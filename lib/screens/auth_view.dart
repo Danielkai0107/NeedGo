@@ -391,7 +391,7 @@ class _AuthViewState extends State<AuthView>
           opacity: _fadeAnimation,
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

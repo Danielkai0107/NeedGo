@@ -15,6 +15,15 @@ import '../data/parks_data.dart';
 import '../services/auth_service.dart';
 import '../components/draggable_bottom_sheet.dart';
 
+enum BottomSheetType {
+  none,
+  locationDetail,
+  newPostNotification,
+  myApplications,
+  notificationPanel,
+  profileEditor,
+}
+
 class PlayerView extends StatefulWidget {
   const PlayerView({Key? key}) : super(key: key);
 
@@ -40,18 +49,16 @@ class _PlayerViewState extends State<PlayerView> {
   bool _isLoadingTravel = false;
   Map<String, String>? _travelInfo;
 
-  bool _isProfileEditorVisible = false;
+  // 將多個布林變數替換為單一的枚舉狀態
+  BottomSheetType _currentBottomSheet = BottomSheetType.none;
+  
+  // 添加缺失的變數
   Map<String, dynamic> _profile = {};
   Map<String, dynamic> _profileForm = {};
   String? _profileStatusType;
   String? _profileStatusMessage;
-
-  bool _isNewPostNotificationVisible = false;
   Map<String, dynamic>? _newPostToShow;
-
   bool _isApplying = false;
-  bool _isMyApplicationsVisible = false;
-
   static const String _apiKey = 'AIzaSyCne1CQNTGm_a3DFxcN59lYhKGlj5McqqE';
 
   List<Map<String, dynamic>> get _myApplications {
@@ -64,7 +71,6 @@ class _PlayerViewState extends State<PlayerView> {
   }
 
   // 新增通知相关变量
-  bool _isNotificationPanelVisible = false;
   List<Map<String, dynamic>> _newPosts = [];
   int _unreadCount = 0;
   Timer? _notificationTimer;
@@ -115,14 +121,14 @@ class _PlayerViewState extends State<PlayerView> {
                   _listenerAttachedTs!,
                 ) >
                 0 &&
-            !_isProfileEditorVisible &&
+            _currentBottomSheet == BottomSheetType.none &&
             _selectedLocation == null) {
           setState(() {
             _newPostToShow = {
               'id': change.doc.id,
               ...Map<String, dynamic>.from(change.doc.data() as Map),
             };
-            _isNewPostNotificationVisible = true;
+            _currentBottomSheet = BottomSheetType.newPostNotification;
           });
         }
       }
@@ -181,40 +187,6 @@ class _PlayerViewState extends State<PlayerView> {
     }
   }
 
-  /// 打开通知面板
-  void _openNotificationPanel() {
-    setState(() {
-      _isNotificationPanelVisible = true;
-      _unreadCount = 0; // 清除红点
-    });
-  }
-
-  /// 关闭通知面板
-  void _closeNotificationPanel() {
-    setState(() {
-      _isNotificationPanelVisible = false;
-    });
-  }
-
-  /// 查看案件详情
-  void _viewPostDetails(Map<String, dynamic> post) {
-    setState(() {
-      _isNotificationPanelVisible = false;
-    });
-    _selectLocationMarker(post);
-
-    // 从新案件列表中移除已查看的案件
-    _newPosts.removeWhere((p) => p['id'] == post['id']);
-  }
-
-  /// 清除所有通知
-  void _clearAllNotifications() {
-    setState(() {
-      _newPosts.clear();
-      _unreadCount = 0;
-    });
-  }
-
   /// 获取并更新当前位置
   Future<void> _findAndRecenter() async {
     var perm = await Geolocator.checkPermission();
@@ -237,9 +209,15 @@ class _PlayerViewState extends State<PlayerView> {
 
   /// 点击任意 Marker（静态或动态）都会调用它
   void _selectLocationMarker(Map<String, dynamic> loc) {
+    // 調試信息：檢查傳遞給 LocationDetailBottomSheet 的數據
+    print('選中的位置數據: $loc');
+    print('地址字段: ${loc['address']}');
+    print('地址字段類型: ${loc['address'].runtimeType}');
+    
     setState(() {
       _selectedLocation = loc;
       _travelInfo = null;
+      _currentBottomSheet = BottomSheetType.locationDetail;
     });
     _calculateTravelInfo(LatLng(loc['lat'], loc['lng']));
   }
@@ -248,6 +226,7 @@ class _PlayerViewState extends State<PlayerView> {
     setState(() {
       _selectedLocation = null;
       _travelInfo = null;
+      _currentBottomSheet = BottomSheetType.none;
     });
   }
 
@@ -297,17 +276,19 @@ class _PlayerViewState extends State<PlayerView> {
     await _firestore.doc('posts/$postId').update({
       'applicants': FieldValue.arrayRemove([u.uid]),
     });
-    setState(_closePopup);
+    _closePopup();
   }
 
   void _openProfileEditor() {
-    _profileForm = Map.from(_profile);
+    _profileForm = Map<String, dynamic>.from(_profile);
     _profileStatusType = null;
     _profileStatusMessage = null;
-    setState(() => _isProfileEditorVisible = true);
+    setState(() {
+      _currentBottomSheet = BottomSheetType.profileEditor;
+    });
   }
 
-  void _closeProfileEditor() => setState(() => _isProfileEditorVisible = false);
+  void _closeProfileEditor() => setState(() => _currentBottomSheet = BottomSheetType.none);
 
   Future<void> _saveProfile() async {
     final u = FirebaseAuth.instance.currentUser;
@@ -333,7 +314,7 @@ class _PlayerViewState extends State<PlayerView> {
     if (_newPostToShow != null) {
       _selectLocationMarker(_newPostToShow!);
       setState(() {
-        _isNewPostNotificationVisible = false;
+        _currentBottomSheet = BottomSheetType.none;
         _newPostToShow = null;
       });
     }
@@ -341,14 +322,13 @@ class _PlayerViewState extends State<PlayerView> {
 
   void _closeNewPostNotification() {
     setState(() {
-      _isNewPostNotificationVisible = false;
+      _currentBottomSheet = BottomSheetType.none;
       _newPostToShow = null;
     });
   }
 
-  void _openMyApplications() => setState(() => _isMyApplicationsVisible = true);
-  void _closeMyApplications() =>
-      setState(() => _isMyApplicationsVisible = false);
+  void _openMyApplications() => setState(() => _currentBottomSheet = BottomSheetType.myApplications);
+  void _closeMyApplications() => setState(() => _currentBottomSheet = BottomSheetType.none);
 
   bool get _hasApplied {
     final u = FirebaseAuth.instance.currentUser;
@@ -704,6 +684,10 @@ class _PlayerViewState extends State<PlayerView> {
             markers: markers,
             myLocationEnabled: false,
             myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
+            compassEnabled: false,
+            zoomGesturesEnabled: true,
           ),
 
           // 右下角工具栏（添加通知按钮）
@@ -827,7 +811,7 @@ class _PlayerViewState extends State<PlayerView> {
             ),
 
           // 新貼文通知彈窗
-          if (_isNewPostNotificationVisible && _newPostToShow != null)
+          if (_currentBottomSheet == BottomSheetType.newPostNotification && _newPostToShow != null)
             Positioned.fill(
               child: DraggableBottomSheet(
                 title: '✨ 有新的案件！',
@@ -914,7 +898,7 @@ class _PlayerViewState extends State<PlayerView> {
             ),
 
           // 我的應徵清單底部彈窗
-          if (_isMyApplicationsVisible)
+          if (_currentBottomSheet == BottomSheetType.myApplications)
             Positioned.fill(
               child: DraggableBottomSheet(
                 title: '我的應徵清單',
@@ -927,7 +911,7 @@ class _PlayerViewState extends State<PlayerView> {
             ),
 
           // 通知面板
-          if (_isNotificationPanelVisible)
+          if (_currentBottomSheet == BottomSheetType.notificationPanel)
             Positioned.fill(
               child: DraggableBottomSheet(
                 title: '最新案件通知',
@@ -941,7 +925,7 @@ class _PlayerViewState extends State<PlayerView> {
             ),
 
           // 編輯個人資料底部彈窗
-          if (_isProfileEditorVisible)
+          if (_currentBottomSheet == BottomSheetType.profileEditor)
             Positioned.fill(
               child: DraggableBottomSheet(
                 title: '編輯個人資料',
@@ -957,5 +941,39 @@ class _PlayerViewState extends State<PlayerView> {
         ],
       ),
     );
+  }
+
+  /// 打开通知面板
+  void _openNotificationPanel() {
+    setState(() {
+      _currentBottomSheet = BottomSheetType.notificationPanel;
+      _unreadCount = 0; // 清除红点
+    });
+  }
+
+  /// 关闭通知面板
+  void _closeNotificationPanel() {
+    setState(() {
+      _currentBottomSheet = BottomSheetType.none;
+    });
+  }
+
+  /// 查看案件详情
+  void _viewPostDetails(Map<String, dynamic> post) {
+    setState(() {
+      _currentBottomSheet = BottomSheetType.none;
+    });
+    _selectLocationMarker(post);
+
+    // 从新案件列表中移除已查看的案件
+    _newPosts.removeWhere((p) => p['id'] == post['id']);
+  }
+
+  /// 清除所有通知
+  void _clearAllNotifications() {
+    setState(() {
+      _newPosts.clear();
+      _unreadCount = 0;
+    });
   }
 }

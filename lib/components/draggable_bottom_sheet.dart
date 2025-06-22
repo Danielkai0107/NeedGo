@@ -17,7 +17,7 @@ class DraggableBottomSheet extends StatefulWidget {
     required this.child,
     this.onClose,
     this.initialHeight = 0.5,
-    this.maxHeight = 0.9,
+    this.maxHeight = 0.5,
     this.title,
     this.titleWidget,
   }) : super(key: key);
@@ -32,13 +32,12 @@ class _DraggableBottomSheetState extends State<DraggableBottomSheet>
   late Animation<double> _heightAnimation;
 
   double _currentHeight = 0.0;
-  bool _isExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 400), // 增加動畫時間使其更平滑
+      duration: const Duration(milliseconds: 200),
       vsync: this,
     );
 
@@ -47,7 +46,6 @@ class _DraggableBottomSheetState extends State<DraggableBottomSheet>
         .animate(
           CurvedAnimation(
             parent: _animationController,
-            // 使用更平滑的曲線
             curve: Curves.easeOutQuart,
           ),
         );
@@ -64,59 +62,6 @@ class _DraggableBottomSheetState extends State<DraggableBottomSheet>
     super.dispose();
   }
 
-  void _handleDragUpdate(DragUpdateDetails details) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final delta = -details.delta.dy / screenHeight;
-
-    // 使用更平滑的拖動體驗，添加一點阻尼效果
-    final dampedDelta = delta * 0.95;
-
-    setState(() {
-      _currentHeight = (_currentHeight + dampedDelta).clamp(
-        0.0,
-        widget.maxHeight,
-      );
-    });
-  }
-
-  void _handleDragEnd(DragEndDetails details) {
-    final velocity = -details.velocity.pixelsPerSecond.dy;
-
-    // 降低速度閾值，使動畫更容易觸發
-    if (velocity > 400) {
-      // 快速向上滑動，展開到最大
-      _expandToMax();
-    } else if (velocity < -400) {
-      // 快速向下滑動，關閉彈窗
-      _close();
-    } else {
-      // 根據當前高度決定
-      if (_currentHeight < widget.initialHeight * 0.6) {
-        _close();
-      } else if (_currentHeight > widget.maxHeight * 0.6) {
-        _expandToMax();
-      } else {
-        _snapToInitial();
-      }
-    }
-  }
-
-  void _expandToMax() {
-    setState(() {
-      _currentHeight = widget.maxHeight;
-      _isExpanded = true;
-    });
-    _animateToHeight(widget.maxHeight);
-  }
-
-  void _snapToInitial() {
-    setState(() {
-      _currentHeight = widget.initialHeight;
-      _isExpanded = false;
-    });
-    _animateToHeight(widget.initialHeight);
-  }
-
   void _close() {
     _animateToHeight(0.0).then((_) {
       if (widget.onClose != null) {
@@ -130,7 +75,6 @@ class _DraggableBottomSheetState extends State<DraggableBottomSheet>
         .animate(
           CurvedAnimation(
             parent: _animationController,
-            // 使用更平滑的曲線
             curve: Curves.easeOutQuart,
           ),
         );
@@ -152,58 +96,41 @@ class _DraggableBottomSheetState extends State<DraggableBottomSheet>
     return AnimatedBuilder(
       animation: _heightAnimation,
       builder: (context, child) {
-        // 調整高度計算，考慮鍵盤高度
-        final height = _heightAnimation.value * screenHeight;
-        // 如果鍵盤彈出，確保底部彈窗不會被鍵盤遮擋
+        // 簡化的高度計算
         final adjustedHeight = keyboardHeight > 0
-            ? (height - keyboardHeight).clamp(
-                0.0,
-                widget.maxHeight * screenHeight,
-              )
-            : height;
+            ? (0.5 * screenHeight) + keyboardHeight
+            : (0.5 * screenHeight);
 
         return Stack(
           children: [
-            // 背景遮罩
-            GestureDetector(
-              onTap: _close,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                color: Colors.black.withOpacity(
-                  (_heightAnimation.value / widget.maxHeight) * 0.5,
-                ),
-              ),
-            ),
-
             // 底部彈窗
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              height: adjustedHeight,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 10,
-                        offset: Offset(0, -2),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: adjustedHeight,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(20),
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      // 拖拽手柄和標題
-                      GestureDetector(
-                        onPanUpdate: _handleDragUpdate,
-                        onPanEnd: _handleDragEnd,
-                        child: Container(
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 10,
+                          offset: Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // 標題區域
+                        Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           child: Column(
@@ -252,11 +179,11 @@ class _DraggableBottomSheetState extends State<DraggableBottomSheet>
                             ],
                           ),
                         ),
-                      ),
 
-                      // 內容區域
-                      Expanded(child: widget.child),
-                    ],
+                        // 內容區域
+                        Expanded(child: widget.child),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -300,6 +227,44 @@ class TaskDetailBottomSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 地址資訊
+          if (task['address']?.toString().isNotEmpty == true) ...[
+            _buildSection(
+              title: '任務地址',
+              icon: Icons.location_city,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      color: Colors.orange[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        task['address'],
+                        style: TextStyle(
+                          color: Colors.orange[700],
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // 任務內容
           if (!isStatic && task['content']?.toString().isNotEmpty == true) ...[
             _buildSection(
@@ -904,8 +869,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet> {
         // 增加底部間距，確保鍵盤彈出時內容不會被擠壓
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      // 添加這個屬性，確保鍵盤彈出時內容可以滾動
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      // 防止滾動時鍵盤消失
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1175,8 +1140,8 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
         // 增加底部間距，確保鍵盤彈出時內容不會被擠壓
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      // 添加這個屬性，確保鍵盤彈出時內容可以滾動
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      // 防止滾動時鍵盤消失
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1397,11 +1362,54 @@ class LocationDetailBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isTask = location['userId'] != null;
 
+    // 調試信息
+    print('LocationDetailBottomSheet 接收到的數據: $location');
+    print('地址字段: ${location['address']}');
+    print('地址字段是否為空: ${location['address']?.toString().isEmpty}');
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 地址資訊
+          if (location['address']?.toString().isNotEmpty == true) ...[
+            _buildSection(
+              title: '任務地址',
+              icon: Icons.location_city,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      color: Colors.orange[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        location['address'],
+                        style: TextStyle(
+                          color: Colors.orange[700],
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // 任務內容
           if (isTask && location['content']?.toString().isNotEmpty == true) ...[
             _buildSection(
@@ -1706,6 +1714,32 @@ class MyApplicationsBottomSheet extends StatelessWidget {
                                 fontSize: 14,
                               ),
                             ),
+                          if (application['address']?.toString().isNotEmpty ==
+                              true) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 14,
+                                  color: Colors.orange[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    application['address'],
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.orange[600],
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1877,6 +1911,31 @@ class NotificationPanelBottomSheet extends StatelessWidget {
                             color: Colors.grey[600],
                             fontSize: 14,
                           ),
+                        ),
+                      ],
+                      if (post['address']?.toString().isNotEmpty == true) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 12,
+                              color: Colors.orange[600],
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                post['address'],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.orange[600],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                       const SizedBox(height: 8),
