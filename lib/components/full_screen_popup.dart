@@ -2577,3 +2577,271 @@ class MyTasksListBottomSheet extends StatelessWidget {
     }
   }
 }
+
+// 9. 聚合任務列表彈窗 (新增)
+class ClusterPostsListBottomSheet extends StatelessWidget {
+  final List<Map<String, dynamic>> posts;
+  final Function(Map<String, dynamic>) onPostTap;
+  final VoidCallback onBack;
+
+  const ClusterPostsListBottomSheet({
+    Key? key,
+    required this.posts,
+    required this.onPostTap,
+    required this.onBack,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // 按創建時間排序
+    final sortedPosts = List<Map<String, dynamic>>.from(posts);
+    sortedPosts.sort((a, b) {
+      final aTime = a['createdAt'] as Timestamp?;
+      final bTime = b['createdAt'] as Timestamp?;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+
+    return Column(
+      children: [
+        // 頂部信息
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.orange[50],
+            border: Border(bottom: BorderSide(color: Colors.orange[100]!)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[600],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.location_on,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '此地點的所有任務',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange[700],
+                      ),
+                    ),
+                    Text(
+                      '共 ${posts.length} 個任務等你來應徵',
+                      style: TextStyle(fontSize: 14, color: Colors.orange[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 任務列表
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: sortedPosts.length,
+            itemBuilder: (context, index) {
+              final post = sortedPosts[index];
+              final createdAt = (post['createdAt'] as Timestamp?)?.toDate();
+              final timeAgo = createdAt != null ? _getTimeAgo(createdAt) : '最近';
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => onPostTap(post),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 頭部：標題和時間
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                post['name'] ?? '未命名任務',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                timeAgo,
+                                style: TextStyle(
+                                  color: Colors.blue[700],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // 任務內容
+                        if (post['content']?.toString().isNotEmpty == true) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[200]!),
+                            ),
+                            child: Text(
+                              post['content'],
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 12),
+
+                        // 發布者信息
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .doc('parents/${post['userId']}')
+                              .get(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || !snapshot.data!.exists) {
+                              return Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  '👤 發布者：無法取得資料',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              );
+                            }
+
+                            final publisherData =
+                                snapshot.data!.data() as Map<String, dynamic>;
+                            return Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.purple[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.purple[200]!),
+                              ),
+                              child: Text(
+                                '👤 發布者：${publisherData['displayName'] ?? '未設定'}',
+                                style: TextStyle(
+                                  color: Colors.purple[700],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // 底部：查看詳情按鈕
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => onPostTap(post),
+                            icon: const Icon(Icons.visibility, size: 16),
+                            label: const Text('查看詳情'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange[600],
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        // 底部返回按鈕
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('返回地圖'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey[300]!),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return '剛剛';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}分鐘前';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}小時前';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}天前';
+    } else {
+      return '${dateTime.month}/${dateTime.day}';
+    }
+  }
+}

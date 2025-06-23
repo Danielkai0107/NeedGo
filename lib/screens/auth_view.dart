@@ -40,12 +40,6 @@ class _AuthViewState extends State<AuthView>
       'color': Colors.green,
       'description': '接受任務，獲得獎勵',
     },
-    'group': {
-      'name': '團體',
-      'icon': Icons.groups,
-      'color': Colors.purple,
-      'description': '組織活動，管理團隊',
-    },
   };
 
   @override
@@ -390,7 +384,12 @@ class _AuthViewState extends State<AuthView>
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              24,
+              24,
+              MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

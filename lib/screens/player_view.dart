@@ -22,6 +22,7 @@ enum BottomSheetType {
   notificationPanel,
   profileEditor,
   randomNearbyNotification,
+  clusterPostsList,
 }
 
 class PlayerView extends StatefulWidget {
@@ -66,6 +67,49 @@ class _PlayerViewState extends State<PlayerView> {
   Map<String, dynamic>? _newPostToShow;
   bool _isApplying = false;
   static const String _apiKey = 'AIzaSyCne1CQNTGm_a3DFxcN59lYhKGlj5McqqE';
+
+  // 新增：聚合相關變數
+  Map<String, List<Map<String, dynamic>>> _clusteredPosts = {};
+  String? _selectedClusterId;
+  List<Map<String, dynamic>> _clusterPosts = [];
+
+  // 新增：聚合 marker 的方法
+  Map<String, List<Map<String, dynamic>>> _clusterPostsByLocation() {
+    final clusters = <String, List<Map<String, dynamic>>>{};
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    for (var post in _allPosts) {
+      // 排除自己發布的任務
+      if (post['userId'] == currentUser?.uid) continue;
+
+      // 使用經緯度作為聚合鍵（精確到小數點後4位，約100米範圍）
+      final lat = (post['lat'] as double).toStringAsFixed(4);
+      final lng = (post['lng'] as double).toStringAsFixed(4);
+      final key = '${lat}_${lng}';
+
+      if (!clusters.containsKey(key)) {
+        clusters[key] = [];
+      }
+      clusters[key]!.add(post);
+    }
+
+    return clusters;
+  }
+
+  // 新增：處理聚合 marker 點擊
+  void _handleClusterTap(String clusterId, List<Map<String, dynamic>> posts) {
+    if (posts.length == 1) {
+      // 只有一個任務，直接顯示詳情
+      _selectLocationMarker(posts.first, isStatic: false);
+    } else {
+      // 多個任務，顯示選擇列表
+      setState(() {
+        _selectedClusterId = clusterId;
+        _clusterPosts = posts;
+        _currentBottomSheet = BottomSheetType.clusterPostsList;
+      });
+    }
+  }
 
   List<Map<String, dynamic>> get _myApplications {
     final user = FirebaseAuth.instance.currentUser;
@@ -497,19 +541,37 @@ class _PlayerViewState extends State<PlayerView> {
   }
 
   Set<Marker> _buildPostMarkers() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    return {
-      for (var post in _allPosts)
-        if (post['userId'] != currentUser?.uid) // 新增這行過濾條件
-          Marker(
-            markerId: MarkerId(post['id']),
-            position: LatLng(post['lat'], post['lng']),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueYellow,
-            ),
-            onTap: () => _selectLocationMarker(post, isStatic: false),
-          ),
-    };
+    _clusteredPosts = _clusterPostsByLocation();
+    final markers = <Marker>{};
+
+    for (var entry in _clusteredPosts.entries) {
+      final posts = entry.value;
+      if (posts.isEmpty) continue;
+
+      // 使用第一個任務的位置作為代表位置
+      final representativePost = posts.first;
+      final position = LatLng(
+        representativePost['lat'],
+        representativePost['lng'],
+      );
+
+      markers.add(
+        Marker(
+          markerId: MarkerId('cluster_${entry.key}'),
+          position: position,
+          icon: posts.length > 1
+              ? BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueOrange,
+                )
+              : BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueYellow,
+                ),
+          onTap: () => _handleClusterTap(entry.key, posts),
+        ),
+      );
+    }
+
+    return markers;
   }
 
   // 新增方法：
@@ -1082,6 +1144,36 @@ class _PlayerViewState extends State<PlayerView> {
               ],
             ),
           ),
+
+          // 聚合任務列表底部彈窗
+          if (_currentBottomSheet == BottomSheetType.clusterPostsList)
+            Positioned.fill(
+              child: FullScreenPopup(
+                title: '此地點的任務',
+                onClose: () => setState(() {
+                  _currentBottomSheet = BottomSheetType.none;
+                  _selectedClusterId = null;
+                  _clusterPosts.clear();
+                }),
+                child: ClusterPostsListBottomSheet(
+                  posts: _clusterPosts,
+                  onPostTap: (post) {
+                    // 關閉聚合列表，顯示任務詳情
+                    setState(() {
+                      _currentBottomSheet = BottomSheetType.none;
+                      _selectedClusterId = null;
+                      _clusterPosts.clear();
+                    });
+                    _selectLocationMarker(post, isStatic: false);
+                  },
+                  onBack: () => setState(() {
+                    _currentBottomSheet = BottomSheetType.none;
+                    _selectedClusterId = null;
+                    _clusterPosts.clear();
+                  }),
+                ),
+              ),
+            ),
 
           // 通用弹窗：静态公园 or 动态任务
           if (_selectedLocation != null)
