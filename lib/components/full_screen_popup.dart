@@ -2148,7 +2148,7 @@ class MyTasksListBottomSheet extends StatelessWidget {
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () => onTaskTap(task),
+                  // onTap: () => onTaskTap(task),
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
@@ -2274,12 +2274,6 @@ class MyTasksListBottomSheet extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              if (applicants.isNotEmpty)
-                                Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 14,
-                                  color: Colors.blue[600],
-                                ),
                             ],
                           ),
                         ),
