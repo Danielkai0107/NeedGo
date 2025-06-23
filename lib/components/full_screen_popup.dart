@@ -1188,6 +1188,23 @@ class LocationDetailBottomSheet extends StatelessWidget {
     this.publisherInfo,
   }) : super(key: key);
 
+  // 開啟Google Maps的方法
+  void _openGoogleMaps(String address) async {
+    final Uri googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
+    );
+
+    try {
+      if (await canLaunchUrl(googleMapsUrl)) {
+        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+      } else {
+        throw '無法開啟Google Maps';
+      }
+    } catch (e) {
+      print('開啟Google Maps失敗: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isTask = location['userId'] != null;
@@ -1200,33 +1217,43 @@ class LocationDetailBottomSheet extends StatelessWidget {
             _buildSection(
               title: '任務地址',
               icon: Icons.location_city,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      color: Colors.orange[600],
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        location['address'],
-                        style: TextStyle(
-                          color: Colors.orange[700],
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+              child: InkWell(
+                onTap: () => _openGoogleMaps(location['address']),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        color: Colors.orange[600],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          location['address'],
+                          style: TextStyle(
+                            color: Colors.orange[700],
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      Icon(
+                        Icons.open_in_new,
+                        size: 16,
+                        color: Colors.orange[600],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

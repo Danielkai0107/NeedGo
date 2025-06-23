@@ -12,7 +12,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../styles/map_styles.dart';
-import '../data/parks_data.dart';
 import '../services/auth_service.dart';
 import '../components/full_screen_popup.dart'; // 引入 FullScreenPopup 及所有 bottom sheet 組件
 
@@ -50,6 +49,12 @@ class _ParentViewState extends State<ParentView> {
   // 搜索建议
   List<Map<String, dynamic>> _locationSuggestions = [];
 
+  // 在 _ParentViewState 類別中添加相同的變數：
+  Set<String> _availableCategories = {};
+  Set<String> _selectedCategories = {};
+  bool _showCategoryFilter = false;
+  List<Map<String, dynamic>> _systemLocations = [];
+
   // 合并用：静态公园 or 自己的任务
   Map<String, dynamic>? _selectedLocation;
   bool _isLoadingTravel = false;
@@ -79,6 +84,7 @@ class _ParentViewState extends State<ParentView> {
   @override
   void initState() {
     super.initState();
+    _loadSystemLocations(); // 新增這行
     _findAndRecenter();
     _loadMyProfile();
     _loadMyPosts();
@@ -146,6 +152,33 @@ class _ParentViewState extends State<ParentView> {
       _travelInfo = null;
       _currentBottomSheet = BottomSheetType.none;
     });
+  }
+
+  Future<void> _loadSystemLocations() async {
+    try {
+      final snapshot = await _firestore.collection('systemLocations').get();
+      final locations = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      // 提取所有類別
+      final categories = locations
+          .map((loc) => loc['category']?.toString() ?? '')
+          .where((cat) => cat.isNotEmpty)
+          .toSet();
+
+      setState(() {
+        _systemLocations = locations;
+        _availableCategories = categories;
+        _selectedCategories = Set.from(categories); // 預設全選
+      });
+
+      print('載入了 ${locations.length} 個系統地點，${categories.length} 個類別');
+    } catch (e) {
+      print('載入系統地點失敗: $e');
+    }
   }
 
   /// 计算路程
@@ -632,21 +665,22 @@ class _ParentViewState extends State<ParentView> {
 
   Set<Marker> _buildStaticParkMarkers() {
     return {
-      for (var p in [...taipeiParks, ...newTaipeiParks])
-        Marker(
-          markerId: MarkerId(
-            'park_${p.location.latitude}_${p.location.longitude}',
+      for (var location in _systemLocations)
+        if (_selectedCategories.contains(location['category']))
+          Marker(
+            markerId: MarkerId('system_${location['id']}'),
+            position: LatLng(location['lat'], location['lng']),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueGreen,
+            ),
+            onTap: () => _selectLocationMarker({
+              'name': location['name'],
+              'lat': location['lat'],
+              'lng': location['lng'],
+              'address': location['address'],
+              'category': location['category'],
+            }, isStatic: true), // 新增這個參數
           ),
-          position: p.location,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          ),
-          onTap: () => _selectLocationMarker({
-            'name': p.name,
-            'lat': p.location.latitude,
-            'lng': p.location.longitude,
-          }, isStatic: true),
-        ),
     };
   }
 
@@ -707,6 +741,143 @@ class _ParentViewState extends State<ParentView> {
           };
   }
 
+  // 新增方法：
+  Widget _buildCategoryFilter() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: _showCategoryFilter ? null : 0,
+      child: _showCategoryFilter
+          ? Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 第一個按鈕：全選/取消按鈕（加陰影）
+
+                  // 類別按鈕區域 - 每個按鈕都加陰影
+                  ..._availableCategories.map((category) {
+                    final isSelected = _selectedCategories.contains(category);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        // 新增 Container 包裝
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(60),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                              spreadRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: FilterChip(
+                          label: Text(
+                            category,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.grey[800],
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              fontSize: 14,
+                            ),
+                          ),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedCategories.add(category);
+                              } else {
+                                _selectedCategories.remove(category);
+                              }
+                            });
+                          },
+                          selectedColor: Colors.orange[600],
+                          checkmarkColor: Colors.white,
+                          side: BorderSide(
+                            color: isSelected
+                                ? Colors.orange[600]!
+                                : Colors.grey[300]!,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(60),
+                          ),
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: FilterChip(
+                      label: Text(
+                        _selectedCategories.length ==
+                                _availableCategories.length
+                            ? '全部取消'
+                            : '全部選取',
+                        style: TextStyle(
+                          color: Colors.blue[600],
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      selected: false,
+                      onSelected: (_) {
+                        setState(() {
+                          if (_selectedCategories.length ==
+                              _availableCategories.length) {
+                            _selectedCategories.clear();
+                          } else {
+                            _selectedCategories = Set.from(
+                              _availableCategories,
+                            );
+                          }
+                        });
+                      },
+                      backgroundColor: Colors.blue[50],
+                      side: BorderSide(color: Colors.blue[300]!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(60),
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 14,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                ],
+              ),
+            )
+          : const SizedBox.shrink(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // 創建所有標記
@@ -738,6 +909,7 @@ class _ParentViewState extends State<ParentView> {
               Future.delayed(const Duration(milliseconds: 500), () {
                 if (mounted) {
                   _loadMyPosts();
+                  _loadSystemLocations(); // 新增這行
                 }
               });
             },
@@ -815,9 +987,48 @@ class _ParentViewState extends State<ParentView> {
               ),
             ),
 
+          Positioned(
+            bottom: 100,
+            left: 0, // 從左邊 20px 開始
+            width: 320, // 固定寬度 300px
+            child: _buildCategoryFilter(),
+          ),
+
+          // 篩選選單按鈕
+          Positioned(
+            bottom: 40, // 動態調整位置
+            left: 24,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 新增：篩選切換按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blueGrey,
+                  heroTag: 'filter',
+                  mini: false,
+                  child: Icon(
+                    _showCategoryFilter
+                        ? Icons
+                              .close // 選單打開時顯示 X
+                        : Icons.filter_list,
+                  ), // 選單關閉時顯示篩選圖標
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showCategoryFilter = !_showCategoryFilter;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
           // 工具按鈕
           Positioned(
-            top: 100,
+            bottom: 40, // 動態調整位置
             right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,

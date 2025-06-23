@@ -11,7 +11,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../styles/map_styles.dart';
-import '../data/parks_data.dart';
 import '../services/auth_service.dart';
 import '../components/full_screen_popup.dart';
 
@@ -52,6 +51,12 @@ class _PlayerViewState extends State<PlayerView> {
   // 將多個布林變數替換為單一的枚舉狀態
   BottomSheetType _currentBottomSheet = BottomSheetType.none;
 
+  // 在 _PlayerViewState 類別中添加：
+  List<Map<String, dynamic>> _systemLocations = [];
+  Set<String> _availableCategories = {};
+  Set<String> _selectedCategories = {};
+  bool _showCategoryFilter = false;
+
   // 添加缺失的變數
   Map<String, dynamic> _profile = {};
   Map<String, dynamic> _profileForm = {};
@@ -79,6 +84,7 @@ class _PlayerViewState extends State<PlayerView> {
   @override
   void initState() {
     super.initState();
+    _loadSystemLocations();
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         _loadProfile(user.uid);
@@ -95,6 +101,33 @@ class _PlayerViewState extends State<PlayerView> {
       }
     });
     _findAndRecenter();
+  }
+
+  Future<void> _loadSystemLocations() async {
+    try {
+      final snapshot = await _firestore.collection('systemLocations').get();
+      final locations = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      // 提取所有類別
+      final categories = locations
+          .map((loc) => loc['category']?.toString() ?? '')
+          .where((cat) => cat.isNotEmpty)
+          .toSet();
+
+      setState(() {
+        _systemLocations = locations;
+        _availableCategories = categories;
+        _selectedCategories = Set.from(categories); // 預設全選
+      });
+
+      print('載入了 ${locations.length} 個系統地點，${categories.length} 個類別');
+    } catch (e) {
+      print('載入系統地點失敗: $e');
+    }
   }
 
   Future<void> _loadProfile(String uid) async {
@@ -228,14 +261,18 @@ class _PlayerViewState extends State<PlayerView> {
   }
 
   /// 点击任意 Marker（静态或动态）都会调用它
-  void _selectLocationMarker(Map<String, dynamic> loc) {
+  void _selectLocationMarker(
+    Map<String, dynamic> loc, {
+    bool isStatic = false,
+  }) {
+    // 新增 isStatic 參數
     // 調試信息：檢查傳遞給 LocationDetailBottomSheet 的數據
     print('選中的位置數據: $loc');
     print('地址字段: ${loc['address']}');
     print('地址字段類型: ${loc['address'].runtimeType}');
 
     setState(() {
-      _selectedLocation = loc;
+      _selectedLocation = {...loc, 'isStatic': isStatic}; // 添加 isStatic 標記
       _travelInfo = null;
       _currentBottomSheet = BottomSheetType.locationDetail;
     });
@@ -333,7 +370,7 @@ class _PlayerViewState extends State<PlayerView> {
 
   void _acceptNewPost() {
     if (_newPostToShow != null) {
-      _selectLocationMarker(_newPostToShow!);
+      _selectLocationMarker(_newPostToShow!, isStatic: false); // 新增參數
       setState(() {
         _currentBottomSheet = BottomSheetType.none;
         _newPostToShow = null;
@@ -362,25 +399,26 @@ class _PlayerViewState extends State<PlayerView> {
 
   Set<Marker> _buildStaticParkMarkers() {
     return {
-      for (var p in [...taipeiParks, ...newTaipeiParks])
-        Marker(
-          markerId: MarkerId(
-            'park_${p.location.latitude}_${p.location.longitude}',
+      for (var location in _systemLocations)
+        if (_selectedCategories.contains(location['category']))
+          Marker(
+            markerId: MarkerId('system_${location['id']}'),
+            position: LatLng(location['lat'], location['lng']),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueGreen,
+            ),
+            onTap: () => _selectLocationMarker({
+              'name': location['name'],
+              'lat': location['lat'],
+              'lng': location['lng'],
+              'address': location['address'],
+              'category': location['category'],
+              'content': null,
+              'applicants': <String>[],
+              'userId': null,
+              'id': null,
+            }, isStatic: true), // 移除重複的註解，保持這個參數
           ),
-          position: p.location,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          ),
-          onTap: () => _selectLocationMarker({
-            'name': p.name,
-            'lat': p.location.latitude,
-            'lng': p.location.longitude,
-            'content': null,
-            'applicants': <String>[],
-            'userId': null,
-            'id': null,
-          }),
-        ),
     };
   }
 
@@ -393,9 +431,146 @@ class _PlayerViewState extends State<PlayerView> {
           icon: BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueYellow,
           ),
-          onTap: () => _selectLocationMarker(post),
+          onTap: () => _selectLocationMarker(post, isStatic: false), // 明確指定為非靜態
         ),
     };
+  }
+
+  // 新增方法：
+  Widget _buildCategoryFilter() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: _showCategoryFilter ? null : 0,
+      child: _showCategoryFilter
+          ? Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 第一個按鈕：全選/取消按鈕（加陰影）
+
+                  // 類別按鈕區域 - 每個按鈕都加陰影
+                  ..._availableCategories.map((category) {
+                    final isSelected = _selectedCategories.contains(category);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        // 新增 Container 包裝
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(60),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                              spreadRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: FilterChip(
+                          label: Text(
+                            category,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.grey[800],
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              fontSize: 14,
+                            ),
+                          ),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedCategories.add(category);
+                              } else {
+                                _selectedCategories.remove(category);
+                              }
+                            });
+                          },
+                          selectedColor: Colors.orange[600],
+                          checkmarkColor: Colors.white,
+                          side: BorderSide(
+                            color: isSelected
+                                ? Colors.orange[600]!
+                                : Colors.grey[300]!,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(60),
+                          ),
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: FilterChip(
+                      label: Text(
+                        _selectedCategories.length ==
+                                _availableCategories.length
+                            ? '全部取消'
+                            : '全部選取',
+                        style: TextStyle(
+                          color: Colors.blue[600],
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      selected: false,
+                      onSelected: (_) {
+                        setState(() {
+                          if (_selectedCategories.length ==
+                              _availableCategories.length) {
+                            _selectedCategories.clear();
+                          } else {
+                            _selectedCategories = Set.from(
+                              _availableCategories,
+                            );
+                          }
+                        });
+                      },
+                      backgroundColor: Colors.blue[50],
+                      side: BorderSide(color: Colors.blue[300]!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(60),
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 14,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                ],
+              ),
+            )
+          : const SizedBox.shrink(),
+    );
   }
 
   /// 构建通知按钮（带红点）
@@ -710,9 +885,48 @@ class _PlayerViewState extends State<PlayerView> {
             zoomGesturesEnabled: true,
           ),
 
+          Positioned(
+            bottom: 100,
+            left: 0, // 從左邊 20px 開始
+            width: 320, // 固定寬度 300px
+            child: _buildCategoryFilter(),
+          ),
+
+          // 篩選選單按鈕
+          Positioned(
+            bottom: 40, // 動態調整位置
+            left: 24,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 新增：篩選切換按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blueGrey,
+                  heroTag: 'filter',
+                  mini: false,
+                  child: Icon(
+                    _showCategoryFilter
+                        ? Icons
+                              .close // 選單打開時顯示 X
+                        : Icons.filter_list,
+                  ), // 選單關閉時顯示篩選圖標
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showCategoryFilter = !_showCategoryFilter;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
           // 右下角工具栏（添加通知按钮）
           Positioned(
-            top: 100,
+            bottom: 40, // 動態調整位置
             right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -931,7 +1145,7 @@ class _PlayerViewState extends State<PlayerView> {
                     // 关闭当前弹窗
                     _closeMyApplications();
                     // 显示应用详情
-                    _selectLocationMarker(application);
+                    _selectLocationMarker(application, isStatic: false); // 新增參數
                   },
                 ),
               ),
@@ -989,7 +1203,7 @@ class _PlayerViewState extends State<PlayerView> {
     setState(() {
       _currentBottomSheet = BottomSheetType.none;
     });
-    _selectLocationMarker(post);
+    _selectLocationMarker(post, isStatic: false); // 新增參數
 
     // 从新案件列表中移除已查看的案件
     _newPosts.removeWhere((p) => p['id'] == post['id']);
