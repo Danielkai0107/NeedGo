@@ -909,6 +909,13 @@ class _PlayerViewState extends State<PlayerView> {
                 child: MyApplicationsBottomSheet(
                   applications: _myApplications,
                   onCancelApplication: _cancelApplication,
+                  onViewDetails: (application) {
+                    // 新增这个回调函数
+                    // 关闭当前弹窗
+                    _closeMyApplications();
+                    // 显示应用详情
+                    _selectLocationMarker(application);
+                  },
                 ),
               ),
             ),

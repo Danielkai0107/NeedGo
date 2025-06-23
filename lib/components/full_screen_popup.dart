@@ -1407,11 +1407,13 @@ class LocationDetailBottomSheet extends StatelessWidget {
 class MyApplicationsBottomSheet extends StatelessWidget {
   final List<Map<String, dynamic>> applications;
   final Function(String) onCancelApplication;
+  final Function(Map<String, dynamic>)? onViewDetails; // 新增这个参数
 
   const MyApplicationsBottomSheet({
     Key? key,
     required this.applications,
     required this.onCancelApplication,
+    this.onViewDetails, // 新增这个参数
   }) : super(key: key);
 
   @override
@@ -1588,11 +1590,9 @@ class MyApplicationsBottomSheet extends StatelessWidget {
                     // 查看详情按钮
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          // 这里可以触发查看详情的操作
-                          Navigator.of(context).pop(); // 先关闭当前弹窗
-                          // 然后可以调用 parent 的方法来显示详情
-                        },
+                        onPressed: onViewDetails != null
+                            ? () => onViewDetails!(application)
+                            : null, // 修改这里，调用回调函数
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
