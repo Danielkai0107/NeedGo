@@ -82,12 +82,16 @@ class _PlayerViewState extends State<PlayerView> {
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         _loadProfile(user.uid);
-        _attachPostsListener();
-        _initializeNotificationSystem();
+        _initializeNotificationSystem(); // 先初始化時間
+        _attachPostsListener(); // 再檢查歷史通知並設置監聽器
       } else {
         _postsSub?.cancel();
         _notificationTimer?.cancel();
-        setState(() => _allPosts = []);
+        setState(() {
+          _allPosts = [];
+          _newPosts.clear(); // 清空通知
+          _unreadCount = 0;
+        });
       }
     });
     _findAndRecenter();
@@ -98,38 +102,92 @@ class _PlayerViewState extends State<PlayerView> {
     if (doc.exists) setState(() => _profile = doc.data()!);
   }
 
+  /// 檢查歷史通知（登入時檢查登入前的新貼文）
+  Future<void> _checkHistoricalNotifications() async {
+    if (_lastCheckTime == null) return;
+
+    try {
+      print('檢查歷史通知，從 $_lastCheckTime 開始');
+
+      final snapshot = await _firestore
+          .collection('posts')
+          .where(
+            'createdAt',
+            isGreaterThan: Timestamp.fromDate(_lastCheckTime!),
+          )
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      print('找到 ${snapshot.docs.length} 個歷史新貼文');
+
+      if (snapshot.docs.isNotEmpty) {
+        final historicalPosts = snapshot.docs.map((doc) {
+          final data = Map<String, dynamic>.from(doc.data());
+          data['id'] = doc.id;
+          return data;
+        }).toList();
+
+        setState(() {
+          _newPosts.addAll(historicalPosts);
+          _unreadCount = _newPosts.length;
+        });
+
+        print('已添加 ${historicalPosts.length} 個歷史通知');
+      }
+    } catch (e) {
+      print('檢查歷史通知失敗: $e');
+    }
+  }
+
   void _attachPostsListener() {
+    // 先檢查歷史通知
+    _checkHistoricalNotifications();
+
+    // 設定監聽器附加時間（用於後續新貼文檢測）
     _listenerAttachedTs = Timestamp.now();
+
     _postsSub = _firestore.collection('posts').snapshots().listen((snap) {
       final list = snap.docs.map((d) {
         final m = Map<String, dynamic>.from(d.data() as Map);
         m['id'] = d.id;
         return m;
       }).toList();
+
       list.sort((a, b) {
         final ta = a['createdAt'] as Timestamp?;
         final tb = b['createdAt'] as Timestamp?;
         return (tb?.seconds ?? 0).compareTo(ta?.seconds ?? 0);
       });
+
       setState(() => _allPosts = list);
 
-      // 新贴文通知
+      // 處理即時新增的貼文（登入後新發布的）
       for (var change in snap.docChanges) {
         if (change.type == DocumentChangeType.added &&
             _listenerAttachedTs != null &&
             (change.doc['createdAt'] as Timestamp).compareTo(
                   _listenerAttachedTs!,
                 ) >
-                0 &&
-            _currentBottomSheet == BottomSheetType.none &&
-            _selectedLocation == null) {
+                0) {
+          final newPost = {
+            'id': change.doc.id,
+            ...Map<String, dynamic>.from(change.doc.data() as Map),
+          };
+
+          // 添加到通知列表
           setState(() {
-            _newPostToShow = {
-              'id': change.doc.id,
-              ...Map<String, dynamic>.from(change.doc.data() as Map),
-            };
-            _currentBottomSheet = BottomSheetType.newPostNotification;
+            _newPosts.insert(0, newPost);
+            _unreadCount = _newPosts.length;
           });
+
+          // 如果當前沒有彈窗，顯示即時通知
+          if (_currentBottomSheet == BottomSheetType.none &&
+              _selectedLocation == null) {
+            setState(() {
+              _newPostToShow = newPost;
+              _currentBottomSheet = BottomSheetType.newPostNotification;
+            });
+          }
         }
       }
     });
@@ -144,47 +202,9 @@ class _PlayerViewState extends State<PlayerView> {
 
   /// 初始化通知系统
   void _initializeNotificationSystem() {
-    _lastCheckTime = DateTime.now().subtract(
-      const Duration(minutes: 5),
-    ); // 5分钟前作为初始时间
-
-    // 每30秒检查一次新案件
-    _notificationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _checkForNewPosts();
-    });
-  }
-
-  /// 检查新案件
-  void _checkForNewPosts() async {
-    if (_lastCheckTime == null) return;
-
-    try {
-      final snapshot = await _firestore
-          .collection('posts')
-          .where(
-            'createdAt',
-            isGreaterThan: Timestamp.fromDate(_lastCheckTime!),
-          )
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        final newPosts = snapshot.docs.map((doc) {
-          final data = Map<String, dynamic>.from(doc.data());
-          data['id'] = doc.id;
-          return data;
-        }).toList();
-
-        setState(() {
-          _newPosts.addAll(newPosts);
-          _unreadCount = _newPosts.length;
-        });
-
-        _lastCheckTime = DateTime.now();
-      }
-    } catch (e) {
-      print('检查新案件失败: $e');
-    }
+    // 只需要初始化時間記錄
+    _lastCheckTime = DateTime.now().subtract(const Duration(hours: 24));
+    print('初始化通知系統，最後檢查時間: $_lastCheckTime');
   }
 
   /// 获取并更新当前位置
@@ -383,16 +403,13 @@ class _PlayerViewState extends State<PlayerView> {
     return Stack(
       children: [
         FloatingActionButton(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.blueGrey,
+          backgroundColor: _unreadCount > 0 ? Colors.orange[600] : Colors.white,
+          foregroundColor: _unreadCount > 0 ? Colors.white : Colors.blueGrey,
           heroTag: 'notifications',
           mini: false,
-          child: Icon(
-            Icons.notifications,
-            color: _unreadCount > 0 ? Colors.white : null,
-          ),
+          child: Icon(Icons.notifications),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(56), // 半徑 12
+            borderRadius: BorderRadius.circular(56),
           ),
           onPressed: _openNotificationPanel,
         ),
