@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class FullScreenPopup extends StatelessWidget {
   final Widget child;
@@ -78,6 +79,25 @@ class TaskDetailBottomSheet extends StatelessWidget {
     this.onCreateFromStatic,
   }) : super(key: key);
 
+  // 開啟Google Maps的方法
+  void _openGoogleMaps(String address) async {
+    final Uri googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
+    );
+
+    try {
+      // 需要在檔案頂部添加 import 'package:url_launcher/url_launcher.dart';
+      if (await canLaunchUrl(googleMapsUrl)) {
+        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+      } else {
+        throw '無法開啟Google Maps';
+      }
+    } catch (e) {
+      // 如果無法開啟，可以顯示錯誤訊息或使用備用方案
+      print('開啟Google Maps失敗: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isStatic = task['isStatic'] == true;
@@ -86,37 +106,48 @@ class TaskDetailBottomSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 地址信息 - 修改為可點擊的Google Maps連結
           if (task['address']?.toString().isNotEmpty == true) ...[
             _buildSection(
               title: '任務地址',
               icon: Icons.location_city,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      color: Colors.orange[600],
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        task['address'],
-                        style: TextStyle(
-                          color: Colors.orange[700],
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+              child: InkWell(
+                onTap: () => _openGoogleMaps(task['address']),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        color: Colors.orange[600],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          task['address'],
+                          style: TextStyle(
+                            color: Colors.orange[700],
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      Icon(
+                        Icons.open_in_new,
+                        size: 16,
+                        color: Colors.orange[600],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
