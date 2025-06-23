@@ -50,3 +50,6 @@ app.*.map.json
 
 # 金鑰設定檔，含密碼資訊
 /android/key.properties
+.env
+.env.*
+!.env.example

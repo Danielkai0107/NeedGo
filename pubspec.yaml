@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   url_launcher: ^6.2.5
+  flutter_dotenv: ^5.1.0
   # Firebase
   firebase_core: ^3.14.0
   firebase_auth: ^5.6.0
@@ -46,9 +47,6 @@ dependencies:
   # HTTP 請求（Distance Matrix API）
   http: ^0.13.4
   shared_preferences: ^2.2.2 # 用于保存登录信息
-
-  # Places Autocomplete
-  flutter_dotenv: ^5.0.2 # 若要把 Key 放到 .env
 
   # 狀態管理
   provider: ^6.0.0
@@ -76,6 +74,7 @@ flutter:
   assets:
     - assets/google_logo.png
     - assets/logo.png
+    - .env
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../services/auth_service.dart';
 import '../components/full_screen_popup.dart'; // 引入 FullScreenPopup 及所有 bottom sheet 組件
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 enum BottomSheetType {
   none,
@@ -36,6 +37,7 @@ class _ParentViewState extends State<ParentView> {
   final _authService = AuthService();
   final _firestore = FirebaseFirestore.instance;
   final TextEditingController _contentCtrl = TextEditingController();
+  String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
 
   late GoogleMapController _mapCtrl;
   LatLng _center = const LatLng(25.0479, 121.5171);
@@ -67,9 +69,6 @@ class _ParentViewState extends State<ParentView> {
     'lat': null,
     'lng': null,
   };
-
-  static const String _apiKey =
-      'AIzaSyCne1CQNTGm_a3DFxcN59lYhKGlj5McqqE'; // 请替换成你的 key
 
   // 將多個布林變數替換為單一的枚舉狀態
   BottomSheetType _currentBottomSheet = BottomSheetType.none;

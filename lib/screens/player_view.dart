@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../services/auth_service.dart';
 import '../components/full_screen_popup.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 enum BottomSheetType {
   none,
@@ -41,6 +42,8 @@ class _PlayerViewState extends State<PlayerView> {
   final _firestore = FirebaseFirestore.instance;
   final _authService = AuthService();
 
+  String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+
   StreamSubscription<QuerySnapshot>? _postsSub;
   List<Map<String, dynamic>> _allPosts = [];
   Timestamp? _listenerAttachedTs;
@@ -66,7 +69,6 @@ class _PlayerViewState extends State<PlayerView> {
   String? _profileStatusMessage;
   Map<String, dynamic>? _newPostToShow;
   bool _isApplying = false;
-  static const String _apiKey = 'AIzaSyCne1CQNTGm_a3DFxcN59lYhKGlj5McqqE';
 
   // 新增：聚合相關變數
   Map<String, List<Map<String, dynamic>>> _clusteredPosts = {};
