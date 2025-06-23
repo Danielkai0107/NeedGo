@@ -74,23 +74,52 @@ class _PlayerViewState extends State<PlayerView> {
   List<Map<String, dynamic>> _clusterPosts = [];
 
   // 新增：聚合 marker 的方法
+  // 修改：聚合 marker 的方法，使用距離計算而非精確座標
   Map<String, List<Map<String, dynamic>>> _clusterPostsByLocation() {
     final clusters = <String, List<Map<String, dynamic>>>{};
     final currentUser = FirebaseAuth.instance.currentUser;
+    final processedPosts = <String>{};
 
     for (var post in _allPosts) {
       // 排除自己發布的任務
       if (post['userId'] == currentUser?.uid) continue;
 
-      // 使用經緯度作為聚合鍵（精確到小數點後4位，約100米範圍）
-      final lat = (post['lat'] as double).toStringAsFixed(4);
-      final lng = (post['lng'] as double).toStringAsFixed(4);
-      final key = '${lat}_${lng}';
+      // 如果已經被處理過，跳過
+      if (processedPosts.contains(post['id'])) continue;
 
-      if (!clusters.containsKey(key)) {
-        clusters[key] = [];
+      final postLat = post['lat'] as double;
+      final postLng = post['lng'] as double;
+
+      // 建立新的聚合群組
+      final cluster = <Map<String, dynamic>>[post];
+      processedPosts.add(post['id']);
+
+      // 找出50米內的其他任務加入同一聚合
+      for (var otherPost in _allPosts) {
+        if (otherPost['userId'] == currentUser?.uid) continue;
+        if (processedPosts.contains(otherPost['id'])) continue;
+
+        final otherLat = otherPost['lat'] as double;
+        final otherLng = otherPost['lng'] as double;
+
+        // 計算距離（米）
+        final distance = Geolocator.distanceBetween(
+          postLat,
+          postLng,
+          otherLat,
+          otherLng,
+        );
+
+        // 如果距離小於50米，加入同一聚合
+        if (distance <= 50) {
+          cluster.add(otherPost);
+          processedPosts.add(otherPost['id']);
+        }
       }
-      clusters[key]!.add(post);
+
+      // 使用第一個任務的ID作為聚合鍵
+      final clusterId = 'cluster_${post['id']}';
+      clusters[clusterId] = cluster;
     }
 
     return clusters;
@@ -515,10 +544,41 @@ class _PlayerViewState extends State<PlayerView> {
     return apps.contains(u.uid);
   }
 
+  // 修改：檢查靜態地點是否被聚合覆蓋
+  bool _isStaticLocationCoveredByCluster(Map<String, dynamic> staticLocation) {
+    for (var clusterPosts in _clusteredPosts.values) {
+      if (clusterPosts.isEmpty) continue;
+
+      // 使用聚合中第一個任務的位置代表聚合位置
+      final clusterLat = clusterPosts.first['lat'] as double;
+      final clusterLng = clusterPosts.first['lng'] as double;
+      final staticLat = staticLocation['lat'] as double;
+      final staticLng = staticLocation['lng'] as double;
+
+      // 計算距離
+      final distance = Geolocator.distanceBetween(
+        staticLat,
+        staticLng,
+        clusterLat,
+        clusterLng,
+      );
+
+      // 如果距離小於50米，認為被覆蓋
+      if (distance <= 50) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Set<Marker> _buildStaticParkMarkers() {
+    // 先計算聚合結果
+    _clusteredPosts = _clusterPostsByLocation();
+
     return {
       for (var location in _systemLocations)
-        if (_selectedCategories.contains(location['category']))
+        if (_selectedCategories.contains(location['category']) &&
+            !_isStaticLocationCoveredByCluster(location)) // 新增條件：未被聚合覆蓋
           Marker(
             markerId: MarkerId('system_${location['id']}'),
             position: LatLng(location['lat'], location['lng']),
@@ -535,13 +595,13 @@ class _PlayerViewState extends State<PlayerView> {
               'applicants': <String>[],
               'userId': null,
               'id': null,
-            }, isStatic: true), // 移除重複的註解，保持這個參數
+            }, isStatic: true),
           ),
     };
   }
 
   Set<Marker> _buildPostMarkers() {
-    _clusteredPosts = _clusterPostsByLocation();
+    // 使用已計算的聚合結果（在 _buildStaticParkMarkers 中計算）
     final markers = <Marker>{};
 
     for (var entry in _clusteredPosts.entries) {
