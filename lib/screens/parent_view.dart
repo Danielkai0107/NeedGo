@@ -14,7 +14,7 @@ import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../data/parks_data.dart';
 import '../services/auth_service.dart';
-import '../components/draggable_bottom_sheet.dart'; // 引入新組件
+import '../components/full_screen_popup.dart'; // 引入 FullScreenPopup 及所有 bottom sheet 組件
 
 enum BottomSheetType {
   none,
@@ -68,7 +68,7 @@ class _ParentViewState extends State<ParentView> {
 
   // 將多個布林變數替換為單一的枚舉狀態
   BottomSheetType _currentBottomSheet = BottomSheetType.none;
-  
+
   // 添加缺失的變數
   String? _editingPostId;
   final TextEditingController _nameCtrl = TextEditingController();
@@ -82,6 +82,12 @@ class _ParentViewState extends State<ParentView> {
     _findAndRecenter();
     _loadMyProfile();
     _loadMyPosts();
+
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        _loadMyPosts();
+      }
+    });
   }
 
   @override
@@ -203,24 +209,25 @@ class _ParentViewState extends State<ParentView> {
     final resp = await http.get(detailUrl);
     final result = jsonDecode(resp.body)['result'];
     final loc = result['geometry']['location'];
-    final formattedAddress = result['formatted_address'] ?? place['description'];
-    
+    final formattedAddress =
+        result['formatted_address'] ?? place['description'];
+
     // 調試信息
     print('選擇的地點: ${place['description']}');
     print('格式化地址: $formattedAddress');
-    
+
     // 如果任務名稱為空，自動填入地點名稱
     if (_postForm['name']?.toString().trim().isEmpty == true) {
       _nameCtrl.text = place['description'];
       _postForm['name'] = place['description'];
     }
-    
+
     // 將地址信息保存到 address 字段
     _postForm['address'] = formattedAddress;
-    
+
     // 調試信息
     print('保存後的 _postForm: $_postForm');
-    
+
     setState(() {
       _postForm['lat'] = loc['lat'];
       _postForm['lng'] = loc['lng'];
@@ -251,60 +258,87 @@ class _ParentViewState extends State<ParentView> {
   void _startCreatePostManually() {
     setState(() {
       _currentBottomSheet = BottomSheetType.createEditPost;
-      _postForm = {'name': '', 'content': '', 'address': '', 'lat': null, 'lng': null};
+      _postForm = {
+        'name': '',
+        'content': '',
+        'address': '',
+        'lat': null,
+        'lng': null,
+      };
       _nameCtrl.clear();
       _contentCtrl.clear();
       _locationSearchCtrl.clear();
     });
   }
 
-  void _cancelCreatePost() => setState(() => _currentBottomSheet = BottomSheetType.none);
+  void _cancelCreatePost() =>
+      setState(() => _currentBottomSheet = BottomSheetType.none);
 
   Future<void> _saveNewPost() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
-    
+
     // 表單驗證
     if (_postForm['name']?.toString().trim().isEmpty == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請輸入任務名稱')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('請輸入任務名稱')));
       return;
     }
-    
+
     if (_postForm['lat'] == null || _postForm['lng'] == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請選擇任務地點')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('請選擇任務地點')));
       return;
     }
-    
+
     try {
+      // 確保座標是正確的數字類型
+      final lat = _postForm['lat'] is String
+          ? double.parse(_postForm['lat'])
+          : _postForm['lat'].toDouble();
+      final lng = _postForm['lng'] is String
+          ? double.parse(_postForm['lng'])
+          : _postForm['lng'].toDouble();
+
       final data = {
         'name': _postForm['name'].toString().trim(),
         'content': _postForm['content']?.toString().trim() ?? '',
         'address': _postForm['address']?.toString().trim() ?? '',
-        'lat': _postForm['lat'],
-        'lng': _postForm['lng'],
+        'lat': lat, // 確保是 double 類型
+        'lng': lng, // 確保是 double 類型
         'userId': u.uid,
         'applicants': [],
         'createdAt': Timestamp.now(),
+        'status': 'open',
       };
-      
-      // 調試信息
+
       print('準備保存到資料庫的數據: $data');
-      print('address 字段: ${data['address']}');
-      
+      print('座標類型檢查 - lat: ${lat.runtimeType}, lng: ${lng.runtimeType}');
+
       await _firestore.collection('posts').add(data);
+
+      // 重新載入資料
       await _loadMyPosts();
-      setState(() => _currentBottomSheet = BottomSheetType.none);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('任務創建成功！')),
-      );
+
+      setState(() {
+        _currentBottomSheet = BottomSheetType.none;
+        _editingPostId = null;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任務創建成功！')));
+
+      // 創建成功後移動地圖到新任務位置
+      final newLatLng = LatLng(lat, lng);
+      _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(newLatLng, 15));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('創建任務失敗：$e')),
-      );
+      print('創建任務失敗: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('創建任務失敗：$e')));
     }
   }
 
@@ -344,38 +378,97 @@ class _ParentViewState extends State<ParentView> {
   /// 加载 Parent 自己的任务
   Future<void> _loadMyPosts() async {
     final u = FirebaseAuth.instance.currentUser;
-    if (u == null) return;
-    final snap = await _firestore
-        .collection('posts')
-        .where('userId', isEqualTo: u.uid)
-        .get();
-    final ps = snap.docs.map((d) {
-      final m = Map<String, dynamic>.from(d.data());
-      m['id'] = d.id;
-      return m;
-    }).toList();
-    setState(() => _myPosts = ps);
+    if (u == null) {
+      print('❌ 用戶未登入');
+      return;
+    }
+
+    try {
+      print('🔄 正在載入用戶 ${u.uid} 的任務...');
+
+      // 移除 orderBy 以避免索引問題
+      final snap = await _firestore
+          .collection('posts')
+          .where('userId', isEqualTo: u.uid)
+          .get();
+
+      print('📊 Firestore 查詢結果: ${snap.docs.length} 個文檔');
+
+      final ps = snap.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data());
+        m['id'] = d.id;
+
+        // 確保座標是正確的數字類型
+        if (m['lat'] != null) {
+          m['lat'] = m['lat'] is String
+              ? double.parse(m['lat'])
+              : m['lat'].toDouble();
+        }
+        if (m['lng'] != null) {
+          m['lng'] = m['lng'] is String
+              ? double.parse(m['lng'])
+              : m['lng'].toDouble();
+        }
+
+        print('✅ 載入任務: ${m['name']} (ID: ${d.id})');
+        print('   - 內容: ${m['content']}');
+        print('   - 地址: ${m['address']}');
+        print('   - 座標: (${m['lat']}, ${m['lng']})');
+        print('   - 應徵者: ${m['applicants']}');
+        print('   - 創建者: ${m['userId']}');
+
+        return m;
+      }).toList();
+
+      // 手動按創建時間排序
+      ps.sort((a, b) {
+        final aTime = a['createdAt'] as Timestamp?;
+        final bTime = b['createdAt'] as Timestamp?;
+
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+
+        return bTime.compareTo(aTime);
+      });
+
+      print('🎯 總共載入了 ${ps.length} 個任務');
+
+      if (mounted) {
+        setState(() {
+          _myPosts = ps;
+        });
+        print('🔄 UI 已更新，_myPosts.length = ${_myPosts.length}');
+      }
+    } catch (e) {
+      print('❌ 載入任務失敗: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('載入任務失敗：$e')));
+      }
+    }
   }
 
   /// 編輯完成後更新 Firestore
   Future<void> _saveEditedPost() async {
     if (_editingPostId == null) return;
-    
+
     // 表單驗證
     if (_postForm['name']?.toString().trim().isEmpty == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請輸入任務名稱')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('請輸入任務名稱')));
       return;
     }
-    
+
     if (_postForm['lat'] == null || _postForm['lng'] == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請選擇任務地點')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('請選擇任務地點')));
       return;
     }
-    
+
     try {
       await _firestore.doc('posts/$_editingPostId').update({
         'name': _postForm['name'].toString().trim(),
@@ -389,13 +482,13 @@ class _ParentViewState extends State<ParentView> {
         _currentBottomSheet = BottomSheetType.none;
         _editingPostId = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('任務更新成功！')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任務更新成功！')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('更新任務失敗：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('更新任務失敗：$e')));
     }
   }
 
@@ -422,7 +515,8 @@ class _ParentViewState extends State<ParentView> {
       // 安全地预填所有输入框
       _nameCtrl.text = loc['name']?.toString() ?? '';
       _contentCtrl.text = loc['content']?.toString() ?? '';
-      _locationSearchCtrl.text = loc['address']?.toString() ?? loc['name']?.toString() ?? '';
+      _locationSearchCtrl.text =
+          loc['address']?.toString() ?? loc['name']?.toString() ?? '';
     });
   }
 
@@ -557,25 +651,46 @@ class _ParentViewState extends State<ParentView> {
   }
 
   Set<Marker> _buildMyPostMarkers() {
-    return {
-      for (var post in _myPosts)
-        Marker(
+    print('建立任務標記，共 ${_myPosts.length} 個任務');
+    final markers = <Marker>{};
+    for (var post in _myPosts) {
+      try {
+        // 檢查必要的字段是否存在
+        if (post['id'] == null || post['lat'] == null || post['lng'] == null) {
+          continue;
+        }
+        final lat = post['lat'];
+        final lng = post['lng'];
+        // 檢查座標是否為有效數字
+        if (lat is! num || lng is! num) {
+          continue;
+        }
+        final position = LatLng(lat.toDouble(), lng.toDouble());
+        final marker = Marker(
           markerId: MarkerId(post['id']),
-          position: LatLng(post['lat'], post['lng']),
+          position: position,
           icon: BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueYellow,
           ),
-          onTap: () => _selectLocationMarker({
-            'id': post['id'],
-            'name': post['name'],
-            'content': post['content'],
-            'address': post['address'],
-            'applicants': post['applicants'],
-            'lat': post['lat'],
-            'lng': post['lng'],
-          }, isStatic: false),
-        ),
-    };
+          onTap: () {
+            _selectLocationMarker({
+              'id': post['id'],
+              'name': post['name'],
+              'content': post['content'],
+              'address': post['address'],
+              'applicants': post['applicants'],
+              'lat': lat.toDouble(),
+              'lng': lng.toDouble(),
+            }, isStatic: false);
+          },
+        );
+        markers.add(marker);
+      } catch (e) {
+        print('創建標記時出錯: ${post['name']} - $e');
+      }
+    }
+    print('成功創建 ${markers.length} 個任務標記');
+    return markers;
   }
 
   Set<Marker> _buildMyLocationMarker() {
@@ -594,11 +709,20 @@ class _ParentViewState extends State<ParentView> {
 
   @override
   Widget build(BuildContext context) {
+    // 創建所有標記
+    final myLocationMarkers = _buildMyLocationMarker();
+    final staticParkMarkers = _buildStaticParkMarkers();
+    final myPostMarkers = _buildMyPostMarkers();
+
     final markers = <Marker>{
-      ..._buildMyLocationMarker(),
-      ..._buildStaticParkMarkers(),
-      ..._buildMyPostMarkers(),
+      ...myLocationMarkers,
+      ...staticParkMarkers,
+      ...myPostMarkers,
     };
+
+    print(
+      '總標記數量: ${markers.length} (我的位置: ${myLocationMarkers.length}, 公園: ${staticParkMarkers.length}, 我的任務: ${myPostMarkers.length})',
+    );
 
     return Scaffold(
       body: Stack(
@@ -606,7 +730,17 @@ class _ParentViewState extends State<ParentView> {
           // Google 地圖
           GoogleMap(
             initialCameraPosition: CameraPosition(target: _center, zoom: _zoom),
-            onMapCreated: (c) => _mapCtrl = c..setMapStyle(mapStyleJson),
+            onMapCreated: (c) {
+              _mapCtrl = c;
+              c.setMapStyle(mapStyleJson);
+
+              // 地圖創建後立即重新載入任務
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  _loadMyPosts();
+                }
+              });
+            },
             markers: markers,
             myLocationEnabled: false,
             myLocationButtonEnabled: false,
@@ -615,6 +749,71 @@ class _ParentViewState extends State<ParentView> {
             compassEnabled: false,
             zoomGesturesEnabled: true,
           ),
+
+          // 添加調試信息按鈕（開發時使用）
+          if (true) // 設為 false 來隱藏調試按鈕
+            Positioned(
+              top: 50,
+              left: 16,
+              child: FloatingActionButton(
+                mini: true,
+                backgroundColor: Colors.red[100],
+                child: const Icon(Icons.info, color: Colors.red),
+                onPressed: () async {
+                  final u = FirebaseAuth.instance.currentUser;
+                  final allPosts = await _firestore.collection('posts').get();
+                  final myPosts = await _firestore
+                      .collection('posts')
+                      .where('userId', isEqualTo: u?.uid)
+                      .get();
+
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('調試信息'),
+                      content: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('當前用戶 UID: ${u?.uid}'),
+                            Text('總任務數量: ${allPosts.docs.length}'),
+                            Text('我的任務數量: ${myPosts.docs.length}'),
+                            Text('本地任務數量: ${_myPosts.length}'),
+                            Text('標記數量: ${markers.length}'),
+                            const SizedBox(height: 10),
+                            const Text('所有任務:'),
+                            for (var doc in allPosts.docs)
+                              Text(
+                                '- ${doc.data()['name']}: ${doc.data()['userId']}',
+                              ),
+                            const SizedBox(height: 10),
+                            const Text('我的任務:'),
+                            for (var post in _myPosts)
+                              Text(
+                                '- ${post['name']}: (${post['lat']}, ${post['lng']})',
+                              ),
+                          ],
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('關閉'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _loadMyPosts();
+                          },
+                          child: const Text('重新載入'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
 
           // 工具按鈕
           Positioned(
@@ -630,7 +829,7 @@ class _ParentViewState extends State<ParentView> {
                   mini: false,
                   child: const Icon(Icons.my_location),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
+                    borderRadius: BorderRadius.circular(56),
                   ),
                   onPressed: () async {
                     var perm = await Geolocator.checkPermission();
@@ -662,7 +861,7 @@ class _ParentViewState extends State<ParentView> {
                   mini: false,
                   child: const Icon(Icons.add),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
+                    borderRadius: BorderRadius.circular(56),
                   ),
                   onPressed: _startCreatePostManually,
                 ),
@@ -674,9 +873,11 @@ class _ParentViewState extends State<ParentView> {
                   mini: false,
                   child: const Icon(Icons.person),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
+                    borderRadius: BorderRadius.circular(56),
                   ),
-                  onPressed: () => setState(() => _currentBottomSheet = BottomSheetType.profileEditing),
+                  onPressed: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.profileEditing,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 FloatingActionButton(
@@ -686,9 +887,11 @@ class _ParentViewState extends State<ParentView> {
                   mini: false,
                   child: const Icon(Icons.list),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
+                    borderRadius: BorderRadius.circular(56),
                   ),
-                  onPressed: () => setState(() => _currentBottomSheet = BottomSheetType.myPostsList),
+                  onPressed: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.myPostsList,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 FloatingActionButton(
@@ -698,7 +901,7 @@ class _ParentViewState extends State<ParentView> {
                   mini: false,
                   child: const Icon(Icons.logout),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
+                    borderRadius: BorderRadius.circular(56),
                   ),
                   onPressed: () async {
                     await _authService.signOut();
@@ -710,9 +913,10 @@ class _ParentViewState extends State<ParentView> {
           ),
 
           // 任務詳情底部彈窗
-          if (_currentBottomSheet == BottomSheetType.taskDetail && _selectedLocation != null)
+          if (_currentBottomSheet == BottomSheetType.taskDetail &&
+              _selectedLocation != null)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: _selectedLocation!['name'],
                 onClose: _closeLocationPopup,
                 child: TaskDetailBottomSheet(
@@ -729,9 +933,10 @@ class _ParentViewState extends State<ParentView> {
           // 應徵者列表底部彈窗
           if (_currentBottomSheet == BottomSheetType.applicantsList)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '應徵者列表',
-                onClose: () => setState(() => _currentBottomSheet = BottomSheetType.none),
+                onClose: () =>
+                    setState(() => _currentBottomSheet = BottomSheetType.none),
                 child: ApplicantsListBottomSheet(
                   applicants: _currentApplicants,
                   onApplicantTap: _showApplicantProfile,
@@ -739,11 +944,13 @@ class _ParentViewState extends State<ParentView> {
               ),
             ),
           // 應徵者詳情底部彈窗
-          if (_currentBottomSheet == BottomSheetType.applicantProfile && _selectedApplicant != null)
+          if (_currentBottomSheet == BottomSheetType.applicantProfile &&
+              _selectedApplicant != null)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '應徵者資料',
-                onClose: () => setState(() => _currentBottomSheet = BottomSheetType.none),
+                onClose: () =>
+                    setState(() => _currentBottomSheet = BottomSheetType.none),
                 child: ApplicantProfileBottomSheet(
                   applicant: _selectedApplicant!,
                   onAccept: () => _acceptApplicant(
@@ -754,159 +961,102 @@ class _ParentViewState extends State<ParentView> {
                     _selectedLocation!['id'],
                     _selectedApplicant!['id'],
                   ),
-                  onBack: () => setState(() => _currentBottomSheet = BottomSheetType.applicantsList),
+                  onBack: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.applicantsList,
+                  ),
                 ),
               ),
             ),
+
           // 我的任務列表底部彈窗
           if (_currentBottomSheet == BottomSheetType.myPostsList)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '我的任務列表',
-                onClose: () => setState(() => _currentBottomSheet = BottomSheetType.none),
-                child: _myPosts.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(40),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.assignment_outlined,
-                                size: 64,
-                                color: Colors.grey,
-                              ),
-                              SizedBox(height: 16),
-                              Text(
-                                '您還沒有發布任何任務',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                '點擊右下角的 + 按鈕來新增第一個任務吧！',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _myPosts.length,
-                        itemBuilder: (context, index) {
-                          final post = _myPosts[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.all(16),
-                              leading: Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.orange[100],
-                                  borderRadius: BorderRadius.circular(25),
-                                ),
-                                child: Icon(
-                                  Icons.location_on,
-                                  color: Colors.orange[600],
-                                  size: 28,
-                                ),
-                              ),
-                              title: Text(
-                                post['name'] ?? '',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (post['content']?.toString().isNotEmpty ==
-                                      true) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      post['content'],
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 16),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.people,
-                                        size: 16,
-                                        color: Colors.blue[600],
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${(post['applicants'] as List?)?.length ?? 0} 人應徵',
-                                        style: TextStyle(
-                                          color: Colors.blue[600],
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              trailing: const Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: Colors.grey,
-                              ),
-                              onTap: () async {
-                                final taskLatLng = LatLng(
-                                  post['lat'].toDouble(),
-                                  post['lng'].toDouble(),
-                                );
-                                await _mapCtrl.animateCamera(
-                                  CameraUpdate.newLatLngZoom(taskLatLng, 16),
-                                );
-                                setState(() => _currentBottomSheet = BottomSheetType.none);
-                                await Future.delayed(
-                                  const Duration(milliseconds: 500),
-                                );
-                                _selectLocationMarker({
-                                  'id': post['id'],
-                                  'name': post['name'],
-                                  'content': post['content'],
-                                  'address': post['address'],
-                                  'applicants': post['applicants'],
-                                  'lat': post['lat'],
-                                  'lng': post['lng'],
-                                }, isStatic: false);
-                              },
-                            ),
-                          );
-                        },
-                      ),
+                onClose: () {
+                  setState(() => _currentBottomSheet = BottomSheetType.none);
+                },
+                child: MyTasksListBottomSheet(
+                  tasks: _myPosts,
+                  onTaskTap: (task) {
+                    // 关闭任务列表，显示任务详情
+                    setState(() {
+                      _selectedLocation = task;
+                      _currentBottomSheet = BottomSheetType.taskDetail;
+                      _travelInfo = null;
+                    });
+                    // 计算交通信息
+                    _calculateTravelInfo(LatLng(task['lat'], task['lng']));
+                  },
+                  onEditTask: (task) {
+                    // 关闭任务列表，打开编辑模式
+                    setState(() {
+                      _currentBottomSheet = BottomSheetType.createEditPost;
+                      _editingPostId = task['id'];
+                      _postForm = {
+                        'name': task['name'],
+                        'content': task['content'],
+                        'address': task['address'],
+                        'lat': task['lat'],
+                        'lng': task['lng'],
+                      };
+
+                      // 预填输入框
+                      _nameCtrl.text = task['name']?.toString() ?? '';
+                      _contentCtrl.text = task['content']?.toString() ?? '';
+                      _locationSearchCtrl.text =
+                          task['address']?.toString() ??
+                          task['name']?.toString() ??
+                          '';
+                    });
+                  },
+                  onDeleteTask: (taskId) async {
+                    try {
+                      await _firestore.doc('posts/$taskId').delete();
+                      await _loadMyPosts();
+
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('任務已刪除')));
+
+                      // 如果删除后没有任务了，保持在列表页面
+                      if (_myPosts.isEmpty) {
+                        // 不关闭弹窗，让用户看到空状态
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('刪除失敗：$e')));
+                    }
+                  },
+                  onCreateNew: () {
+                    // 关闭任务列表，打开新建任务页面
+                    setState(() {
+                      _currentBottomSheet = BottomSheetType.createEditPost;
+                      _editingPostId = null;
+                      _postForm = {
+                        'name': '',
+                        'content': '',
+                        'address': '',
+                        'lat': null,
+                        'lng': null,
+                      };
+                      _nameCtrl.clear();
+                      _contentCtrl.clear();
+                      _locationSearchCtrl.clear();
+                    });
+                  },
+                ),
               ),
             ),
+
           // 創建/編輯任務底部彈窗
           if (_currentBottomSheet == BottomSheetType.createEditPost)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: _editingPostId == null ? '新增任務' : '編輯任務',
-                maxHeight: 0.95, // 設置最大高度，因為表單內容較多
-                onClose: () => setState(() => _currentBottomSheet = BottomSheetType.none),
+                onClose: () =>
+                    setState(() => _currentBottomSheet = BottomSheetType.none),
                 child: CreateEditTaskBottomSheet(
                   isEditing: _editingPostId != null,
                   taskForm: _postForm,
@@ -923,7 +1073,9 @@ class _ParentViewState extends State<ParentView> {
                       await _saveNewPost();
                     }
                   },
-                  onCancel: () => setState(() => _currentBottomSheet = BottomSheetType.none),
+                  onCancel: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.none,
+                  ),
                 ),
               ),
             ),
@@ -931,14 +1083,16 @@ class _ParentViewState extends State<ParentView> {
           // 編輯個人資料底部彈窗
           if (_currentBottomSheet == BottomSheetType.profileEditing)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '編輯個人資料',
-                maxHeight: 0.9,
-                onClose: () => setState(() => _currentBottomSheet = BottomSheetType.none),
+                onClose: () =>
+                    setState(() => _currentBottomSheet = BottomSheetType.none),
                 child: EditProfileBottomSheet(
                   profileForm: _profileForm,
                   onSave: _saveProfile,
-                  onCancel: () => setState(() => _currentBottomSheet = BottomSheetType.none),
+                  onCancel: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.none,
+                  ),
                 ),
               ),
             ),

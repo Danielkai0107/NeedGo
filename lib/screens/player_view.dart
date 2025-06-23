@@ -13,7 +13,7 @@ import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../data/parks_data.dart';
 import '../services/auth_service.dart';
-import '../components/draggable_bottom_sheet.dart';
+import '../components/full_screen_popup.dart';
 
 enum BottomSheetType {
   none,
@@ -51,7 +51,7 @@ class _PlayerViewState extends State<PlayerView> {
 
   // 將多個布林變數替換為單一的枚舉狀態
   BottomSheetType _currentBottomSheet = BottomSheetType.none;
-  
+
   // 添加缺失的變數
   Map<String, dynamic> _profile = {};
   Map<String, dynamic> _profileForm = {};
@@ -213,7 +213,7 @@ class _PlayerViewState extends State<PlayerView> {
     print('選中的位置數據: $loc');
     print('地址字段: ${loc['address']}');
     print('地址字段類型: ${loc['address'].runtimeType}');
-    
+
     setState(() {
       _selectedLocation = loc;
       _travelInfo = null;
@@ -288,7 +288,8 @@ class _PlayerViewState extends State<PlayerView> {
     });
   }
 
-  void _closeProfileEditor() => setState(() => _currentBottomSheet = BottomSheetType.none);
+  void _closeProfileEditor() =>
+      setState(() => _currentBottomSheet = BottomSheetType.none);
 
   Future<void> _saveProfile() async {
     final u = FirebaseAuth.instance.currentUser;
@@ -327,8 +328,10 @@ class _PlayerViewState extends State<PlayerView> {
     });
   }
 
-  void _openMyApplications() => setState(() => _currentBottomSheet = BottomSheetType.myApplications);
-  void _closeMyApplications() => setState(() => _currentBottomSheet = BottomSheetType.none);
+  void _openMyApplications() =>
+      setState(() => _currentBottomSheet = BottomSheetType.myApplications);
+  void _closeMyApplications() =>
+      setState(() => _currentBottomSheet = BottomSheetType.none);
 
   bool get _hasApplied {
     final u = FirebaseAuth.instance.currentUser;
@@ -759,7 +762,7 @@ class _PlayerViewState extends State<PlayerView> {
           // 通用弹窗：静态公园 or 动态任务
           if (_selectedLocation != null)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: _selectedLocation!['name'] ?? '地點',
                 onClose: _closePopup,
                 child: LocationDetailBottomSheet(
@@ -811,11 +814,11 @@ class _PlayerViewState extends State<PlayerView> {
             ),
 
           // 新貼文通知彈窗
-          if (_currentBottomSheet == BottomSheetType.newPostNotification && _newPostToShow != null)
+          if (_currentBottomSheet == BottomSheetType.newPostNotification &&
+              _newPostToShow != null)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '✨ 有新的案件！',
-                initialHeight: 0.3,
                 onClose: _closeNewPostNotification,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -900,7 +903,7 @@ class _PlayerViewState extends State<PlayerView> {
           // 我的應徵清單底部彈窗
           if (_currentBottomSheet == BottomSheetType.myApplications)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '我的應徵清單',
                 onClose: _closeMyApplications,
                 child: MyApplicationsBottomSheet(
@@ -913,7 +916,7 @@ class _PlayerViewState extends State<PlayerView> {
           // 通知面板
           if (_currentBottomSheet == BottomSheetType.notificationPanel)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '最新案件通知',
                 onClose: _closeNotificationPanel,
                 child: NotificationPanelBottomSheet(
@@ -927,9 +930,8 @@ class _PlayerViewState extends State<PlayerView> {
           // 編輯個人資料底部彈窗
           if (_currentBottomSheet == BottomSheetType.profileEditor)
             Positioned.fill(
-              child: DraggableBottomSheet(
+              child: FullScreenPopup(
                 title: '編輯個人資料',
-                maxHeight: 0.9,
                 onClose: _closeProfileEditor,
                 child: EditProfileBottomSheet(
                   profileForm: _profileForm,
