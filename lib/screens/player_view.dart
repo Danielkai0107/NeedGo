@@ -21,6 +21,7 @@ enum BottomSheetType {
   myApplications,
   notificationPanel,
   profileEditor,
+  randomNearbyNotification,
 }
 
 class PlayerView extends StatefulWidget {
@@ -90,6 +91,7 @@ class _PlayerViewState extends State<PlayerView> {
         _loadProfile(user.uid);
         _initializeNotificationSystem(); // 先初始化時間
         _attachPostsListener(); // 再檢查歷史通知並設置監聽器
+        _showRandomNearbyPost();
       } else {
         _postsSub?.cancel();
         _notificationTimer?.cancel();
@@ -101,6 +103,57 @@ class _PlayerViewState extends State<PlayerView> {
       }
     });
     _findAndRecenter();
+  }
+
+  /// 顯示隨機的附近案件彈窗
+  Future<void> _showRandomNearbyPost() async {
+    if (_myLocation == null) {
+      // 如果還沒取得位置，等一下再試
+      await Future.delayed(const Duration(seconds: 2));
+      if (_myLocation == null) return;
+    }
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    // 找出5KM內的所有案件，排除自己發布的
+    final nearbyPosts = _allPosts.where((post) {
+      // 排除自己發布的案件
+      if (post['userId'] == currentUser.uid) return false;
+
+      final distance = _calculateDistance(
+        _myLocation!.latitude,
+        _myLocation!.longitude,
+        post['lat'],
+        post['lng'],
+      );
+      return distance <= 5.0; // 5公里內
+    }).toList();
+
+    if (nearbyPosts.isNotEmpty) {
+      // 隨機選一個
+      final randomPost =
+          nearbyPosts[DateTime.now().millisecondsSinceEpoch %
+              nearbyPosts.length];
+
+      // 延遲1秒顯示彈窗，避免與其他初始化衝突
+      await Future.delayed(const Duration(seconds: 1));
+
+      setState(() {
+        _newPostToShow = randomPost;
+        _currentBottomSheet = BottomSheetType.randomNearbyNotification;
+      });
+    }
+  }
+
+  /// 計算兩點間距離（公里）
+  double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    return Geolocator.distanceBetween(lat1, lon1, lat2, lon2) / 1000;
   }
 
   Future<void> _loadSystemLocations() async {
@@ -130,14 +183,26 @@ class _PlayerViewState extends State<PlayerView> {
     }
   }
 
+  // 在 _loadProfile 方法中檢查設定
   Future<void> _loadProfile(String uid) async {
     final doc = await _firestore.doc('players/$uid').get();
-    if (doc.exists) setState(() => _profile = doc.data()!);
+    if (doc.exists) {
+      setState(() => _profile = doc.data()!);
+
+      // 只有當用戶開啟此功能時才顯示隨機彈窗
+      if (_profile['showRandomPosts'] != false) {
+        // 預設開啟
+        _showRandomNearbyPost();
+      }
+    }
   }
 
   /// 檢查歷史通知（登入時檢查登入前的新貼文）
   Future<void> _checkHistoricalNotifications() async {
     if (_lastCheckTime == null) return;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
 
     try {
       print('檢查歷史通知，從 $_lastCheckTime 開始');
@@ -154,18 +219,21 @@ class _PlayerViewState extends State<PlayerView> {
       print('找到 ${snapshot.docs.length} 個歷史新貼文');
 
       if (snapshot.docs.isNotEmpty) {
-        final historicalPosts = snapshot.docs.map((doc) {
-          final data = Map<String, dynamic>.from(doc.data());
-          data['id'] = doc.id;
-          return data;
-        }).toList();
+        final historicalPosts = snapshot.docs
+            .map((doc) {
+              final data = Map<String, dynamic>.from(doc.data());
+              data['id'] = doc.id;
+              return data;
+            })
+            .where((post) => post['userId'] != currentUser.uid) // 排除自己發布的
+            .toList();
 
         setState(() {
           _newPosts.addAll(historicalPosts);
           _unreadCount = _newPosts.length;
         });
 
-        print('已添加 ${historicalPosts.length} 個歷史通知');
+        print('已添加 ${historicalPosts.length} 個歷史通知（排除自己發布的）');
       }
     } catch (e) {
       print('檢查歷史通知失敗: $e');
@@ -194,6 +262,9 @@ class _PlayerViewState extends State<PlayerView> {
 
       setState(() => _allPosts = list);
 
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
       // 處理即時新增的貼文（登入後新發布的）
       for (var change in snap.docChanges) {
         if (change.type == DocumentChangeType.added &&
@@ -206,6 +277,9 @@ class _PlayerViewState extends State<PlayerView> {
             'id': change.doc.id,
             ...Map<String, dynamic>.from(change.doc.data() as Map),
           };
+
+          // 排除自己發布的案件
+          if (newPost['userId'] == currentUser.uid) continue;
 
           // 添加到通知列表
           setState(() {
@@ -423,16 +497,18 @@ class _PlayerViewState extends State<PlayerView> {
   }
 
   Set<Marker> _buildPostMarkers() {
+    final currentUser = FirebaseAuth.instance.currentUser;
     return {
       for (var post in _allPosts)
-        Marker(
-          markerId: MarkerId(post['id']),
-          position: LatLng(post['lat'], post['lng']),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueYellow,
+        if (post['userId'] != currentUser?.uid) // 新增這行過濾條件
+          Marker(
+            markerId: MarkerId(post['id']),
+            position: LatLng(post['lat'], post['lng']),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueYellow,
+            ),
+            onTap: () => _selectLocationMarker(post, isStatic: false),
           ),
-          onTap: () => _selectLocationMarker(post, isStatic: false), // 明確指定為非靜態
-        ),
     };
   }
 
@@ -857,6 +933,23 @@ class _PlayerViewState extends State<PlayerView> {
     }
   }
 
+  void _closeRandomNearbyNotification() {
+    setState(() {
+      _currentBottomSheet = BottomSheetType.none;
+      _newPostToShow = null;
+    });
+  }
+
+  void _acceptRandomNearbyPost() {
+    if (_newPostToShow != null) {
+      _selectLocationMarker(_newPostToShow!, isStatic: false);
+      setState(() {
+        _currentBottomSheet = BottomSheetType.none;
+        _newPostToShow = null;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final markers = <Marker>{
@@ -1045,30 +1138,102 @@ class _PlayerViewState extends State<PlayerView> {
             ),
 
           // 新貼文通知彈窗
-          if (_currentBottomSheet == BottomSheetType.newPostNotification &&
+          // 隨機附近案件懸浮彈窗（新增）
+          if (_currentBottomSheet == BottomSheetType.randomNearbyNotification &&
               _newPostToShow != null)
-            Positioned.fill(
-              child: FullScreenPopup(
-                title: '✨ 有新的案件！',
-                onClose: _closeNewPostNotification,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+            Positioned(
+              top: 100, // 距離頂部100px
+              left: 20,
+              right: 20,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // 標題列
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[100],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.location_on,
+                              color: Colors.orange[600],
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '🎯 發現附近案件！',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange[700],
+                                  ),
+                                ),
+                                Text(
+                                  '距離您 ${_calculateDistance(_myLocation!.latitude, _myLocation!.longitude, _newPostToShow!['lat'], _newPostToShow!['lng']).toStringAsFixed(1)} 公里',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _closeRandomNearbyNotification,
+                            icon: Icon(
+                              Icons.close,
+                              color: Colors.grey[400],
+                              size: 20,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // 案件內容
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.orange[50],
+                          color: Colors.grey[50],
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange[200]!),
+                          border: Border.all(color: Colors.grey[200]!),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '標題：${_newPostToShow!['name'] ?? ''}',
+                              _newPostToShow!['name'] ?? '未命名案件',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
@@ -1077,25 +1242,33 @@ class _PlayerViewState extends State<PlayerView> {
                             if (_newPostToShow!['content'] != null) ...[
                               const SizedBox(height: 8),
                               Text(
-                                '內容：${_newPostToShow!['content']}',
-                                style: TextStyle(color: Colors.grey[600]),
+                                _newPostToShow!['content'],
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ],
                         ),
                       ),
-                      const Spacer(),
+
+                      const SizedBox(height: 16),
+
+                      // 按鈕列
                       Row(
                         children: [
                           Expanded(
                             child: TextButton(
-                              onPressed: _closeNewPostNotification,
+                              onPressed: _closeRandomNearbyNotification,
                               style: TextButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 12,
                                 ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(8),
                                   side: BorderSide(color: Colors.grey[300]!),
                                 ),
                               ),
@@ -1105,8 +1278,10 @@ class _PlayerViewState extends State<PlayerView> {
                           const SizedBox(width: 12),
                           Expanded(
                             flex: 2,
-                            child: ElevatedButton(
-                              onPressed: _acceptNewPost,
+                            child: ElevatedButton.icon(
+                              onPressed: _acceptRandomNearbyPost,
+                              icon: const Icon(Icons.visibility, size: 16),
+                              label: const Text('立即查看'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.orange[600],
                                 foregroundColor: Colors.white,
@@ -1114,16 +1289,12 @@ class _PlayerViewState extends State<PlayerView> {
                                   vertical: 12,
                                 ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: const Text('立即接洽'),
                             ),
                           ),
                         ],
-                      ),
-                      SizedBox(
-                        height: MediaQuery.of(context).padding.bottom + 16,
                       ),
                     ],
                   ),
