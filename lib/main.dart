@@ -7,13 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-    // 🔑 載入 .env 檔案
   await dotenv.load(fileName: ".env");
-  print('🔑 .env 檔案已載入');
-
-  // 先移除 dotenv 相關，或用 try/catch 包起來
-  // await dotenv.load(fileName: '.env');
-
   await FirebaseConfig.init();
   runApp(const MyApp());
 }

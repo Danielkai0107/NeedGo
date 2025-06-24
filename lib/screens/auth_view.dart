@@ -2,7 +2,6 @@
 import 'dart:async'; // 加入這行
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'registration_view.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthView extends StatefulWidget {

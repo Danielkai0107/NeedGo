@@ -32,7 +32,7 @@ android {
         // Firebase Auth 23.x+ 要求 minSdk >= 23
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0"
         
         // 將 API Key 作為 BuildConfig 傳入

@@ -402,9 +402,6 @@ class _ParentViewState extends State<ParentView> {
     });
   }
 
-  void _cancelCreatePost() =>
-      setState(() => _currentBottomSheet = BottomSheetType.none);
-
   Future<void> _saveNewPost() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
