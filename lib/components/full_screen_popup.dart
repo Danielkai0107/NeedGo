@@ -3,6 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
+import 'package:crop_your_image/crop_your_image.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class FullScreenPopup extends StatelessWidget {
   final Widget child;
@@ -964,6 +968,7 @@ class EditProfileBottomSheet extends StatefulWidget {
     required this.onSave,
     required this.onCancel,
     this.isParentView = true,
+    // 加入這個參數來獲取當前用戶 ID
   }) : super(key: key);
 
   @override
@@ -984,6 +989,155 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
   final FocusNode _lineFocus = FocusNode();
   final FocusNode _socialFocus = FocusNode();
   final FocusNode _bioFocus = FocusNode();
+
+  Uint8List? _rawImage;
+  Uint8List? _croppedImage;
+  final CropController _cropController = CropController();
+  final ImagePicker _picker = ImagePicker();
+  bool _isUploadingAvatar = false;
+  bool _isPickingImage = false; // 新增這個變數
+
+  // 選擇並裁切頭像
+  // 選擇並裁切頭像
+  Future<void> _pickAndCropAvatar() async {
+    // 防止重複調用
+    if (_isPickingImage) return;
+
+    setState(() => _isPickingImage = true);
+
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) {
+        setState(() => _isPickingImage = false);
+        return;
+      }
+
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _rawImage = bytes;
+        _isPickingImage = false;
+      });
+
+      // 顯示裁切對話框
+      if (mounted) {
+        _showCropDialog();
+      }
+    } catch (e) {
+      setState(() => _isPickingImage = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+    }
+  }
+
+  // 顯示裁切對話框
+  void _showCropDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Container(
+            width: 300,
+            height: 400,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Text(
+                  '裁切頭像',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Crop(
+                    image: _rawImage!,
+                    controller: _cropController,
+                    aspectRatio: 1,
+                    onCropped: (result) {
+                      switch (result) {
+                        case CropSuccess(:final croppedImage):
+                          setState(() => _croppedImage = croppedImage);
+                          Navigator.of(context).pop();
+                          _uploadAvatar();
+                          break;
+                        case CropFailure(:final cause):
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('裁切失敗: $cause')),
+                          );
+                          break;
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _rawImage = null;
+                            _croppedImage = null;
+                          });
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text('取消'),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _cropController.crop(),
+                        child: const Text('確定裁切'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // 上傳頭像到 Firebase Storage
+  Future<void> _uploadAvatar() async {
+    if (_croppedImage == null) return;
+
+    setState(() => _isUploadingAvatar = true);
+
+    try {
+      // 假設需要當前用戶的 uid，這裡需要從外部傳入或獲取
+      // 您可能需要在 EditProfileBottomSheet 構造函數中加入 userId 參數
+      final userId = widget.profileForm['userId'] ?? 'temp_id';
+
+      final storageRef = FirebaseStorage.instance.ref().child(
+        'avatars/$userId.jpg',
+      );
+
+      await storageRef.putData(
+        _croppedImage!,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+
+      final avatarUrl = await storageRef.getDownloadURL();
+
+      setState(() {
+        widget.profileForm['avatarUrl'] = avatarUrl;
+        _isUploadingAvatar = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('頭像更新成功！')));
+    } catch (e) {
+      setState(() => _isUploadingAvatar = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('頭像上傳失敗：$e')));
+    }
+  }
 
   @override
   void initState() {
@@ -1065,29 +1219,85 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.blue[100],
-                  backgroundImage:
-                      widget.profileForm['avatarUrl']?.toString().isNotEmpty ==
-                          true
-                      ? NetworkImage(widget.profileForm['avatarUrl'])
-                      : null,
-                  child:
-                      widget.profileForm['avatarUrl']?.toString().isNotEmpty !=
-                          true
-                      ? Icon(Icons.person, size: 50, color: Colors.blue[600])
-                      : null,
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.blue[100],
+                      backgroundImage:
+                          widget.profileForm['avatarUrl']
+                                  ?.toString()
+                                  .isNotEmpty ==
+                              true
+                          ? NetworkImage(widget.profileForm['avatarUrl'])
+                          : null,
+                      child:
+                          widget.profileForm['avatarUrl']
+                                  ?.toString()
+                                  .isNotEmpty !=
+                              true
+                          ? Icon(
+                              Icons.person,
+                              size: 50,
+                              color: Colors.blue[600],
+                            )
+                          : null,
+                    ),
+                    if (_isUploadingAvatar)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.blue[600],
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: IconButton(
+                          onPressed: (_isUploadingAvatar || _isPickingImage)
+                              ? null
+                              : _pickAndCropAvatar,
+                          icon: const Icon(
+                            Icons.camera_alt,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 TextButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('頭像更換功能待實現')));
-                  },
+                  onPressed: (_isUploadingAvatar || _isPickingImage)
+                      ? null
+                      : _pickAndCropAvatar,
                   icon: const Icon(Icons.camera_alt, size: 16),
-                  label: const Text('更換頭像'),
+                  label: Text(
+                    _isUploadingAvatar
+                        ? '上傳中...'
+                        : _isPickingImage
+                        ? '選擇中...'
+                        : '更換頭像',
+                  ),
                 ),
               ],
             ),

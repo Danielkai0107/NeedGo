@@ -403,19 +403,39 @@ class _RegistrationViewState extends State<RegistrationView> {
           ),
 
         const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _rawImage == null
-                ? _pickImage
-                : () => _cropController.crop(),
-            icon: const Icon(Icons.upload_file),
-            label: Text(_rawImage == null ? '上傳大頭照' : '裁切並完成'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+        if (_croppedImage != null)
+          // 已裁切完成：顯示重選按鈕
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _rawImage = null;
+                  _croppedImage = null;
+                });
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('重新選擇照片'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          )
+        else
+          // 尚未裁切完成：顯示原本的按鈕
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _rawImage == null
+                  ? _pickImage
+                  : () => _cropController.crop(),
+              icon: const Icon(Icons.upload_file),
+              label: Text(_rawImage == null ? '上傳大頭照' : '裁切並完成'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
