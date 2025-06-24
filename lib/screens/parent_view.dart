@@ -140,26 +140,8 @@ class _ParentViewState extends State<ParentView> {
     }
   }
 
-  /// 通用：点击静态公园或自己任务的 Marker 调用
-  void _selectLocationMarker(
-    Map<String, dynamic> loc, {
-    bool isStatic = false,
-  }) {
-    setState(() {
-      _selectedLocation = {...loc, 'isStatic': isStatic};
-      _travelInfo = null;
-      _currentBottomSheet = BottomSheetType.taskDetail;
-    });
-    _calculateTravelInfo(LatLng(loc['lat'], loc['lng']));
-  }
-
-  void _closeLocationPopup() {
-    setState(() {
-      _selectedLocation = null;
-      _travelInfo = null;
-      _currentBottomSheet = BottomSheetType.none;
-    });
-  }
+  // 舊的 _selectLocationMarker 和 _closeLocationPopup 方法已移除
+  // 現在使用直接的 showModalBottomSheet 方式
 
   Future<void> _loadSystemLocations() async {
     try {
@@ -478,7 +460,7 @@ class _ParentViewState extends State<ParentView> {
   Future<void> _deletePost(String id) async {
     await _firestore.doc('posts/$id').delete();
     await _loadMyPosts();
-    _closeLocationPopup();
+    // 不再需要 _closeLocationPopup()，新的彈窗系統會自動處理
   }
 
   /// 加载 Parent 个人档
@@ -805,13 +787,13 @@ class _ParentViewState extends State<ParentView> {
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueGreen,
             ),
-            onTap: () => _selectLocationMarker({
+            onTap: () => _showLocationInfoSheetDirect({
               'name': location['name'],
               'lat': location['lat'],
               'lng': location['lng'],
               'address': location['address'],
               'category': location['category'],
-            }, isStatic: true), // 新增這個參數
+            }),
           ),
     };
   }
@@ -839,15 +821,23 @@ class _ParentViewState extends State<ParentView> {
             BitmapDescriptor.hueYellow,
           ),
           onTap: () {
-            _selectLocationMarker({
+            _showTaskDetailSheetDirect({
               'id': post['id'],
               'name': post['name'],
+              'title': post['title'] ?? post['name'], // 向下兼容
               'content': post['content'],
               'address': post['address'],
               'applicants': post['applicants'],
               'lat': lat.toDouble(),
               'lng': lng.toDouble(),
-            }, isStatic: false);
+              'userId': post['userId'],
+              'createdAt': post['createdAt'],
+              'status': post['status'],
+              'date': post['date'],
+              'time': post['time'],
+              'price': post['price'],
+              'images': post['images'],
+            });
           },
         );
         markers.add(marker);
@@ -864,10 +854,10 @@ class _ParentViewState extends State<ParentView> {
         ? {}
         : {
             Marker(
-              markerId: const MarkerId('me'),
+              markerId: const MarkerId('my_location'),
               position: _myLocation!,
               icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueBlue,
+                BitmapDescriptor.hueRed,
               ),
             ),
           };
@@ -927,6 +917,8 @@ class _ParentViewState extends State<ParentView> {
                                 _selectedCategories.remove(category);
                               }
                             });
+                            // 重新更新地圖標記
+                            _updateMarkers();
                           },
                           selectedColor: Colors.orange[600],
                           checkmarkColor: Colors.white,
@@ -986,6 +978,8 @@ class _ParentViewState extends State<ParentView> {
                             );
                           }
                         });
+                        // 重新更新地圖標記
+                        _updateMarkers();
                       },
                       backgroundColor: Colors.blue[50],
                       side: BorderSide(color: Colors.blue[300]!),
@@ -1296,18 +1290,21 @@ class _ParentViewState extends State<ParentView> {
 
   /// 更新地圖標記
   void _updateMarkers() {
-    MapMarkerManager.generateMarkers(
-      systemLocations: _systemLocations,
-      userTasks: _myPosts,
-      isParentView: true,
-      onMarkerTap: _handleMarkerTap,
-      currentLocation: _myLocation,
-    ).then((markers) {
-      if (mounted) {
-        setState(() {
-          _markers = markers;
-        });
-      }
+    if (!mounted) return;
+
+    final allMarkers = <Marker>{};
+
+    // 添加系統地點標記（考慮類別過濾）
+    allMarkers.addAll(_buildStaticParkMarkers());
+
+    // 添加我的任務標記
+    allMarkers.addAll(_buildMyPostMarkers());
+
+    // 添加我的位置標記
+    allMarkers.addAll(_buildMyLocationMarker());
+
+    setState(() {
+      _markers = allMarkers;
     });
   }
 
@@ -1379,6 +1376,59 @@ class _ParentViewState extends State<ParentView> {
         onCreateTaskAtLocation: () {
           Navigator.of(context).pop();
           _startCreatePostFromStatic();
+        },
+      ),
+    );
+  }
+
+  /// 直接顯示地點資訊彈窗（不通過 MarkerData）
+  void _showLocationInfoSheetDirect(Map<String, dynamic> locationData) {
+    // 移動地圖到地點位置
+    _moveMapToLocation(LatLng(locationData['lat'], locationData['lng']));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => LocationInfoSheet(
+        locationData: locationData,
+        isParentView: true,
+        currentLocation: _myLocation,
+        onCreateTaskAtLocation: () {
+          Navigator.of(context).pop();
+          _showCreateTaskSheetWithLocation(locationData);
+        },
+      ),
+    );
+  }
+
+  /// 直接顯示任務詳情彈窗（不通過 MarkerData）
+  void _showTaskDetailSheetDirect(Map<String, dynamic> taskData) {
+    // 移動地圖到任務位置
+    _moveMapToLocation(LatLng(taskData['lat'], taskData['lng']));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TaskDetailSheet(
+        taskData: taskData,
+        isParentView: true,
+        currentLocation: _myLocation,
+        onTaskUpdated: () {
+          _loadMyPosts();
+          _updateMarkers();
+        },
+        onEditTask: () {
+          Navigator.of(context).pop();
+          _editingPostId = taskData['id'];
+          _showEditTaskSheet();
+        },
+        onDeleteTask: () async {
+          Navigator.of(context).pop();
+          await _deletePost(taskData['id']);
         },
       ),
     );
@@ -1629,24 +1679,7 @@ class _ParentViewState extends State<ParentView> {
             ),
           ),
 
-          // 任務詳情底部彈窗
-          if (_currentBottomSheet == BottomSheetType.taskDetail &&
-              _selectedLocation != null)
-            Positioned.fill(
-              child: FullScreenPopup(
-                title: _selectedLocation!['name'],
-                onClose: _closeLocationPopup,
-                child: TaskDetailBottomSheet(
-                  task: _selectedLocation!,
-                  travelInfo: _travelInfo,
-                  isLoadingTravel: _isLoadingTravel,
-                  onEdit: _startEditPost,
-                  onDelete: () => _deletePost(_selectedLocation!['id']),
-                  onViewApplicants: _showApplicantsList,
-                  onCreateFromStatic: _startCreatePostFromStatic,
-                ),
-              ),
-            ),
+          // 舊的任務詳情彈窗已移除，改用新的 showModalBottomSheet 方式
           // 應徵者列表底部彈窗
           if (_currentBottomSheet == BottomSheetType.applicantsList)
             Positioned.fill(

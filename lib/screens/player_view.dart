@@ -826,6 +826,8 @@ class _PlayerViewState extends State<PlayerView> {
                                 _selectedCategories.remove(category);
                               }
                             });
+                            // 重新更新地圖標記
+                            _updateMarkers();
                           },
                           selectedColor: Colors.orange[600],
                           checkmarkColor: Colors.white,
@@ -885,6 +887,8 @@ class _PlayerViewState extends State<PlayerView> {
                             );
                           }
                         });
+                        // 重新更新地圖標記
+                        _updateMarkers();
                       },
                       backgroundColor: Colors.blue[50],
                       side: BorderSide(color: Colors.blue[300]!),
