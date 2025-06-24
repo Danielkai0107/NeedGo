@@ -1,11 +1,13 @@
 // lib/screens/parent_view.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../components/full_screen_popup.dart';
@@ -349,21 +351,43 @@ class _ParentViewState extends State<ParentView> {
   /// 打开"以此静态点位发任务"表单
   void _startCreatePostFromStatic() {
     final loc = _selectedLocation!;
+
+    // 關閉當前彈窗
     setState(() {
-      _currentBottomSheet = BottomSheetType.createEditPost;
-      _postForm = {
-        'name': loc['name'],
-        'content': '',
-        'address': loc['name'],
-        'lat': loc['lat'],
-        'lng': loc['lng'],
-      };
-      _nameCtrl.text = loc['name']?.toString() ?? '';
-      _contentCtrl.clear();
-      _locationSearchCtrl.text = loc['name']?.toString() ?? '';
       _selectedLocation = null;
       _travelInfo = null;
+      _currentBottomSheet = BottomSheetType.none;
     });
+
+    // 使用新的任務創建流程，但預填地址資訊
+    _showCreateTaskSheetWithLocation(loc);
+  }
+
+  /// 顯示帶有預設地址的新建任務彈窗
+  void _showCreateTaskSheetWithLocation(Map<String, dynamic> location) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
+        existingTask: {
+          // 預填地址資訊，其他欄位留空
+          'address': location['address'] ?? location['name'],
+          'lat': location['lat'],
+          'lng': location['lng'],
+          // 其他欄位使用預設值
+          'title': '',
+          'content': '',
+          'price': 0,
+          'images': <String>[],
+        },
+        onSubmit: (taskData) async {
+          Navigator.of(context).pop(); // 先關閉彈窗
+          await _saveNewTaskData(taskData);
+        },
+      ),
+    );
   }
 
   /// 手动新建任务
@@ -1059,23 +1083,55 @@ class _ParentViewState extends State<ParentView> {
     );
   }
 
+  /// 上傳圖片到 Firebase Storage
+  Future<List<String>> _uploadImagesToStorage(
+    List<Uint8List> images,
+    String taskId,
+  ) async {
+    final List<String> imageUrls = [];
+    final storage = FirebaseStorage.instance;
+
+    for (int i = 0; i < images.length; i++) {
+      try {
+        // 創建檔案路徑：tasks/{taskId}/image_{index}.jpg
+        final String fileName =
+            'image_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final String filePath = 'tasks/$taskId/$fileName';
+
+        // 上傳圖片
+        final Reference ref = storage.ref().child(filePath);
+        final UploadTask uploadTask = ref.putData(
+          images[i],
+          SettableMetadata(
+            contentType: 'image/jpeg',
+            cacheControl: 'max-age=60',
+          ),
+        );
+
+        // 等待上傳完成
+        final TaskSnapshot snapshot = await uploadTask;
+
+        // 取得下載 URL
+        final String downloadUrl = await snapshot.ref.getDownloadURL();
+        imageUrls.add(downloadUrl);
+
+        print('圖片 $i 上傳成功: $downloadUrl');
+      } catch (e) {
+        print('圖片 $i 上傳失敗: $e');
+        // 即使某張圖片上傳失敗，繼續上傳其他圖片
+      }
+    }
+
+    return imageUrls;
+  }
+
   /// 保存新任務資料（新格式）
   Future<void> _saveNewTaskData(new_task_sheet.TaskData taskData) async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
 
     try {
-      // 處理圖片上傳到 Firebase Storage（如果有圖片的話）
-      List<String> imageUrls = [];
-      if (taskData.images.isNotEmpty) {
-        // 暫時將圖片轉為 base64 字串保存
-        // 未來可以改為上傳到 Firebase Storage
-        for (int i = 0; i < taskData.images.length; i++) {
-          final base64String = base64Encode(taskData.images[i]);
-          imageUrls.add('data:image/jpeg;base64,$base64String');
-        }
-      }
-
+      // 先創建基本任務資料（不包含圖片）
       final data = {
         'title': taskData.title,
         'name': taskData.title, // 向下兼容
@@ -1084,7 +1140,7 @@ class _ParentViewState extends State<ParentView> {
             ? {'hour': taskData.time!.hour, 'minute': taskData.time!.minute}
             : null,
         'content': taskData.content,
-        'images': imageUrls, // 保存為字串陣列而不是 Uint8List 陣列
+        'images': <String>[], // 先設為空陣列，稍後更新
         'price': taskData.price,
         'address': taskData.address,
         'lat': taskData.lat,
@@ -1095,7 +1151,36 @@ class _ParentViewState extends State<ParentView> {
         'status': 'open',
       };
 
-      await _firestore.collection('posts').add(data);
+      // 創建任務文檔並取得 ID
+      final DocumentReference docRef = await _firestore
+          .collection('posts')
+          .add(data);
+      final String taskId = docRef.id;
+
+      // 如果有圖片，上傳到 Firebase Storage
+      List<String> imageUrls = [];
+      if (taskData.images.isNotEmpty) {
+        print('開始上傳 ${taskData.images.length} 張圖片...');
+
+        // 顯示上傳進度提示
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('正在上傳 ${taskData.images.length} 張圖片...'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+
+        imageUrls = await _uploadImagesToStorage(taskData.images, taskId);
+        print('圖片上傳完成，共 ${imageUrls.length} 張');
+
+        // 更新任務文檔的圖片 URL
+        if (imageUrls.isNotEmpty) {
+          await docRef.update({'images': imageUrls});
+        }
+      }
+
       await _loadMyPosts();
 
       setState(() {
@@ -1103,9 +1188,13 @@ class _ParentViewState extends State<ParentView> {
         _editingPostId = null;
       });
 
+      final successMessage = taskData.images.isNotEmpty
+          ? '任務創建成功！已上傳 ${imageUrls.length} 張圖片'
+          : '任務創建成功！';
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('任務創建成功！')));
+      ).showSnackBar(SnackBar(content: Text(successMessage)));
 
       // 移動地圖到新任務位置
       if (taskData.lat != null && taskData.lng != null) {
@@ -1125,18 +1214,33 @@ class _ParentViewState extends State<ParentView> {
     if (_editingPostId == null) return;
 
     try {
-      // 處理圖片上傳到 Firebase Storage（如果有圖片的話）
-      List<String> imageUrls = [];
+      // 處理圖片：合併現有圖片和新圖片
+      List<String> allImageUrls = List<String>.from(taskData.existingImageUrls);
+
+      // 如果有新圖片，上傳到 Firebase Storage
       if (taskData.images.isNotEmpty) {
-        // 暫時將圖片轉為 base64 字串保存
-        // 未來可以改為上傳到 Firebase Storage
-        for (int i = 0; i < taskData.images.length; i++) {
-          final base64String = base64Encode(taskData.images[i]);
-          imageUrls.add('data:image/jpeg;base64,$base64String');
+        print('開始上傳 ${taskData.images.length} 張新圖片...');
+
+        // 顯示上傳進度提示
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('正在上傳 ${taskData.images.length} 張圖片...'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
         }
+
+        final newImageUrls = await _uploadImagesToStorage(
+          taskData.images,
+          _editingPostId!,
+        );
+        allImageUrls.addAll(newImageUrls);
+        print('圖片上傳完成，共 ${newImageUrls.length} 張新圖片');
       }
 
-      final data = {
+      // 準備更新資料
+      final data = <String, dynamic>{
         'title': taskData.title,
         'name': taskData.title, // 向下兼容
         'date': taskData.date?.toIso8601String(),
@@ -1144,7 +1248,7 @@ class _ParentViewState extends State<ParentView> {
             ? {'hour': taskData.time!.hour, 'minute': taskData.time!.minute}
             : null,
         'content': taskData.content,
-        'images': imageUrls, // 保存為字串陣列而不是 Uint8List 陣列
+        'images': allImageUrls, // 更新為完整的圖片 URL 列表
         'price': taskData.price,
         'address': taskData.address,
         'lat': taskData.lat,
@@ -1160,9 +1264,13 @@ class _ParentViewState extends State<ParentView> {
         _editingPostId = null;
       });
 
+      final successMessage = taskData.images.isNotEmpty
+          ? '任務更新成功！已上傳 ${taskData.images.length} 張新圖片'
+          : '任務更新成功！';
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('任務更新成功！')));
+      ).showSnackBar(SnackBar(content: Text(successMessage)));
     } catch (e) {
       print('更新任務錯誤詳情: $e');
       ScaffoldMessenger.of(

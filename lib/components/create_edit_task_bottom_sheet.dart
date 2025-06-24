@@ -3,6 +3,9 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // 任務數據模型
 class TaskData {
@@ -10,7 +13,8 @@ class TaskData {
   DateTime? date;
   TimeOfDay? time;
   String content;
-  List<Uint8List> images;
+  List<Uint8List> images; // 新上傳的圖片（bytes）
+  List<String> existingImageUrls; // 已存在的圖片 URL
   int price;
   String? address;
   double? lat;
@@ -22,11 +26,13 @@ class TaskData {
     this.time,
     this.content = '',
     List<Uint8List>? images,
+    List<String>? existingImageUrls,
     this.price = 0,
     this.address,
     this.lat,
     this.lng,
-  }) : images = images ?? [];
+  }) : images = images ?? [],
+       existingImageUrls = existingImageUrls ?? [];
 
   // 從已有任務物件初始化
   TaskData.fromExisting(Map<String, dynamic> task)
@@ -39,11 +45,17 @@ class TaskData {
             )
           : null,
       content = task['content'] ?? '',
-      images = [], // 需要根據實際情況從 Firebase Storage 加載
+      images = [], // 新上傳的圖片
+      existingImageUrls = task['images'] != null
+          ? List<String>.from(task['images'])
+          : [], // 從任務載入現有圖片 URL
       price = task['price'] ?? 0,
       address = task['address'],
       lat = task['lat']?.toDouble(),
       lng = task['lng']?.toDouble();
+
+  // 取得總圖片數量
+  int get totalImageCount => images.length + existingImageUrls.length;
 
   Map<String, dynamic> toJson() {
     return {
@@ -129,7 +141,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   bool get _isLegacyMode => widget.taskForm != null;
 
   int _currentStep = 0;
-  final int _totalSteps = 5;
+  final int _totalSteps = 6; // 從 5 改為 6
 
   // 表單數據
   late TaskData _taskData;
@@ -137,16 +149,19 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 表單控制器（內部使用）
   late TextEditingController _titleController;
   late TextEditingController _contentController;
+  late TextEditingController _addressController; // 新增地址控制器
 
   // UI 狀態
   bool _isSubmitting = false;
   final ImagePicker _imagePicker = ImagePicker();
+  List<Map<String, dynamic>> _locationSuggestions = []; // 地址搜尋建議
 
   // 錯誤提示狀態
   String? _titleError;
   String? _dateError;
   String? _timeError;
   String? _contentError;
+  String? _addressError; // 新增地址錯誤提示
 
   // Legacy API 相關
   final FocusNode _nameFocus = FocusNode();
@@ -191,12 +206,14 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     // 創建內部控制器
     _titleController = TextEditingController();
     _contentController = TextEditingController();
+    _addressController = TextEditingController(); // 新增地址控制器
 
     // 初始化任務數據
     if (widget.existingTask != null) {
       _taskData = TaskData.fromExisting(widget.existingTask!);
       _titleController.text = _taskData.title;
       _contentController.text = _taskData.content;
+      _addressController.text = _taskData.address ?? ''; // 初始化地址
     } else {
       _taskData = TaskData();
     }
@@ -209,6 +226,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       _animationController.dispose();
       _titleController.dispose();
       _contentController.dispose();
+      _addressController.dispose(); // 釋放地址控制器
     }
     _nameFocus.dispose();
     _contentFocus.dispose();
@@ -223,6 +241,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       _dateError = null;
       _timeError = null;
       _contentError = null;
+      _addressError = null; // 清除地址錯誤
     });
   }
 
@@ -265,13 +284,26 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         }
         return true;
 
-      case 2: // 圖片上傳 (可選)
+      case 2: // 地址選擇
+        if (_taskData.address == null || _taskData.address!.isEmpty) {
+          _addressError = '請選擇任務地點';
+          setState(() {});
+          return false;
+        }
+        if (_taskData.lat == null || _taskData.lng == null) {
+          _addressError = '請選擇有效的地點';
+          setState(() {});
+          return false;
+        }
         return true;
 
-      case 3: // 報價選項
+      case 3: // 圖片上傳 (可選)
         return true;
 
-      case 4: // 預覽
+      case 4: // 報價選項
+        return true;
+
+      case 5: // 預覽
         return true;
 
       default:
@@ -606,9 +638,10 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 children: [
                   _buildStep1BasicInfo(),
                   _buildStep2TaskContent(),
-                  _buildStep3ImageUpload(),
-                  _buildStep4PriceOption(),
-                  _buildStep5Preview(),
+                  _buildStep3AddressSelection(), // 新增地址選擇步驟
+                  _buildStep4ImageUpload(), // 原來的步驟3變成步驟4
+                  _buildStep5PriceOption(), // 原來的步驟4變成步驟5
+                  _buildStep6Preview(), // 原來的步驟5變成步驟6
                 ],
               ),
             ),
@@ -914,15 +947,131 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     );
   }
 
-  // 步驟3：圖片上傳
-  Widget _buildStep3ImageUpload() {
+  // 步驟3：地址選擇
+  Widget _buildStep3AddressSelection() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 3/5: 圖片上傳',
+            '步驟 3/6: 地址選擇',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 24),
+
+          const Text('任務地點 *', style: TextStyle(fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _addressController,
+            decoration: InputDecoration(
+              hintText: '搜尋地點...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderSide: BorderSide(
+                  color: _addressError != null ? Colors.red : Colors.grey,
+                ),
+              ),
+              errorBorder: const OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.red),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 16,
+              ),
+              errorText: _addressError,
+            ),
+            onChanged: (value) {
+              if (value.isNotEmpty) {
+                _searchLocations(value);
+                if (_addressError != null) {
+                  setState(() {
+                    _addressError = null; // 清除錯誤
+                  });
+                }
+              } else {
+                setState(() {
+                  _locationSuggestions = [];
+                });
+              }
+            },
+          ),
+
+          // 地點建議列表
+          if (_locationSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _locationSuggestions.length,
+                itemBuilder: (context, index) {
+                  final suggestion = _locationSuggestions[index];
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(
+                      Icons.location_on,
+                      color: Colors.grey[600],
+                      size: 20,
+                    ),
+                    title: Text(
+                      suggestion['description'],
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    onTap: () => _selectLocation(suggestion),
+                  );
+                },
+              ),
+            ),
+          ],
+
+          // 顯示已選擇的地址
+          if (_taskData.address != null && _taskData.address!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green[600]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '已選擇: ${_taskData.address}',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // 步驟4：圖片上傳
+  Widget _buildStep4ImageUpload() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '步驟 4/6: 圖片上傳',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -943,54 +1092,117 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             ),
             itemCount: 3,
             itemBuilder: (context, index) {
-              if (index < _taskData.images.length) {
-                // 顯示已上傳的圖片
-                return Stack(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[300]!),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          _taskData.images[index],
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
+              final existingImageCount = _taskData.existingImageUrls.length;
+              final newImageCount = _taskData.images.length;
+              final totalImageCount = existingImageCount + newImageCount;
+
+              if (index < totalImageCount) {
+                if (index < existingImageCount) {
+                  // 顯示現有圖片（從 URL）
+                  return Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            _taskData.existingImageUrls[index],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[200],
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  color: Colors.grey[400],
+                                  size: 40,
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: () => _removeImage(index),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            size: 16,
-                            color: Colors.white,
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => _removeExistingImage(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                );
+                    ],
+                  );
+                } else {
+                  // 顯示新上傳的圖片（從 bytes）
+                  final newImageIndex = index - existingImageCount;
+                  return Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            _taskData.images[newImageIndex],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => _removeNewImage(newImageIndex),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
               } else {
                 // 顯示添加按鈕
                 return GestureDetector(
-                  onTap: _taskData.images.length < 3 ? _pickImage : null,
+                  onTap: totalImageCount < 3 ? _pickImage : null,
                   child: Container(
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: _taskData.images.length < 3
+                        color: totalImageCount < 3
                             ? Colors.blue
                             : Colors.grey[300]!,
                         style: BorderStyle.solid,
@@ -1003,7 +1215,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                         Icon(
                           Icons.add_photo_alternate,
                           size: 32,
-                          color: _taskData.images.length < 3
+                          color: totalImageCount < 3
                               ? Colors.blue
                               : Colors.grey[400],
                         ),
@@ -1012,7 +1224,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           '添加圖片',
                           style: TextStyle(
                             fontSize: 12,
-                            color: _taskData.images.length < 3
+                            color: totalImageCount < 3
                                 ? Colors.blue
                                 : Colors.grey[400],
                           ),
@@ -1029,15 +1241,15 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     );
   }
 
-  // 步驟4：報價選項
-  Widget _buildStep4PriceOption() {
+  // 步驟5：報價選項
+  Widget _buildStep5PriceOption() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 4/5: 報價選項',
+            '步驟 5/6: 報價選項',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
@@ -1130,15 +1342,15 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     );
   }
 
-  // 步驟5：預覽與送出
-  Widget _buildStep5Preview() {
+  // 步驟6：預覽與送出
+  Widget _buildStep6Preview() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 5/5: 預覽與送出',
+            '步驟 6/6: 預覽與送出',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
@@ -1194,7 +1406,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   const SizedBox(height: 12),
 
                   // 圖片
-                  if (_taskData.images.isNotEmpty) ...[
+                  if (_taskData.totalImageCount > 0) ...[
                     const Text(
                       '任務圖片',
                       style: TextStyle(fontWeight: FontWeight.w500),
@@ -1204,18 +1416,51 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                       height: 80,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: _taskData.images.length,
+                        itemCount: _taskData.totalImageCount,
                         itemBuilder: (context, index) {
                           return Container(
                             margin: const EdgeInsets.only(right: 8),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.memory(
-                                _taskData.images[index],
-                                width: 80,
-                                height: 80,
-                                fit: BoxFit.cover,
-                              ),
+                              child: index < _taskData.existingImageUrls.length
+                                  ? Image.network(
+                                      _taskData.existingImageUrls[index],
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                            if (loadingProgress == null)
+                                              return child;
+                                            return const SizedBox(
+                                              width: 80,
+                                              height: 80,
+                                              child: Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                            );
+                                          },
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                            return Container(
+                                              width: 80,
+                                              height: 80,
+                                              color: Colors.grey[200],
+                                              child: Icon(
+                                                Icons.image_not_supported,
+                                                color: Colors.grey[400],
+                                              ),
+                                            );
+                                          },
+                                    )
+                                  : Image.memory(
+                                      _taskData.images[index -
+                                          _taskData.existingImageUrls.length],
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                    ),
                             ),
                           );
                         },
@@ -1387,10 +1632,180 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     }
   }
 
-  // 移除圖片
-  void _removeImage(int index) {
+  // 移除現有圖片（URL）
+  void _removeExistingImage(int index) {
+    setState(() {
+      _taskData.existingImageUrls.removeAt(index);
+    });
+  }
+
+  // 移除新上傳的圖片（bytes）
+  void _removeNewImage(int index) {
     setState(() {
       _taskData.images.removeAt(index);
+    });
+  }
+
+  // 搜尋地點（使用 Google Places API）
+  Future<void> _searchLocations(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _locationSuggestions = [];
+      });
+      return;
+    }
+
+    final apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+
+    if (apiKey.isEmpty) {
+      // 如果沒有 API Key，使用台北真實地點作為模擬數據
+      _setMockLocationSuggestions(query);
+      return;
+    }
+
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/autocomplete/json'
+        '?input=${Uri.encodeComponent(query)}'
+        '&key=$apiKey'
+        '&language=zh-TW&components=country:tw',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['status'] == 'OK') {
+          final predictions = data['predictions'] as List;
+          final suggestions = <Map<String, dynamic>>[];
+
+          for (var prediction in predictions.take(5)) {
+            // 限制最多5個建議
+            // 取得地點詳細資訊（包含座標）
+            final placeDetails = await _getPlaceDetails(
+              prediction['place_id'],
+              apiKey,
+            );
+            if (placeDetails != null) {
+              suggestions.add({
+                'description': prediction['description'],
+                'place_id': prediction['place_id'],
+                'lat': placeDetails['lat'],
+                'lng': placeDetails['lng'],
+              });
+            }
+          }
+
+          if (mounted) {
+            setState(() {
+              _locationSuggestions = suggestions;
+            });
+          }
+        } else {
+          print('Google Places API 錯誤: ${data['status']}');
+          _setMockLocationSuggestions(query);
+        }
+      } else {
+        print('HTTP 錯誤: ${response.statusCode}');
+        _setMockLocationSuggestions(query);
+      }
+    } catch (e) {
+      print('搜尋地點失敗: $e');
+      _setMockLocationSuggestions(query);
+    }
+  }
+
+  // 設定模擬地點建議（台北真實地點）
+  void _setMockLocationSuggestions(String query) {
+    if (!mounted) return;
+
+    final mockLocations = [
+      {
+        'description': '台北101, 台北市信義區',
+        'place_id': 'mock_101',
+        'lat': 25.0340,
+        'lng': 121.5645,
+      },
+      {
+        'description': '台北車站, 台北市中正區',
+        'place_id': 'mock_station',
+        'lat': 25.0478,
+        'lng': 121.5170,
+      },
+      {
+        'description': '西門町, 台北市萬華區',
+        'place_id': 'mock_ximending',
+        'lat': 25.0424,
+        'lng': 121.5062,
+      },
+      {
+        'description': '士林夜市, 台北市士林區',
+        'place_id': 'mock_shilin',
+        'lat': 25.0879,
+        'lng': 121.5240,
+      },
+      {
+        'description': '大安森林公園, 台北市大安區',
+        'place_id': 'mock_daan_park',
+        'lat': 25.0329,
+        'lng': 121.5354,
+      },
+    ];
+
+    // 根據搜尋關鍵字過濾結果
+    final filteredLocations = mockLocations.where((location) {
+      final description = location['description'] as String;
+      return description.toLowerCase().contains(query.toLowerCase());
+    }).toList();
+
+    setState(() {
+      _locationSuggestions = filteredLocations.isNotEmpty
+          ? filteredLocations
+          : mockLocations;
+    });
+  }
+
+  // 取得地點詳細資訊（包含座標）
+  Future<Map<String, double>?> _getPlaceDetails(
+    String placeId,
+    String apiKey,
+  ) async {
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/details/json'
+        '?place_id=$placeId&key=$apiKey&fields=geometry',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['status'] == 'OK') {
+          final location = data['result']['geometry']['location'];
+          return {
+            'lat': location['lat'].toDouble(),
+            'lng': location['lng'].toDouble(),
+          };
+        }
+      }
+    } catch (e) {
+      print('取得地點詳情失敗: $e');
+    }
+
+    return null;
+  }
+
+  // 選擇地點
+  void _selectLocation(Map<String, dynamic> place) {
+    setState(() {
+      _taskData.address = place['description'];
+      _taskData.lat = place['lat']?.toDouble();
+      _taskData.lng = place['lng']?.toDouble();
+      _addressController.text = place['description'];
+      _locationSuggestions = []; // 清空建議列表
+      if (_addressError != null) _addressError = null; // 清除錯誤
     });
   }
 }
