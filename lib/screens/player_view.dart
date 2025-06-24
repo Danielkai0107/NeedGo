@@ -177,18 +177,18 @@ class _PlayerViewState extends State<PlayerView> {
 
       if (mounted) {
         FirebaseAuth.instance.authStateChanges().listen((user) async {
-          // ✅ 加入 async
-          if (!mounted) return;
+          if (!mounted) return; // 新增檢查
 
           if (user != null) {
-            _loadProfile(user.uid);
-            await _loadMyProfile(); // ✅ 現在可以正確使用 await
-            _initializeNotificationSystem();
-            _attachPostsListener();
+            if (mounted) _loadProfile(user.uid);
+            if (mounted) await _loadMyProfile();
+            if (mounted) _initializeNotificationSystem();
+            if (mounted) _attachPostsListener();
 
             // 更長的延遲來顯示隨機彈窗
             Future.delayed(const Duration(seconds: 5), () {
               if (mounted && _myLocation != null) {
+                // 新增 mounted 檢查
                 _showRandomNearbyPost();
               }
             });
@@ -262,14 +262,16 @@ class _PlayerViewState extends State<PlayerView> {
 
   /// 顯示隨機的附近案件彈窗
   Future<void> _showRandomNearbyPost() async {
+    if (!mounted) return; // 新增檢查
+
     if (_myLocation == null) {
       // 如果還沒取得位置，等一下再試
       await Future.delayed(const Duration(seconds: 2));
-      if (_myLocation == null) return;
+      if (!mounted || _myLocation == null) return; // 新增 mounted 檢查
     }
 
     final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
+    if (currentUser == null || !mounted) return; // 新增 mounted 檢查
 
     // 找出5KM內的所有案件，排除自己發布的
     final nearbyPosts = _allPosts.where((post) {
@@ -285,7 +287,8 @@ class _PlayerViewState extends State<PlayerView> {
       return distance <= 5.0; // 5公里內
     }).toList();
 
-    if (nearbyPosts.isNotEmpty) {
+    if (nearbyPosts.isNotEmpty && mounted) {
+      // 新增 mounted 檢查
       // 隨機選一個
       final randomPost =
           nearbyPosts[DateTime.now().millisecondsSinceEpoch %
@@ -294,10 +297,13 @@ class _PlayerViewState extends State<PlayerView> {
       // 延遲1秒顯示彈窗，避免與其他初始化衝突
       await Future.delayed(const Duration(seconds: 1));
 
-      setState(() {
-        _newPostToShow = randomPost;
-        _currentBottomSheet = BottomSheetType.randomNearbyNotification;
-      });
+      if (mounted) {
+        // 新增 mounted 檢查
+        setState(() {
+          _newPostToShow = randomPost;
+          _currentBottomSheet = BottomSheetType.randomNearbyNotification;
+        });
+      }
     }
   }
 
@@ -326,11 +332,14 @@ class _PlayerViewState extends State<PlayerView> {
           .where((cat) => cat.isNotEmpty)
           .toSet();
 
-      setState(() {
-        _systemLocations = locations;
-        _availableCategories = categories;
-        _selectedCategories = Set.from(categories); // 預設全選
-      });
+      if (mounted) {
+        // 新增 mounted 檢查
+        setState(() {
+          _systemLocations = locations;
+          _availableCategories = categories;
+          _selectedCategories = Set.from(categories); // 預設全選
+        });
+      }
 
       print('載入了 ${locations.length} 個系統地點，${categories.length} 個類別');
     } catch (e) {
@@ -357,10 +366,10 @@ class _PlayerViewState extends State<PlayerView> {
 
   /// 檢查歷史通知（登入時檢查登入前的新貼文）
   Future<void> _checkHistoricalNotifications() async {
-    if (_lastCheckTime == null) return;
+    if (_lastCheckTime == null || !mounted) return; // 新增 mounted 檢查
 
     final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
+    if (currentUser == null || !mounted) return; // 新增 mounted 檢查
 
     try {
       print('檢查歷史通知，從 $_lastCheckTime 開始');
@@ -376,7 +385,8 @@ class _PlayerViewState extends State<PlayerView> {
 
       print('找到 ${snapshot.docs.length} 個歷史新貼文');
 
-      if (snapshot.docs.isNotEmpty) {
+      if (snapshot.docs.isNotEmpty && mounted) {
+        // 新增 mounted 檢查
         final historicalPosts = snapshot.docs
             .map((doc) {
               final data = Map<String, dynamic>.from(doc.data());
@@ -386,10 +396,13 @@ class _PlayerViewState extends State<PlayerView> {
             .where((post) => post['userId'] != currentUser.uid) // 排除自己發布的
             .toList();
 
-        setState(() {
-          _newPosts.addAll(historicalPosts);
-          _unreadCount = _newPosts.length;
-        });
+        if (mounted) {
+          // 新增 mounted 檢查
+          setState(() {
+            _newPosts.addAll(historicalPosts);
+            _unreadCount = _newPosts.length;
+          });
+        }
 
         print('已添加 ${historicalPosts.length} 個歷史通知（排除自己發布的）');
       }
@@ -399,6 +412,8 @@ class _PlayerViewState extends State<PlayerView> {
   }
 
   void _attachPostsListener() {
+    if (!mounted) return; // 新增檢查
+
     // 先檢查歷史通知
     _checkHistoricalNotifications();
 
@@ -406,6 +421,8 @@ class _PlayerViewState extends State<PlayerView> {
     _listenerAttachedTs = Timestamp.now();
 
     _postsSub = _firestore.collection('posts').snapshots().listen((snap) {
+      if (!mounted) return; // 新增檢查
+
       final list = snap.docs.map((d) {
         final m = Map<String, dynamic>.from(d.data() as Map);
         m['id'] = d.id;
@@ -418,11 +435,15 @@ class _PlayerViewState extends State<PlayerView> {
         return (tb?.seconds ?? 0).compareTo(ta?.seconds ?? 0);
       });
 
-      setState(() => _allPosts = list);
+      if (mounted) {
+        // 新增 mounted 檢查
+        setState(() => _allPosts = list);
+      }
 
       final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return;
+      if (currentUser == null || !mounted) return; // 新增 mounted 檢查
 
+      // 處理即時新增的貼文（登入後新發布的）
       // 處理即時新增的貼文（登入後新發布的）
       for (var change in snap.docChanges) {
         if (change.type == DocumentChangeType.added &&
@@ -440,13 +461,17 @@ class _PlayerViewState extends State<PlayerView> {
           if (newPost['userId'] == currentUser.uid) continue;
 
           // 添加到通知列表
-          setState(() {
-            _newPosts.insert(0, newPost);
-            _unreadCount = _newPosts.length;
-          });
+          if (mounted) {
+            // 新增 mounted 檢查
+            setState(() {
+              _newPosts.insert(0, newPost);
+              _unreadCount = _newPosts.length;
+            });
+          }
 
           // 如果當前沒有彈窗，顯示即時通知
-          if (_currentBottomSheet == BottomSheetType.none &&
+          if (mounted && // 新增 mounted 檢查
+              _currentBottomSheet == BottomSheetType.none &&
               _selectedLocation == null) {
             setState(() {
               _newPostToShow = newPost;
@@ -462,6 +487,7 @@ class _PlayerViewState extends State<PlayerView> {
   void dispose() {
     _postsSub?.cancel();
     _notificationTimer?.cancel();
+    _mapCtrl.dispose(); // 新增：清理地圖控制器
     super.dispose();
   }
 
@@ -521,12 +547,18 @@ class _PlayerViewState extends State<PlayerView> {
 
   /// 计算路程信息
   Future<void> _calculateTravelInfo(LatLng dest) async {
-    if (_myLocation == null) return;
-    setState(() => _isLoadingTravel = true);
+    if (_myLocation == null || !mounted) return; // 新增 mounted 檢查
+
+    if (mounted) {
+      // 新增 mounted 檢查
+      setState(() => _isLoadingTravel = true);
+    }
+
     final o = '${_myLocation!.latitude},${_myLocation!.longitude}';
     final d = '${dest.latitude},${dest.longitude}';
     final modes = ['driving', 'walking', 'transit'];
     final info = <String, String>{};
+
     for (var m in modes) {
       try {
         final url = Uri.parse(
@@ -540,10 +572,14 @@ class _PlayerViewState extends State<PlayerView> {
         info[m] = '無法計算';
       }
     }
-    setState(() {
-      _travelInfo = info;
-      _isLoadingTravel = false;
-    });
+
+    if (mounted) {
+      // 新增 mounted 檢查
+      setState(() {
+        _travelInfo = info;
+        _isLoadingTravel = false;
+      });
+    }
   }
 
   Future<void> _applyToPost(String postId) async {

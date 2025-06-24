@@ -7,6 +7,8 @@ import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 class FullScreenPopup extends StatelessWidget {
   final Widget child;
@@ -997,8 +999,9 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
   bool _isUploadingAvatar = false;
   bool _isPickingImage = false; // 新增這個變數
 
-  // 選擇並裁切頭像
-  // 選擇並裁切頭像
+  // 在 _EditProfileBottomSheetState 類中，修改以下方法：
+
+  // 選擇並自動裁切頭像
   Future<void> _pickAndCropAvatar() async {
     // 防止重複調用
     if (_isPickingImage) return;
@@ -1013,15 +1016,9 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
       }
 
       final bytes = await picked.readAsBytes();
-      setState(() {
-        _rawImage = bytes;
-        _isPickingImage = false;
-      });
 
-      // 顯示裁切對話框
-      if (mounted) {
-        _showCropDialog();
-      }
+      // 直接進行自動裁切
+      await _performAutoCrop(bytes);
     } catch (e) {
       setState(() => _isPickingImage = false);
       ScaffoldMessenger.of(
@@ -1030,77 +1027,61 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
     }
   }
 
-  // 顯示裁切對話框
-  void _showCropDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          child: Container(
-            width: 300,
-            height: 400,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Text(
-                  '裁切頭像',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Crop(
-                    image: _rawImage!,
-                    controller: _cropController,
-                    aspectRatio: 1,
-                    onCropped: (result) {
-                      switch (result) {
-                        case CropSuccess(:final croppedImage):
-                          setState(() => _croppedImage = croppedImage);
-                          Navigator.of(context).pop();
-                          _uploadAvatar();
-                          break;
-                        case CropFailure(:final cause):
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('裁切失敗: $cause')),
-                          );
-                          break;
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _rawImage = null;
-                            _croppedImage = null;
-                          });
-                          Navigator.of(context).pop();
-                        },
-                        child: const Text('取消'),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _cropController.crop(),
-                        child: const Text('確定裁切'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  // 新增：自動裁切方法
+  Future<void> _performAutoCrop(Uint8List imageBytes) async {
+    try {
+      // 使用 dart:ui 套件計算正方形裁切
+      final codec = await ui.instantiateImageCodec(imageBytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+
+      final width = image.width;
+      final height = image.height;
+      final size = math.min(width, height);
+      final offsetX = (width - size) / 2;
+      final offsetY = (height - size) / 2;
+
+      // 創建畫布進行裁切
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final srcRect = Rect.fromLTWH(
+        offsetX,
+        offsetY,
+        size.toDouble(),
+        size.toDouble(),
+      );
+      final destRect = Rect.fromLTWH(0, 0, 300, 300); // 固定輸出尺寸為 300x300
+
+      canvas.drawImageRect(image, srcRect, destRect, Paint());
+
+      final picture = recorder.endRecording();
+      final croppedImage = await picture.toImage(300, 300);
+      final byteData = await croppedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      if (byteData != null) {
+        setState(() {
+          _croppedImage = byteData.buffer.asUint8List();
+          _isPickingImage = false;
+        });
+
+        // 直接上傳
+        _uploadAvatar();
+      } else {
+        throw '無法處理圖片';
+      }
+    } catch (e) {
+      setState(() => _isPickingImage = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('自動裁切失敗：$e')));
+    }
   }
 
+  // 需要在檔案頂部添加這些 import：
+  // import 'dart:ui' as ui;
+  // import 'dart:math' as math;
   // 上傳頭像到 Firebase Storage
   Future<void> _uploadAvatar() async {
     if (_croppedImage == null) return;
@@ -1216,92 +1197,99 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 頭像區域
+          // 在 _EditProfileBottomSheetState 的 build 方法中，修改頭像區域：
+
+          // 頭像區域
           Center(
             child: Column(
               children: [
-                Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.blue[100],
-                      backgroundImage:
-                          widget.profileForm['avatarUrl']
-                                  ?.toString()
-                                  .isNotEmpty ==
-                              true
-                          ? NetworkImage(widget.profileForm['avatarUrl'])
-                          : null,
-                      child:
-                          widget.profileForm['avatarUrl']
-                                  ?.toString()
-                                  .isNotEmpty !=
-                              true
-                          ? Icon(
-                              Icons.person,
-                              size: 50,
-                              color: Colors.blue[600],
-                            )
-                          : null,
-                    ),
-                    if (_isUploadingAvatar)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black26,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
+                GestureDetector(
+                  onTap: (_isUploadingAvatar || _isPickingImage)
+                      ? null
+                      : _pickAndCropAvatar,
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                        ),
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.blue[100],
+                          backgroundImage:
+                              widget.profileForm['avatarUrl']
+                                      ?.toString()
+                                      .isNotEmpty ==
+                                  true
+                              ? NetworkImage(widget.profileForm['avatarUrl'])
+                              : null,
+                          child:
+                              widget.profileForm['avatarUrl']
+                                      ?.toString()
+                                      .isNotEmpty !=
+                                  true
+                              ? Icon(
+                                  Icons.person,
+                                  size: 50,
+                                  color: Colors.blue[600],
+                                )
+                              : null,
+                        ),
+                      ),
+                      if (_isUploadingAvatar)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: Colors.blue[600],
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: IconButton(
-                          onPressed: (_isUploadingAvatar || _isPickingImage)
-                              ? null
-                              : _pickAndCropAvatar,
-                          icon: const Icon(
-                            Icons.camera_alt,
-                            size: 16,
+                      // 右下角的相機圖標
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 35,
+                          height: 35,
+                          decoration: BoxDecoration(
+                            color: Colors.blue[600],
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                spreadRadius: 1,
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _isPickingImage
+                                ? Icons.hourglass_empty
+                                : Icons.edit,
+                            size: 18,
                             color: Colors.white,
                           ),
-                          padding: EdgeInsets.zero,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: (_isUploadingAvatar || _isPickingImage)
-                      ? null
-                      : _pickAndCropAvatar,
-                  icon: const Icon(Icons.camera_alt, size: 16),
-                  label: Text(
-                    _isUploadingAvatar
-                        ? '上傳中...'
-                        : _isPickingImage
-                        ? '選擇中...'
-                        : '更換頭像',
+                    ],
                   ),
                 ),
+                const SizedBox(height: 12),
               ],
             ),
           ),
+
           const SizedBox(height: 24),
 
           // 姓名

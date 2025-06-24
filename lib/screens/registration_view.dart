@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:crop_your_image/crop_your_image.dart';
+import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 class RegistrationView extends StatefulWidget {
   final String uid;
@@ -30,9 +32,8 @@ class _RegistrationViewState extends State<RegistrationView> {
   DateTime? _birthDate;
 
   // Step 2: 大頭貼裁切
-  Uint8List? _rawImage;
   Uint8List? _croppedImage;
-  final CropController _cropController = CropController();
+  bool _isProcessingImage = false;
 
   // Step 3: 真人驗證（跳過）
   // 此步驟暫時跳過，未來實作
@@ -54,20 +55,11 @@ class _RegistrationViewState extends State<RegistrationView> {
     super.dispose();
   }
 
-  // 選圖並讀取 bytes
-  Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    setState(() => _rawImage = bytes);
-  }
-
   // Email 格式驗證
   bool _isValidEmail(String email) {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
-  // 提交全部資料：上傳 Storage、寫入 Firestore
   // 提交全部資料：上傳 Storage、寫入 Firestore
   Future<void> _submitAll() async {
     if (!_formKey4.currentState!.validate() || _croppedImage == null) {
@@ -161,6 +153,79 @@ class _RegistrationViewState extends State<RegistrationView> {
         }),
       ),
     );
+  }
+
+  Future<void> _pickAndCropImage() async {
+    if (_isProcessingImage) return;
+
+    setState(() => _isProcessingImage = true);
+
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) {
+        setState(() => _isProcessingImage = false);
+        return;
+      }
+
+      final bytes = await picked.readAsBytes();
+
+      // 自動裁切
+      await _performAutoCrop(bytes);
+    } catch (e) {
+      setState(() => _isProcessingImage = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+    }
+  }
+
+  // 新增：自動裁切方法
+  Future<void> _performAutoCrop(Uint8List imageBytes) async {
+    try {
+      // 使用 dart:ui 套件計算正方形裁切
+      final codec = await ui.instantiateImageCodec(imageBytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+
+      final width = image.width;
+      final height = image.height;
+      final size = math.min(width, height);
+      final offsetX = (width - size) / 2;
+      final offsetY = (height - size) / 2;
+
+      // 創建畫布進行裁切
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final srcRect = Rect.fromLTWH(
+        offsetX,
+        offsetY,
+        size.toDouble(),
+        size.toDouble(),
+      );
+      final destRect = Rect.fromLTWH(0, 0, 300, 300); // 固定輸出尺寸為 300x300
+
+      canvas.drawImageRect(image, srcRect, destRect, Paint());
+
+      final picture = recorder.endRecording();
+      final croppedImage = await picture.toImage(300, 300);
+      final byteData = await croppedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      if (byteData != null) {
+        setState(() {
+          _croppedImage = byteData.buffer.asUint8List();
+          _isProcessingImage = false;
+        });
+      } else {
+        throw '無法處理圖片';
+      }
+    } catch (e) {
+      setState(() => _isProcessingImage = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('自動裁切失敗：$e')));
+    }
   }
 
   @override
@@ -357,85 +422,120 @@ class _RegistrationViewState extends State<RegistrationView> {
   Widget _buildAvatarStep() {
     return Column(
       children: [
-        if (_croppedImage != null)
-          // 已裁切完成：顯示圓形頭貼
-          ClipOval(
-            child: Image.memory(
-              _croppedImage!,
-              width: 150,
-              height: 150,
-              fit: BoxFit.cover,
-            ),
-          )
-        else if (_rawImage != null)
-          // 尚未裁切：顯示 Crop UI
-          SizedBox(
-            height: 300,
-            child: Crop(
-              image: _rawImage!,
-              controller: _cropController,
-              aspectRatio: 1,
-              onCropped: (result) {
-                switch (result) {
-                  case CropSuccess(:final croppedImage):
-                    setState(() => _croppedImage = croppedImage);
-                    break;
-                  case CropFailure(:final cause):
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text('裁切失敗: $cause')));
-                    break;
-                }
-              },
-            ),
-          )
-        else
-          // 尚未選擇圖片：顯示圓形佔位符
-          Container(
-            width: 150,
-            height: 150,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.grey[200],
-              border: Border.all(color: Colors.grey[400]!),
-            ),
-            child: const Icon(Icons.person, size: 80, color: Colors.grey),
+        // 頭像顯示區域
+        GestureDetector(
+          onTap: _isProcessingImage ? null : _pickAndCropImage,
+          child: Stack(
+            children: [
+              Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _croppedImage != null
+                        ? Colors.green[300]!
+                        : Colors.blue[300]!,
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          (_croppedImage != null ? Colors.green : Colors.blue)
+                              .withOpacity(0.2),
+                      spreadRadius: 2,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: _croppedImage != null
+                    ? ClipOval(
+                        child: Image.memory(
+                          _croppedImage!,
+                          width: 150,
+                          height: 150,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.grey[100],
+                        ),
+                        child: Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+              ),
+
+              // 處理中的遮罩
+              if (_isProcessingImage)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // 右下角的相機圖標
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _croppedImage != null
+                        ? Colors.green[600]
+                        : Colors.blue[600],
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        spreadRadius: 1,
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    _croppedImage != null ? Icons.check : Icons.edit,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
 
         const SizedBox(height: 24),
-        if (_croppedImage != null)
-          // 已裁切完成：顯示重選按鈕
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _rawImage = null;
-                  _croppedImage = null;
-                });
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('重新選擇照片'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-          )
-        else
-          // 尚未裁切完成：顯示原本的按鈕
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _rawImage == null
-                  ? _pickImage
-                  : () => _cropController.crop(),
-              icon: const Icon(Icons.upload_file),
-              label: Text(_rawImage == null ? '上傳大頭照' : '裁切並完成'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
+
+        // 狀態文字
+        Text(
+          _isProcessingImage
+              ? '處理中...'
+              : _croppedImage != null
+              ? '頭像已設定完成，點擊可重新選擇'
+              : '點擊上方圓圈選擇頭像照片',
+          style: TextStyle(
+            color: _croppedImage != null ? Colors.green[600] : Colors.blue[600],
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
+          textAlign: TextAlign.center,
+        ),
       ],
     );
   }
@@ -526,11 +626,11 @@ class _RegistrationViewState extends State<RegistrationView> {
             _gender != null &&
             _birthDate != null;
       case 1:
-        return _croppedImage != null;
+        return _croppedImage != null && !_isProcessingImage;
       case 2:
         return true; // 真人驗證可跳過
       case 3:
-        return true; // 改為總是返回 true，讓完成按鈕隨時可用
+        return true;
       default:
         return false;
     }

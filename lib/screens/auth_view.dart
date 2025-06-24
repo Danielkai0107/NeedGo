@@ -66,11 +66,11 @@ class _AuthViewState extends State<AuthView>
     }
 
     // 台灣手機號碼格式
-    // if (phone.startsWith('0')) {
-    //   phone = '+886${phone.substring(1)}';
-    // } else if (!phone.startsWith('+886')) {
-    //   phone = '+886$phone';
-    // }
+    if (phone.startsWith('0')) {
+      phone = '+886${phone.substring(1)}';
+    } else if (!phone.startsWith('+886')) {
+      phone = '+886$phone';
+    }
 
     return phone;
   }
