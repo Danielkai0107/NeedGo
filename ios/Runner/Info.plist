@@ -4,6 +4,11 @@
 <dict>
 <key>LSApplicationQueriesSchemes</key>
 <array>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>App 需要存取相簿來上傳大頭貼</string>
+<key>NSCameraUsageDescription</key>
+<string>App 需要使用相機來拍攝大頭貼</string>
+
   <string>https</string>
   <string>http</string>
 </array>

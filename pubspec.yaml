@@ -36,6 +36,7 @@ dependencies:
   firebase_core: ^3.14.0
   firebase_auth: ^5.6.0
   cloud_firestore: ^5.6.9
+  firebase_storage: ^12.4.7
 
   # Google Sign-In
   google_sign_in: ^6.1.1
@@ -47,6 +48,9 @@ dependencies:
   # HTTP 請求（Distance Matrix API）
   http: ^0.13.4
   shared_preferences: ^2.2.2 # 用于保存登录信息
+
+  image_picker: ^0.8.7+4 # 從裝置相簿或相機取得影像
+  crop_your_image: ^2.0.0 
 
   # 狀態管理
   provider: ^6.0.0

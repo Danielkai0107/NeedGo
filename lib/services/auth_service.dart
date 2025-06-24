@@ -1,45 +1,40 @@
+// lib/services/auth_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   Stream<User?> get userChanges => _auth.authStateChanges();
 
-  // Email/Password 登入
-  Future<User?> signIn({required String email, required String password}) async {
-    final cred = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
+  // 手機號碼驗證
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required void Function(PhoneAuthCredential) verificationCompleted,
+    required void Function(FirebaseAuthException) verificationFailed,
+    required void Function(String, int?) codeSent,
+    required void Function(String) codeAutoRetrievalTimeout,
+  }) async {
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+      timeout: const Duration(seconds: 60),
     );
-    return cred.user;
   }
 
-  // **Email/Password 註冊**
-  Future<User?> register({required String email, required String password}) async {
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    return cred.user;
-  }
-
-  // Google 登入
-  Future<User?> signInWithGoogle() async {
-    final googleUser = await _googleSignIn.signIn();
-    if (googleUser == null) return null;
-    final googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
+  // 使用認證憑證登入
+  Future<User?> signInWithCredential(PhoneAuthCredential credential) async {
     final userCred = await _auth.signInWithCredential(credential);
     return userCred.user;
   }
 
+  // 登出
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
     await _auth.signOut();
   }
+
+  // 取得當前用戶
+  User? get currentUser => _auth.currentUser;
 }

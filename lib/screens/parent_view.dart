@@ -12,7 +12,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../styles/map_styles.dart';
-import '../services/auth_service.dart';
 import '../components/full_screen_popup.dart'; // 引入 FullScreenPopup 及所有 bottom sheet 組件
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -34,7 +33,6 @@ class ParentView extends StatefulWidget {
 }
 
 class _ParentViewState extends State<ParentView> {
-  final _authService = AuthService();
   final _firestore = FirebaseFirestore.instance;
   final TextEditingController _contentCtrl = TextEditingController();
   String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
@@ -83,6 +81,11 @@ class _ParentViewState extends State<ParentView> {
   @override
   void initState() {
     super.initState();
+    // 🔍 立即檢查 API Key
+    print('🔑 開始檢查 API Key...');
+    print('🔑 API Key 內容: "${dotenv.env['GOOGLE_MAPS_API_KEY']}"');
+    print('🔑 API Key 長度: ${(dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '').length}');
+    print('🔑 _apiKey getter 結果: "$_apiKey"');
     _loadSystemLocations(); // 新增這行
     _findAndRecenter();
     _loadMyProfile();
@@ -208,62 +211,146 @@ class _ParentViewState extends State<ParentView> {
   }
 
   /// 搜地点建议
+  /// 搜地点建议 - 調試版本
   Future<void> _fetchLocationSuggestions(String input) async {
+    print('🔍 開始搜尋地點: "$input"');
+
     if (input.isEmpty) {
       setState(() => _locationSuggestions = []);
+      print('🔍 輸入為空，清空建議列表');
       return;
     }
-    final url = Uri.parse(
-      'https://maps.googleapis.com/maps/api/place/autocomplete/json'
-      '?input=${Uri.encodeComponent(input)}'
-      '&key=$_apiKey'
-      '&language=zh-TW&components=country:tw',
-    );
-    final resp = await http.get(url);
-    final preds = jsonDecode(resp.body)['predictions'] as List;
-    setState(() {
-      _locationSuggestions = preds
-          .map(
-            (p) => {'description': p['description'], 'place_id': p['place_id']},
-          )
-          .toList();
-    });
+
+    // 檢查 API Key
+    if (_apiKey.isEmpty) {
+      print('❌ Google Maps API Key 未設定或為空');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Google Maps API Key 未設定')));
+      return;
+    }
+
+    print('✅ API Key 已設定: ${_apiKey.substring(0, 10)}...');
+
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/autocomplete/json'
+        '?input=${Uri.encodeComponent(input)}'
+        '&key=$_apiKey'
+        '&language=zh-TW&components=country:tw',
+      );
+
+      print('🌐 API URL: $url');
+
+      final resp = await http.get(url);
+      print('📡 HTTP 狀態碼: ${resp.statusCode}');
+      print(
+        '📡 回應內容: ${resp.body.length > 200 ? resp.body.substring(0, 200) + '...' : resp.body}',
+      );
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        print('📊 API 狀態: ${data['status']}');
+
+        if (data['status'] == 'OK') {
+          final preds = data['predictions'] as List;
+          setState(() {
+            _locationSuggestions = preds
+                .map(
+                  (p) => {
+                    'description': p['description'],
+                    'place_id': p['place_id'],
+                  },
+                )
+                .toList();
+          });
+          print('✅ 成功載入 ${_locationSuggestions.length} 個地點建議');
+
+          // 顯示前 3 個建議的詳細信息
+          for (int i = 0; i < _locationSuggestions.length && i < 3; i++) {
+            print('   ${i + 1}. ${_locationSuggestions[i]['description']}');
+          }
+        } else {
+          print('❌ API 錯誤: ${data['status']}');
+          if (data['error_message'] != null) {
+            print('❌ 錯誤訊息: ${data['error_message']}');
+          }
+
+          // 顯示用戶友好的錯誤訊息
+          String errorMsg = 'API 錯誤';
+          switch (data['status']) {
+            case 'REQUEST_DENIED':
+              errorMsg = 'API Key 無效或服務未啟用';
+              break;
+            case 'OVER_QUERY_LIMIT':
+              errorMsg = 'API 呼叫次數超過限制';
+              break;
+            case 'INVALID_REQUEST':
+              errorMsg = '請求格式無效';
+              break;
+            default:
+              errorMsg = '服務暫時無法使用: ${data['status']}';
+          }
+
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(errorMsg)));
+        }
+      } else {
+        print('❌ HTTP 錯誤: ${resp.statusCode}');
+        print('❌ 錯誤內容: ${resp.body}');
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('網路請求失敗: ${resp.statusCode}')));
+      }
+    } catch (e, stackTrace) {
+      print('❌ 搜尋地點異常: $e');
+      print('❌ 堆疊追蹤: $stackTrace');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('搜尋失敗: $e')));
+    }
   }
 
   /// 选中建议；填入表单
   Future<void> _selectLocation(Map<String, dynamic> place) async {
     _locationSearchCtrl.text = place['description'];
+
+    // ✅ 先清空建議列表
     setState(() => _locationSuggestions = []);
+
     final detailUrl = Uri.parse(
       'https://maps.googleapis.com/maps/api/place/details/json'
       '?place_id=${place['place_id']}&key=$_apiKey&fields=geometry,formatted_address,name',
     );
-    final resp = await http.get(detailUrl);
-    final result = jsonDecode(resp.body)['result'];
-    final loc = result['geometry']['location'];
-    final formattedAddress =
-        result['formatted_address'] ?? place['description'];
 
-    // 調試信息
-    print('選擇的地點: ${place['description']}');
-    print('格式化地址: $formattedAddress');
+    try {
+      final resp = await http.get(detailUrl);
+      final result = jsonDecode(resp.body)['result'];
+      final loc = result['geometry']['location'];
+      final formattedAddress =
+          result['formatted_address'] ?? place['description'];
 
-    // 如果任務名稱為空，自動填入地點名稱
-    if (_postForm['name']?.toString().trim().isEmpty == true) {
-      _nameCtrl.text = place['description'];
-      _postForm['name'] = place['description'];
+      // 如果任務名稱為空，自動填入地點名稱
+      if (_postForm['name']?.toString().trim().isEmpty == true) {
+        _nameCtrl.text = place['description'];
+        _postForm['name'] = place['description'];
+      }
+
+      // 將地址信息保存到 address 字段
+      _postForm['address'] = formattedAddress;
+
+      setState(() {
+        _postForm['lat'] = loc['lat'];
+        _postForm['lng'] = loc['lng'];
+      });
+    } catch (e) {
+      print('獲取地點詳情失敗: $e');
+      // 即使失敗也要更新基本信息
+      setState(() {
+        _postForm['address'] = place['description'];
+      });
     }
-
-    // 將地址信息保存到 address 字段
-    _postForm['address'] = formattedAddress;
-
-    // 調試信息
-    print('保存後的 _postForm: $_postForm');
-
-    setState(() {
-      _postForm['lat'] = loc['lat'];
-      _postForm['lng'] = loc['lng'];
-    });
   }
 
   /// 打开"以此静态点位发任务"表单
@@ -384,26 +471,62 @@ class _ParentViewState extends State<ParentView> {
   Future<void> _loadMyProfile() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
-    final doc = await _firestore.doc('parents/${u.uid}').get();
-    if (doc.exists) {
-      setState(() {
-        _profile = doc.data()!;
-        _profileForm = Map.from(_profile);
-      });
+
+    try {
+      final doc = await _firestore.doc('user/${u.uid}').get(); // ✅ 改用 user 集合
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _profile = data;
+          _profileForm = Map.from(_profile);
+        });
+      } else if (mounted) {
+        setState(() {
+          _profile = {
+            'name': '未設定',
+            'phoneNumber': '',
+            'email': '',
+            'lineId': '',
+            'socialLinks': {},
+            'publisherResume': '',
+            'avatarUrl': '',
+          };
+          _profileForm = Map.from(_profile);
+        });
+      }
+    } catch (e) {
+      print('載入個人資料失敗: $e');
+      if (mounted) {
+        setState(() {
+          _profile = {
+            'name': '未設定',
+            'phoneNumber': '',
+            'email': '',
+            'lineId': '',
+            'socialLinks': {},
+            'publisherResume': '',
+            'avatarUrl': '',
+          };
+          _profileForm = Map.from(_profile);
+        });
+      }
     }
   }
 
   Future<void> _saveProfile() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
-    final ref = _firestore.doc('parents/${u.uid}');
+    final ref = _firestore.doc('user/${u.uid}'); // ✅ 改用 user 集合
     try {
       await ref.set(_profileForm, SetOptions(merge: true));
       setState(() => _currentBottomSheet = BottomSheetType.none);
-    } catch (_) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('儲存失敗')));
+      ).showSnackBar(const SnackBar(content: Text('個人資料更新成功')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('儲存失敗：$e')));
     }
   }
 
@@ -558,20 +681,12 @@ class _ParentViewState extends State<ParentView> {
       final applicants = <Map<String, dynamic>>[];
 
       for (String applicantId in applicantIds) {
-        var doc = await _firestore.doc('players/$applicantId').get();
+        var doc = await _firestore
+            .doc('user/$applicantId')
+            .get(); // ✅ 統一使用 user 集合
         if (doc.exists) {
           final data = doc.data()!;
           data['id'] = applicantId;
-          data['userType'] = 'player';
-          applicants.add(data);
-          continue;
-        }
-
-        doc = await _firestore.doc('groups/$applicantId').get();
-        if (doc.exists) {
-          final data = doc.data()!;
-          data['id'] = applicantId;
-          data['userType'] = 'group';
           applicants.add(data);
         }
       }
@@ -1114,7 +1229,7 @@ class _ParentViewState extends State<ParentView> {
                     borderRadius: BorderRadius.circular(56),
                   ),
                   onPressed: () async {
-                    await _authService.signOut();
+                    await FirebaseAuth.instance.signOut();
                     Navigator.pushReplacementNamed(context, '/');
                   },
                 ),
@@ -1299,6 +1414,7 @@ class _ParentViewState extends State<ParentView> {
                     setState(() => _currentBottomSheet = BottomSheetType.none),
                 child: EditProfileBottomSheet(
                   profileForm: _profileForm,
+                  isParentView: true,
                   onSave: _saveProfile,
                   onCancel: () => setState(
                     () => _currentBottomSheet = BottomSheetType.none,

@@ -8,6 +8,18 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// 讀取 local.properties 文件中的 API Key
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+// 從 local.properties 或環境變數中讀取 API Key
+val googleMapsApiKey = localProperties.getProperty("GOOGLE_MAPS_API_KEY") 
+    ?: System.getenv("GOOGLE_MAPS_API_KEY") 
+    ?: "AIzaSyCne1CQNTGm_a3DFxcN59lYhKGlj5McqqE"
+
 android {
     namespace = "com.needgo.mvpapp"
     compileSdk = 35
@@ -22,50 +34,71 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        
+        // 將 API Key 作為 BuildConfig 傳入
+        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsApiKey
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
-    // 1. 讀取 key.properties
-    val keystorePropsFile = rootProject.file("key.properties")
-    val keystoreProperties = Properties().apply {
-        if (keystorePropsFile.exists()) {
-            load(FileInputStream(keystorePropsFile))
-        } else {
-            // It's good that you have this check, it will catch the missing file
-            throw GradleException("Missing key.properties for signingConfig")
-        }
-    }
-
-    // 2. 設定 signingConfigs
+    // 設定 signingConfigs - 包含 debug 和 release
     signingConfigs {
+        // Debug 簽名配置（使用 Android 默認的 debug keystore）
+        getByName("debug") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+        
+        // Release 簽名配置
         create("release") {
-            // Use the exact keys from your key.properties file
-            keyAlias    = keystoreProperties["keyAlias"]    as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile   = rootProject.file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+            val keystorePropsFile = rootProject.file("key.properties")
+            if (keystorePropsFile.exists()) {
+                val keystoreProperties = Properties().apply {
+                    load(FileInputStream(keystorePropsFile))
+                }
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
-    // 3. 設定 buildTypes 並套用 release signingConfig
+    // 設定 buildTypes
     buildTypes {
-       getByName("release") {
-          signingConfig   = signingConfigs.getByName("release")
-          isMinifyEnabled = true       // 關閉程式碼混淆
-          isShrinkResources = true     // 關閉資源精簡
-          // 若日後想要混淆再加上 proguard 檔即可
-       }
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = true
+            // 移除 applicationIdSuffix = ".debug" 以避免 Firebase 配置問題
+        }
+        
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+        }
+    }
+    
+    // 啟用 BuildConfig 生成
+    buildFeatures {
+        buildConfig = true
     }
 }
 
 dependencies {
     implementation("com.google.android.gms:play-services-auth:20.5.0")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
     // 其他 dependencies…
 }

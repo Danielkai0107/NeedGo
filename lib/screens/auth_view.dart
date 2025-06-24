@@ -1,11 +1,11 @@
 // lib/screens/auth_view.dart
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
+import 'registration_view.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthView extends StatefulWidget {
-  const AuthView({Key? key}) : super(key: key);
+  const AuthView({super.key});
 
   @override
   State<AuthView> createState() => _AuthViewState();
@@ -13,34 +13,16 @@ class AuthView extends StatefulWidget {
 
 class _AuthViewState extends State<AuthView>
     with SingleTickerProviderStateMixin {
-  final _emailCtrl = TextEditingController();
-  final _pwdCtrl = TextEditingController();
-  final _auth = AuthService();
+  final _phoneCtrl = TextEditingController();
+  final _otpCtrl = TextEditingController();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  bool _isLogin = true;
   bool _isLoading = false;
-  bool _obscurePassword = true;
-  bool _rememberMe = false;
+  bool _isOtpSent = false;
   String? _error;
-
-  // 角色選擇欄位
-  String _selectedRole = 'parent';
-  final _roles = <String, Map<String, dynamic>>{
-    'parent': {
-      'name': '家長',
-      'icon': Icons.family_restroom,
-      'color': Colors.blue,
-      'description': '發布任務，找到合適的玩家',
-    },
-    'player': {
-      'name': '玩家',
-      'icon': Icons.sports_esports,
-      'color': Colors.green,
-      'description': '接受任務，獲得獎勵',
-    },
-  };
+  String? _verificationId;
+  int _resendTimer = 0;
 
   @override
   void initState() {
@@ -53,55 +35,154 @@ class _AuthViewState extends State<AuthView>
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
-    _loadSavedCredentials(); // 加载保存的登录信息
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _emailCtrl.dispose();
-    _pwdCtrl.dispose();
+    _phoneCtrl.dispose();
+    _otpCtrl.dispose();
     super.dispose();
   }
 
-  // 加载保存的登录信息
-  void _loadSavedCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedEmail = prefs.getString('saved_email');
-    final savedPassword = prefs.getString('saved_password');
-    final savedRole = prefs.getString('saved_role');
-    final rememberMe = prefs.getBool('remember_me') ?? false;
+  // 格式化手機號碼
+  String _formatPhoneNumber(String phone) {
+    // 移除所有非數字字符
+    phone = phone.replaceAll(RegExp(r'[^\d]'), '');
 
-    if (rememberMe && savedEmail != null && savedPassword != null) {
+    // 檢查是否為測試號碼格式 (0912345678)
+    if (phone == '0912345678') {
+      return '+1 0912345678'; // Firebase 測試號碼格式
+    }
+
+    if (phone == '0912938010') {
+      return '+1 0912938010'; // Firebase 測試號碼格式
+    }
+
+    if (phone == '0911111111') {
+      return '+1 0911111111'; // Firebase 測試號碼格式
+    }
+
+    // 台灣手機號碼格式
+    // if (phone.startsWith('0')) {
+    //   phone = '+886${phone.substring(1)}';
+    // } else if (!phone.startsWith('+886')) {
+    //   phone = '+886$phone';
+    // }
+
+    return phone;
+  }
+
+  // 驗證手機號碼格式
+  bool _isValidPhoneNumber(String phone) {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
+
+    // 允許測試號碼
+    if (cleanPhone == '0912345678') {
+      return true;
+    }
+    if (cleanPhone == '0912938010') {
+      return true;
+    }
+    if (cleanPhone == '0911111111') {
+      return true;
+    }
+
+    // 台灣手機號碼驗證
+    return cleanPhone.length == 10 && cleanPhone.startsWith('09');
+  }
+
+  // 發送 OTP
+  void _sendOtp() async {
+    if (!_isValidPhoneNumber(_phoneCtrl.text)) {
+      setState(() => _error = '請輸入正確的手機號碼格式（09xxxxxxxx 或測試號碼 0912345678）');
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _isLoading = true;
+    });
+
+    try {
+      final formattedPhone = _formatPhoneNumber(_phoneCtrl.text.trim());
+
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: formattedPhone,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // 自動驗證完成（某些設備支援）
+          try {
+            final userCredential = await FirebaseAuth.instance
+                .signInWithCredential(credential);
+            if (userCredential.user != null) {
+              _navigateToRegistration(userCredential.user!, formattedPhone);
+            }
+          } catch (e) {
+            setState(() => _error = '自動驗證失敗：${e.toString()}');
+          }
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          setState(() {
+            _isLoading = false;
+            switch (e.code) {
+              case 'invalid-phone-number':
+                _error = '手機號碼格式不正確';
+                break;
+              case 'too-many-requests':
+                _error = '請求過於頻繁，請稍後再試';
+                break;
+              case 'quota-exceeded':
+                _error = '今日驗證次數已達上限，請明日再試';
+                break;
+              case 'operation-not-allowed':
+                _error = '手機驗證功能未啟用，請檢查 Firebase 設定';
+                break;
+              default:
+                _error = '發送驗證碼失敗：${e.message}';
+            }
+          });
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          setState(() {
+            _verificationId = verificationId;
+            _isOtpSent = true;
+            _isLoading = false;
+            _resendTimer = 60; // 60秒後可重新發送
+          });
+          _startResendTimer();
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          setState(() => _verificationId = verificationId);
+        },
+      );
+    } catch (e) {
       setState(() {
-        _emailCtrl.text = savedEmail;
-        _pwdCtrl.text = savedPassword;
-        _selectedRole = savedRole ?? 'parent';
-        _rememberMe = true;
+        _isLoading = false;
+        _error = '發送驗證碼失敗，請檢查網路連接：${e.toString()}';
       });
     }
   }
 
-  // 保存登录信息
-  Future<void> _saveCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_rememberMe) {
-      await prefs.setString('saved_email', _emailCtrl.text.trim());
-      await prefs.setString('saved_password', _pwdCtrl.text);
-      await prefs.setString('saved_role', _selectedRole);
-      await prefs.setBool('remember_me', true);
-    } else {
-      await prefs.remove('saved_email');
-      await prefs.remove('saved_password');
-      await prefs.remove('saved_role');
-      await prefs.setBool('remember_me', false);
-    }
+  // 重新發送倒數計時
+  void _startResendTimer() {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (_resendTimer > 0) {
+        setState(() => _resendTimer--);
+        _startResendTimer();
+      }
+    });
   }
 
-  // 忘记密码
-  void _forgotPassword() async {
-    if (_emailCtrl.text.trim().isEmpty) {
-      setState(() => _error = '請先輸入您的 Email 地址');
+  // 驗證 OTP
+  void _verifyOtp() async {
+    if (_otpCtrl.text.trim().length != 6) {
+      setState(() => _error = '請輸入 6 位數驗證碼');
+      return;
+    }
+
+    if (_verificationId == null) {
+      setState(() => _error = '驗證流程異常，請重新發送驗證碼');
       return;
     }
 
@@ -111,269 +192,97 @@ class _AuthViewState extends State<AuthView>
     });
 
     try {
-      // 直接使用 Firebase Auth 的重置密码方法
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailCtrl.text.trim(),
+      final credential = PhoneAuthProvider.credential(
+        verificationId: _verificationId!,
+        smsCode: _otpCtrl.text.trim(),
       );
-      _showSuccessDialog('重置密碼郵件已發送', '請檢查您的信箱並按照指示重置密碼');
+
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      if (userCredential.user != null) {
+        final formattedPhone = _formatPhoneNumber(_phoneCtrl.text.trim());
+        _navigateToRegistration(userCredential.user!, formattedPhone);
+      }
     } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = '找不到此 Email 對應的用戶';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Email 格式不正確';
-          break;
-        case 'too-many-requests':
-          errorMessage = '請求過於頻繁，請稍後再試';
-          break;
-        default:
-          errorMessage = '發送重置郵件失敗：${e.message}';
-      }
-      setState(() => _error = errorMessage);
+      setState(() {
+        _isLoading = false;
+        switch (e.code) {
+          case 'invalid-verification-code':
+            _error = '驗證碼錯誤，請重新輸入';
+            break;
+          case 'code-expired':
+            _error = '驗證碼已過期，請重新發送';
+            break;
+          default:
+            _error = '驗證失敗：${e.message}';
+        }
+      });
     } catch (e) {
-      setState(() => _error = '發送重置郵件失敗，請檢查網路連接');
-    } finally {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _error = '驗證失敗，請檢查網路連接：${e.toString()}';
+      });
     }
   }
 
-  // 显示成功对话框
-  void _showSuccessDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green[600]),
-            const SizedBox(width: 8),
-            Text(title),
-          ],
-        ),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('確定'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _onSubmit() async {
-    if (_emailCtrl.text.trim().isEmpty || _pwdCtrl.text.trim().isEmpty) {
-      setState(() => _error = '請填寫完整的 Email 和密碼');
-      return;
-    }
-
-    setState(() {
-      _error = null;
-      _isLoading = true;
-    });
-
+  // 導向註冊頁面或主頁面
+  void _navigateToRegistration(User user, String phoneNumber) async {
     try {
-      final user = _isLogin
-          ? await _auth.signIn(
-              email: _emailCtrl.text.trim(),
-              password: _pwdCtrl.text,
-            )
-          : await _auth.register(
-              email: _emailCtrl.text.trim(),
-              password: _pwdCtrl.text,
-            );
-      if (user != null) {
-        // 保存登录信息（如果勾选了记住我）
-        await _saveCredentials();
-        Navigator.pushReplacementNamed(context, '/$_selectedRole');
+      // 檢查用戶是否已註冊 - 統一使用 user 集合
+      final userDoc = await FirebaseFirestore.instance
+          .collection('user')
+          .doc(user.uid)
+          .get();
+
+      if (mounted) {
+        if (userDoc.exists) {
+          // 已註冊用戶，直接進入主頁面
+          Navigator.of(context).pushReplacementNamed('/parent');
+        } else {
+          // 新用戶，進入註冊流程
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) =>
+                  RegistrationView(uid: user.uid, phoneNumber: phoneNumber),
+            ),
+          );
+        }
       }
     } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
-      setState(() => _isLoading = false);
+      print('檢查用戶註冊狀態失敗: $e');
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) =>
+                RegistrationView(uid: user.uid, phoneNumber: phoneNumber),
+          ),
+        );
+      }
     }
   }
 
-  void _onGoogleSignIn() async {
+  // 重新發送驗證碼
+  void _resendOtp() {
+    if (_resendTimer == 0) {
+      setState(() {
+        _isOtpSent = false;
+        _otpCtrl.clear();
+        _error = null;
+      });
+      _sendOtp();
+    }
+  }
+
+  // 返回輸入手機號碼步驟
+  void _goBack() {
     setState(() {
+      _isOtpSent = false;
+      _otpCtrl.clear();
       _error = null;
-      _isLoading = true;
+      _verificationId = null;
+      _resendTimer = 0;
     });
-
-    try {
-      final user = await _auth.signInWithGoogle();
-      if (user != null) {
-        Navigator.pushReplacementNamed(context, '/$_selectedRole');
-      }
-    } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Widget _buildRoleSelector() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.person_outline, color: Colors.grey[700], size: 20),
-              const SizedBox(width: 8),
-              Text(
-                '選擇您的身份',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Tab 样式的角色选择器
-          Container(
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: _roles.entries.map((entry) {
-                final role = entry.key;
-                final roleData = entry.value;
-                final isSelected = _selectedRole == role;
-                final isFirst = _roles.keys.first == role;
-                final isLast = _roles.keys.last == role;
-
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectedRole = role),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? roleData['color']
-                            : Colors.transparent,
-                        borderRadius:
-                            BorderRadius.horizontal(
-                              left: isFirst
-                                  ? const Radius.circular(8)
-                                  : Radius.zero,
-                              right: isLast
-                                  ? const Radius.circular(8)
-                                  : Radius.zero,
-                            ).copyWith(
-                              topLeft: isFirst
-                                  ? const Radius.circular(8)
-                                  : const Radius.circular(8),
-                              topRight: isLast
-                                  ? const Radius.circular(8)
-                                  : const Radius.circular(8),
-                              bottomLeft: isFirst
-                                  ? const Radius.circular(8)
-                                  : const Radius.circular(8),
-                              bottomRight: isLast
-                                  ? const Radius.circular(8)
-                                  : const Radius.circular(8),
-                            ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: roleData['color'].withOpacity(0.3),
-                                  spreadRadius: 1,
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            roleData['icon'],
-                            color: isSelected
-                                ? Colors.white
-                                : roleData['color'],
-                            size: 20,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            roleData['name'],
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isSelected
-                                  ? Colors.white
-                                  : roleData['color'],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // 選中角色的描述
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Container(
-              key: ValueKey(_selectedRole),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _roles[_selectedRole]!['color'].withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _roles[_selectedRole]!['color'].withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: _roles[_selectedRole]!['color'],
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _roles[_selectedRole]!['description'],
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: _roles[_selectedRole]!['color'].withOpacity(0.8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -400,14 +309,14 @@ class _AuthViewState extends State<AuthView>
                 Center(
                   child: Column(
                     children: [
-                      Container(
+                      SizedBox(
                         width: 160,
                         height: 80,
                         child: Image.asset('assets/logo.png'),
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        _isLogin ? '歡迎回來' : '建立帳戶',
+                        _isOtpSent ? '驗證手機號碼' : '手機登入',
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -416,8 +325,11 @@ class _AuthViewState extends State<AuthView>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _isLogin ? '登入您的帳戶以繼續使用' : '註冊新帳戶開始使用服務',
+                        _isOtpSent
+                            ? '請輸入發送到 ${_phoneCtrl.text} 的驗證碼'
+                            : '輸入手機號碼以接收驗證碼',
                         style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -425,12 +337,7 @@ class _AuthViewState extends State<AuthView>
 
                 const SizedBox(height: 40),
 
-                // 角色選擇器
-                _buildRoleSelector(),
-
-                const SizedBox(height: 24),
-
-                // Email / Password 輸入欄位
+                // 輸入欄位
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -447,108 +354,93 @@ class _AuthViewState extends State<AuthView>
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      TextField(
-                        controller: _emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.blue[400]!),
+                      if (!_isOtpSent) ...[
+                        TextField(
+                          controller: _phoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          maxLength: 10,
+                          decoration: InputDecoration(
+                            labelText: '手機號碼',
+                            prefixIcon: const Icon(Icons.phone_outlined),
+                            hintText: '0912345678 (測試) 或 09xxxxxxxx',
+                            helperText: '請輸入台灣手機號碼或測試號碼',
+                            counterText: '',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.blue[400]!),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 记住我和忘记密码
-                      if (_isLogin) ...[
-                        Row(
-                          children: [
-                            // 记住我复选框
-                            SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: Checkbox(
-                                value: _rememberMe,
-                                onChanged: (value) => setState(
-                                  () => _rememberMe = value ?? false,
-                                ),
-                                activeColor: Colors.blue[600],
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
+                      ] else ...[
+                        // OTP 輸入
+                        TextField(
+                          controller: _otpCtrl,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 8,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: '驗證碼',
+                            prefixIcon: const Icon(Icons.sms_outlined),
+                            hintText: '',
+                            counterText: '',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
                             ),
-                            const SizedBox(width: 8),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.blue[400]!),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 重新發送按鈕
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
                             Text(
-                              '記住我',
+                              '沒收到驗證碼？',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey[700],
+                                color: Colors.grey[600],
                               ),
                             ),
-                            const Spacer(),
-                            // 忘记密码
                             TextButton(
-                              onPressed: _isLoading ? null : _forgotPassword,
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
+                              onPressed: _resendTimer == 0 ? _resendOtp : null,
                               child: Text(
-                                '忘記密碼？',
+                                _resendTimer > 0
+                                    ? '重新發送 ($_resendTimer)'
+                                    : '重新發送',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.blue[600],
+                                  color: _resendTimer > 0
+                                      ? Colors.grey[400]
+                                      : Colors.blue[600],
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
                       ],
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _pwdCtrl,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          labelText: '密碼',
-                          prefixIcon: const Icon(Icons.lock_outlined),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.blue[400]!),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -587,12 +479,14 @@ class _AuthViewState extends State<AuthView>
 
                 if (_error != null) const SizedBox(height: 16),
 
-                // 登入/註冊按鈕
+                // 主要按鈕
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _onSubmit,
+                    onPressed: _isLoading
+                        ? null
+                        : (_isOtpSent ? _verifyOtp : _sendOtp),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue[600],
                       foregroundColor: Colors.white,
@@ -613,7 +507,7 @@ class _AuthViewState extends State<AuthView>
                             ),
                           )
                         : Text(
-                            _isLogin ? '登入' : '註冊',
+                            _isOtpSent ? '驗證' : '發送驗證碼',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -624,79 +518,17 @@ class _AuthViewState extends State<AuthView>
 
                 const SizedBox(height: 16),
 
-                // 切換登入/註冊
-                Center(
-                  child: TextButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () => setState(() => _isLogin = !_isLogin),
-                    child: RichText(
-                      text: TextSpan(
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                        children: [
-                          TextSpan(text: _isLogin ? '還沒有帳戶？' : '已經有帳戶？'),
-                          TextSpan(
-                            text: _isLogin ? ' 立即註冊' : ' 立即登入',
-                            style: TextStyle(
-                              color: Colors.blue[600],
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // 分隔線
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: Colors.grey[300])),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                // 返回按鈕
+                if (_isOtpSent)
+                  Center(
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _goBack,
                       child: Text(
-                        '或',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                      ),
-                    ),
-                    Expanded(child: Divider(color: Colors.grey[300])),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Google 登入按鈕
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _onGoogleSignIn,
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey[300]!),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      backgroundColor: Colors.white,
-                    ),
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Image.asset('assets/google_logo.png', height: 24),
-                    label: Text(
-                      '使用 Google 登入',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[700],
+                        '返回修改手機號碼',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                     ),
                   ),
-                ),
 
                 const SizedBox(height: 40),
               ],

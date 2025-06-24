@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
 class FullScreenPopup extends StatelessWidget {
   final Widget child;
   final VoidCallback? onClose;
@@ -816,7 +815,12 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet> {
                       vertical: 12,
                     ),
                   ),
-                  onChanged: widget.onLocationSearch,
+                  onChanged: (value) {
+                    print('🔍 輸入框內容變更: "$value"');
+                    // ✅ 確保每次輸入都觸發搜尋
+                    widget.onLocationSearch(value);
+                  },
+                  textInputAction: TextInputAction.search,
                 ),
                 if (widget.locationSuggestions.isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -935,12 +939,14 @@ class EditProfileBottomSheet extends StatefulWidget {
   final Map<String, dynamic> profileForm;
   final VoidCallback onSave;
   final VoidCallback onCancel;
+  final bool isParentView;
 
   const EditProfileBottomSheet({
     Key? key,
     required this.profileForm,
     required this.onSave,
     required this.onCancel,
+    this.isParentView = true,
   }) : super(key: key);
 
   @override
@@ -948,35 +954,81 @@ class EditProfileBottomSheet extends StatefulWidget {
 }
 
 class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
-  late TextEditingController _displayNameCtrl;
-  late TextEditingController _contactCtrl;
+  late TextEditingController _nameCtrl;
+  late TextEditingController _phoneCtrl;
+  late TextEditingController _emailCtrl;
+  late TextEditingController _lineCtrl;
+  late TextEditingController _socialLinksCtrl;
   late TextEditingController _bioCtrl;
 
   final FocusNode _nameFocus = FocusNode();
-  final FocusNode _contactFocus = FocusNode();
+  final FocusNode _phoneFocus = FocusNode();
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _lineFocus = FocusNode();
+  final FocusNode _socialFocus = FocusNode();
   final FocusNode _bioFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    _displayNameCtrl = TextEditingController(
-      text: widget.profileForm['displayName'] ?? '',
+    _nameCtrl = TextEditingController(text: widget.profileForm['name'] ?? '');
+    _phoneCtrl = TextEditingController(
+      text: widget.profileForm['phoneNumber'] ?? '',
     );
-    _contactCtrl = TextEditingController(
-      text: widget.profileForm['contact'] ?? '',
+    _emailCtrl = TextEditingController(text: widget.profileForm['email'] ?? '');
+    _lineCtrl = TextEditingController(text: widget.profileForm['lineId'] ?? '');
+
+    // 處理 socialLinks
+    final socialLinks =
+        widget.profileForm['socialLinks'] as Map<String, dynamic>? ?? {};
+    _socialLinksCtrl = TextEditingController(
+      text: socialLinks['other']?.toString() ?? '',
     );
-    _bioCtrl = TextEditingController(text: widget.profileForm['bio'] ?? '');
+
+    // 根據視角決定使用哪個履歷欄位
+    final bioField = widget.isParentView
+        ? 'publisherResume'
+        : 'applicantResume';
+    _bioCtrl = TextEditingController(
+      text: widget.profileForm[bioField]?.toString() ?? '',
+    );
   }
 
   @override
   void dispose() {
-    _displayNameCtrl.dispose();
-    _contactCtrl.dispose();
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _lineCtrl.dispose();
+    _socialLinksCtrl.dispose();
     _bioCtrl.dispose();
     _nameFocus.dispose();
-    _contactFocus.dispose();
+    _phoneFocus.dispose();
+    _emailFocus.dispose();
+    _lineFocus.dispose();
+    _socialFocus.dispose();
     _bioFocus.dispose();
     super.dispose();
+  }
+
+  void _updateProfileForm() {
+    widget.profileForm['name'] = _nameCtrl.text.trim();
+    widget.profileForm['phoneNumber'] = _phoneCtrl.text.trim();
+    widget.profileForm['email'] = _emailCtrl.text.trim();
+    widget.profileForm['lineId'] = _lineCtrl.text.trim();
+
+    // 更新 socialLinks
+    final socialLinks = <String, String>{};
+    if (_socialLinksCtrl.text.trim().isNotEmpty) {
+      socialLinks['other'] = _socialLinksCtrl.text.trim();
+    }
+    widget.profileForm['socialLinks'] = socialLinks;
+
+    // 根據視角更新對應的履歷欄位
+    final bioField = widget.isParentView
+        ? 'publisherResume'
+        : 'applicantResume';
+    widget.profileForm[bioField] = _bioCtrl.text.trim();
   }
 
   @override
@@ -992,13 +1044,23 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 頭像區域
           Center(
             child: Column(
               children: [
                 CircleAvatar(
                   radius: 50,
                   backgroundColor: Colors.blue[100],
-                  child: Icon(Icons.person, size: 50, color: Colors.blue[600]),
+                  backgroundImage:
+                      widget.profileForm['avatarUrl']?.toString().isNotEmpty ==
+                          true
+                      ? NetworkImage(widget.profileForm['avatarUrl'])
+                      : null,
+                  child:
+                      widget.profileForm['avatarUrl']?.toString().isNotEmpty !=
+                          true
+                      ? Icon(Icons.person, size: 50, color: Colors.blue[600])
+                      : null,
                 ),
                 const SizedBox(height: 8),
                 TextButton.icon(
@@ -1014,14 +1076,16 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
             ),
           ),
           const SizedBox(height: 24),
+
+          // 姓名
           _buildInputSection(
-            title: '顯示名稱',
+            title: '姓名',
             icon: Icons.badge,
             child: TextField(
-              controller: _displayNameCtrl,
+              controller: _nameCtrl,
               focusNode: _nameFocus,
               decoration: InputDecoration(
-                hintText: '請輸入您的顯示名稱',
+                hintText: '請輸入您的姓名',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey[300]!),
@@ -1035,20 +1099,22 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
                   vertical: 12,
                 ),
               ),
-              onChanged: (v) => widget.profileForm['displayName'] = v,
               textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _contactFocus.requestFocus(),
+              onSubmitted: (_) => _phoneFocus.requestFocus(),
             ),
           ),
           const SizedBox(height: 20),
+
+          // 手機號碼
           _buildInputSection(
-            title: '聯絡方式',
-            icon: Icons.contact_phone,
+            title: '手機號碼',
+            icon: Icons.phone,
             child: TextField(
-              controller: _contactCtrl,
-              focusNode: _contactFocus,
+              controller: _phoneCtrl,
+              focusNode: _phoneFocus,
+              keyboardType: TextInputType.phone,
               decoration: InputDecoration(
-                hintText: '電話、Email 或其他聯絡方式',
+                hintText: '請輸入手機號碼',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey[300]!),
@@ -1062,21 +1128,109 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
                   vertical: 12,
                 ),
               ),
-              onChanged: (v) => widget.profileForm['contact'] = v,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _emailFocus.requestFocus(),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Email
+          _buildInputSection(
+            title: 'Email',
+            icon: Icons.email,
+            child: TextField(
+              controller: _emailCtrl,
+              focusNode: _emailFocus,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                hintText: '請輸入 Email',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _lineFocus.requestFocus(),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Line ID
+          _buildInputSection(
+            title: 'Line ID',
+            icon: Icons.chat,
+            child: TextField(
+              controller: _lineCtrl,
+              focusNode: _lineFocus,
+              decoration: InputDecoration(
+                hintText: '請輸入 Line ID（選填）',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _socialFocus.requestFocus(),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 社群連結
+          _buildInputSection(
+            title: '社群連結',
+            icon: Icons.link,
+            child: TextField(
+              controller: _socialLinksCtrl,
+              focusNode: _socialFocus,
+              decoration: InputDecoration(
+                hintText: 'Instagram、Facebook 等連結（選填）',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
               textInputAction: TextInputAction.next,
               onSubmitted: (_) => _bioFocus.requestFocus(),
             ),
           ),
           const SizedBox(height: 20),
+
+          // 個人簡介/履歷
           _buildInputSection(
-            title: '自我介紹',
+            title: widget.isParentView ? '發布者簡介' : '應徵者履歷',
             icon: Icons.description,
             child: TextField(
               controller: _bioCtrl,
               focusNode: _bioFocus,
               maxLines: 4,
               decoration: InputDecoration(
-                hintText: '簡單介紹一下自己...',
+                hintText: widget.isParentView
+                    ? '簡單介紹一下自己，讓應徵者更了解你...'
+                    : '描述您的技能、經驗和專長...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey[300]!),
@@ -1087,10 +1241,11 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
                 ),
                 contentPadding: const EdgeInsets.all(16),
               ),
-              onChanged: (v) => widget.profileForm['bio'] = v,
             ),
           ),
           const SizedBox(height: 32),
+
+          // 按鈕
           Row(
             children: [
               Expanded(
@@ -1113,7 +1268,10 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: widget.onSave,
+                  onPressed: () {
+                    _updateProfileForm();
+                    widget.onSave();
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[600],
                     foregroundColor: Colors.white,
@@ -2738,9 +2896,10 @@ class ClusterPostsListBottomSheet extends StatelessWidget {
                         const SizedBox(height: 12),
 
                         // 發布者信息
+                        // 發布者信息
                         FutureBuilder<DocumentSnapshot>(
                           future: FirebaseFirestore.instance
-                              .doc('parents/${post['userId']}')
+                              .doc('user/${post['userId']}') // ✅ 改用 user 集合
                               .get(),
                           builder: (context, snapshot) {
                             if (!snapshot.hasData || !snapshot.data!.exists) {
@@ -2767,7 +2926,7 @@ class ClusterPostsListBottomSheet extends StatelessWidget {
                                 border: Border.all(color: Colors.purple[200]!),
                               ),
                               child: Text(
-                                '👤 發布者：${publisherData['displayName'] ?? '未設定'}',
+                                '👤 發布者：${publisherData['name'] ?? '未設定'}', // ✅ 改用 name 欄位
                                 style: TextStyle(
                                   color: Colors.purple[700],
                                   fontSize: 12,
@@ -2777,7 +2936,6 @@ class ClusterPostsListBottomSheet extends StatelessWidget {
                             );
                           },
                         ),
-
                         const SizedBox(height: 12),
 
                         // 底部：查看詳情按鈕

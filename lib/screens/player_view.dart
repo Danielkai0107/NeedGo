@@ -11,7 +11,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../styles/map_styles.dart';
-import '../services/auth_service.dart';
 import '../components/full_screen_popup.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -40,7 +39,6 @@ class _PlayerViewState extends State<PlayerView> {
   LatLng? _myLocation;
 
   final _firestore = FirebaseFirestore.instance;
-  final _authService = AuthService();
 
   String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
 
@@ -260,15 +258,18 @@ class _PlayerViewState extends State<PlayerView> {
 
   // 在 _loadProfile 方法中檢查設定
   Future<void> _loadProfile(String uid) async {
-    final doc = await _firestore.doc('players/$uid').get();
-    if (doc.exists) {
-      setState(() => _profile = doc.data()!);
+    try {
+      final doc = await _firestore.doc('user/$uid').get(); // ✅ 改用 user 集合
+      if (doc.exists && mounted) {
+        setState(() => _profile = doc.data()!);
 
-      // 只有當用戶開啟此功能時才顯示隨機彈窗
-      if (_profile['showRandomPosts'] != false) {
-        // 預設開啟
-        _showRandomNearbyPost();
+        // 只有當用戶開啟此功能時才顯示隨機彈窗
+        if (_profile['showRandomPosts'] != false) {
+          _showRandomNearbyPost();
+        }
       }
+    } catch (e) {
+      print('載入個人資料失敗: $e');
     }
   }
 
@@ -500,7 +501,7 @@ class _PlayerViewState extends State<PlayerView> {
   Future<void> _saveProfile() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
-    final ref = _firestore.doc('players/${u.uid}');
+    final ref = _firestore.doc('user/${u.uid}'); // ✅ 改用 user 集合
     try {
       await ref.set(_profileForm, SetOptions(merge: true));
       setState(() {
@@ -509,10 +510,10 @@ class _PlayerViewState extends State<PlayerView> {
         _profileStatusMessage = '履歷更新成功';
       });
       Future.delayed(const Duration(seconds: 1), _closeProfileEditor);
-    } catch (_) {
+    } catch (e) {
       setState(() {
         _profileStatusType = 'error';
-        _profileStatusMessage = '儲存失敗';
+        _profileStatusMessage = '儲存失敗：$e';
       });
     }
   }
@@ -1199,7 +1200,7 @@ class _PlayerViewState extends State<PlayerView> {
                     borderRadius: BorderRadius.circular(56), // 半徑 12
                   ),
                   onPressed: () async {
-                    await _authService.signOut();
+                    await FirebaseAuth.instance.signOut();
                     Navigator.pushReplacementNamed(context, '/');
                   },
                 ),
@@ -1258,10 +1259,13 @@ class _PlayerViewState extends State<PlayerView> {
                   onCancelApplication: _hasApplied
                       ? () => _cancelApplication(_selectedLocation!['id'])
                       : null,
+                  // 在 publisherInfo 的 FutureBuilder 中也要修改
                   publisherInfo: _selectedLocation!['userId'] != null
                       ? FutureBuilder<DocumentSnapshot>(
                           future: _firestore
-                              .doc('parents/${_selectedLocation!['userId']}')
+                              .doc(
+                                'user/${_selectedLocation!['userId']}',
+                              ) // ✅ 改用 user 集合
                               .get(),
                           builder: (ctx, snap) {
                             if (snap.connectionState != ConnectionState.done) {
@@ -1274,14 +1278,31 @@ class _PlayerViewState extends State<PlayerView> {
                             }
                             final data =
                                 snap.data!.data() as Map<String, dynamic>;
+
+                            // 組合聯絡方式顯示
+                            final contacts = <String>[];
+                            if (data['phoneNumber']?.toString().isNotEmpty ==
+                                true) {
+                              contacts.add('📞 ${data['phoneNumber']}');
+                            }
+                            if (data['email']?.toString().isNotEmpty == true) {
+                              contacts.add('📧 ${data['email']}');
+                            }
+                            if (data['lineId']?.toString().isNotEmpty == true) {
+                              contacts.add('💬 Line: ${data['lineId']}');
+                            }
+
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('👤 名稱：${data['displayName'] ?? '—'}'),
-                                if (data['contact'] != null)
-                                  Text('📞 聯絡：${data['contact']}'),
-                                if (data['bio'] != null)
-                                  Text('📝 關於他：${data['bio']}'),
+                                Text('👤 名稱：${data['name'] ?? '—'}'),
+                                if (contacts.isNotEmpty)
+                                  ...contacts.map((contact) => Text(contact)),
+                                if (data['publisherResume']
+                                        ?.toString()
+                                        .isNotEmpty ==
+                                    true)
+                                  Text('📝 關於發布者：${data['publisherResume']}'),
                               ],
                             );
                           },
@@ -1498,6 +1519,7 @@ class _PlayerViewState extends State<PlayerView> {
                 onClose: _closeProfileEditor,
                 child: EditProfileBottomSheet(
                   profileForm: _profileForm,
+                  isParentView: false,
                   onSave: _saveProfile,
                   onCancel: _closeProfileEditor,
                 ),
