@@ -1,15 +1,14 @@
 // lib/screens/player_view.dart
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../components/full_screen_popup.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../components/task_detail_sheet.dart';
+import '../components/location_info_sheet.dart';
 
 enum BottomSheetType {
   none,
@@ -19,7 +18,6 @@ enum BottomSheetType {
   notificationPanel,
   profileEditor,
   randomNearbyNotification,
-  clusterPostsList,
 }
 
 class PlayerView extends StatefulWidget {
@@ -35,13 +33,11 @@ class _PlayerViewState extends State<PlayerView> {
   double _zoom = 14;
   LatLng? _myLocation;
   final _firestore = FirebaseFirestore.instance;
-  String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+
   StreamSubscription<QuerySnapshot>? _postsSub;
   List<Map<String, dynamic>> _allPosts = [];
   Timestamp? _listenerAttachedTs;
-  Map<String, dynamic>? _selectedLocation;
-  bool _isLoadingTravel = false;
-  Map<String, String>? _travelInfo;
+
   BottomSheetType _currentBottomSheet = BottomSheetType.none;
   List<Map<String, dynamic>> _systemLocations = [];
   Set<String> _availableCategories = {};
@@ -54,8 +50,9 @@ class _PlayerViewState extends State<PlayerView> {
   Map<String, dynamic>? _newPostToShow;
   bool _isApplying = false;
   Map<String, List<Map<String, dynamic>>> _clusteredPosts = {};
-  String? _selectedClusterId;
-  List<Map<String, dynamic>> _clusterPosts = [];
+
+  // 新的地圖標記管理
+  Set<Marker> _markers = {};
 
   Map<String, List<Map<String, dynamic>>> _clusterPostsByLocation() {
     final clusters = <String, List<Map<String, dynamic>>>{};
@@ -96,21 +93,6 @@ class _PlayerViewState extends State<PlayerView> {
     }
 
     return clusters;
-  }
-
-  // 新增：處理聚合 marker 點擊
-  void _handleClusterTap(String clusterId, List<Map<String, dynamic>> posts) {
-    if (posts.length == 1) {
-      // 只有一個任務，直接顯示詳情
-      _selectLocationMarker(posts.first, isStatic: false);
-    } else {
-      // 多個任務，顯示選擇列表
-      setState(() {
-        _selectedClusterId = clusterId;
-        _clusterPosts = posts;
-        _currentBottomSheet = BottomSheetType.clusterPostsList;
-      });
-    }
   }
 
   List<Map<String, dynamic>> get _myApplications {
@@ -323,6 +305,9 @@ class _PlayerViewState extends State<PlayerView> {
       }
 
       print('載入了 ${locations.length} 個系統地點，${categories.length} 個類別');
+
+      // 載入系統地點後更新標記
+      _updateMarkers();
     } catch (e) {
       print('載入系統地點失敗: $e');
     }
@@ -419,6 +404,9 @@ class _PlayerViewState extends State<PlayerView> {
       if (mounted) {
         // 新增 mounted 檢查
         setState(() => _allPosts = list);
+
+        // 更新地圖標記
+        _updateMarkers();
       }
 
       final currentUser = FirebaseAuth.instance.currentUser;
@@ -452,8 +440,7 @@ class _PlayerViewState extends State<PlayerView> {
 
           // 如果當前沒有彈窗，顯示即時通知
           if (mounted && // 新增 mounted 檢查
-              _currentBottomSheet == BottomSheetType.none &&
-              _selectedLocation == null) {
+              _currentBottomSheet == BottomSheetType.none) {
             setState(() {
               _newPostToShow = newPost;
               _currentBottomSheet = BottomSheetType.newPostNotification;
@@ -487,6 +474,7 @@ class _PlayerViewState extends State<PlayerView> {
       final pos = await Geolocator.getCurrentPosition();
       final coord = LatLng(pos.latitude, pos.longitude);
       setState(() => _myLocation = coord);
+      _updateMarkers(); // 更新標記以包含新的位置
       _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(coord, 16));
     } catch (_) {}
   }
@@ -502,57 +490,46 @@ class _PlayerViewState extends State<PlayerView> {
     print('地址字段: ${loc['address']}');
     print('地址字段類型: ${loc['address'].runtimeType}');
 
-    setState(() {
-      _selectedLocation = {...loc, 'isStatic': isStatic}; // 添加 isStatic 標記
-      _travelInfo = null;
-      _currentBottomSheet = BottomSheetType.locationDetail;
-    });
-    _calculateTravelInfo(LatLng(loc['lat'], loc['lng']));
-  }
+    // 如果是任務（有 userId），使用新的 TaskDetailSheet
+    if (loc['userId'] != null && !isStatic) {
+      // 移動地圖到任務位置
+      _moveMapToLocation(LatLng(loc['lat'], loc['lng']));
 
-  void _closePopup() {
-    setState(() {
-      _selectedLocation = null;
-      _travelInfo = null;
-      _currentBottomSheet = BottomSheetType.none;
-    });
-  }
-
-  /// 计算路程信息
-  Future<void> _calculateTravelInfo(LatLng dest) async {
-    if (_myLocation == null || !mounted) return; // 新增 mounted 檢查
-
-    if (mounted) {
-      // 新增 mounted 檢查
-      setState(() => _isLoadingTravel = true);
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        enableDrag: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => TaskDetailSheet(
+          taskData: loc,
+          isParentView: false,
+          currentLocation: _myLocation,
+          onTaskUpdated: () {
+            // 重新載入任務列表和更新標記
+            if (mounted) {
+              setState(() {
+                // 可能需要重新載入 _allPosts
+              });
+              _updateMarkers();
+            }
+          },
+        ),
+      );
+      return; // 直接返回，不執行後續邏輯
     }
 
-    final o = '${_myLocation!.latitude},${_myLocation!.longitude}';
-    final d = '${dest.latitude},${dest.longitude}';
-    final modes = ['driving', 'walking', 'transit'];
-    final info = <String, String>{};
-
-    for (var m in modes) {
-      try {
-        final url = Uri.parse(
-          'https://maps.googleapis.com/maps/api/distancematrix/json'
-          '?origins=$o&destinations=$d&mode=$m&key=$_apiKey',
-        );
-        final resp = await http.get(url);
-        final row = jsonDecode(resp.body)['rows'][0]['elements'][0];
-        info[m] = '${row['duration']['text']} (${row['distance']['text']})';
-      } catch (_) {
-        info[m] = '無法計算';
-      }
-    }
-
-    if (mounted) {
-      // 新增 mounted 檢查
-      setState(() {
-        _travelInfo = info;
-        _isLoadingTravel = false;
-      });
-    }
+    // 系統地點，使用新的 LocationInfoSheet
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => LocationInfoSheet(
+        locationData: loc,
+        isParentView: false,
+        currentLocation: _myLocation,
+      ),
+    );
   }
 
   Future<void> _applyToPost(String postId) async {
@@ -564,7 +541,6 @@ class _PlayerViewState extends State<PlayerView> {
     });
     setState(() {
       _isApplying = false;
-      _closePopup();
     });
   }
 
@@ -574,7 +550,6 @@ class _PlayerViewState extends State<PlayerView> {
     await _firestore.doc('posts/$postId').update({
       'applicants': FieldValue.arrayRemove([u.uid]),
     });
-    _closePopup();
   }
 
   void _openProfileEditor() {
@@ -630,13 +605,6 @@ class _PlayerViewState extends State<PlayerView> {
       setState(() => _currentBottomSheet = BottomSheetType.myApplications);
   void _closeMyApplications() =>
       setState(() => _currentBottomSheet = BottomSheetType.none);
-
-  bool get _hasApplied {
-    final u = FirebaseAuth.instance.currentUser;
-    if (u == null || _selectedLocation == null) return false;
-    final apps = List<String>.from(_selectedLocation!['applicants'] ?? []);
-    return apps.contains(u.uid);
-  }
 
   // 修改：檢查靜態地點是否被聚合覆蓋
   bool _isStaticLocationCoveredByCluster(Map<String, dynamic> staticLocation) {
@@ -709,6 +677,9 @@ class _PlayerViewState extends State<PlayerView> {
         representativePost['lng'],
       );
 
+      // 統一使用 LocationInfoSheet，顯示該地點的所有任務
+      final onTapAction = () => _showLocationInfoWithTasks(posts);
+
       markers.add(
         Marker(
           markerId: MarkerId('cluster_${entry.key}'),
@@ -720,12 +691,84 @@ class _PlayerViewState extends State<PlayerView> {
               : BitmapDescriptor.defaultMarkerWithHue(
                   BitmapDescriptor.hueYellow,
                 ),
-          onTap: () => _handleClusterTap(entry.key, posts),
+          onTap: onTapAction,
         ),
       );
     }
 
     return markers;
+  }
+
+  /// 顯示聚合地點的 LocationInfoSheet 與任務列表
+  void _showLocationInfoWithTasks(List<Map<String, dynamic>> tasks) {
+    if (tasks.isEmpty) return;
+
+    // 使用第一個任務的位置作為代表地點
+    final representativeTask = tasks.first;
+    final position = LatLng(
+      representativeTask['lat'],
+      representativeTask['lng'],
+    );
+
+    // 移動地圖到該位置
+    _moveMapToLocation(position);
+
+    // 建立地點資料結構
+    final locationData = {
+      'name': _getLocationNameForTasks(tasks),
+      'lat': representativeTask['lat'],
+      'lng': representativeTask['lng'],
+      'address': representativeTask['address'] ?? '地址未設定',
+      'category': '任務地點',
+    };
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => LocationInfoSheet(
+        locationData: locationData,
+        isParentView: false,
+        currentLocation: _myLocation,
+        availableTasksAtLocation: tasks,
+        onTaskSelected: (taskData) {
+          // 關閉 LocationInfoSheet
+          Navigator.of(context).pop();
+
+          // 顯示 TaskDetailSheet
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            enableDrag: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => TaskDetailSheet(
+              taskData: taskData,
+              isParentView: false,
+              currentLocation: _myLocation,
+              onTaskUpdated: () {
+                // 重新載入任務列表和更新標記
+                if (mounted) {
+                  setState(() {
+                    // 可能需要重新載入 _allPosts
+                  });
+                  _updateMarkers();
+                }
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 為任務群組生成地點名稱
+  String _getLocationNameForTasks(List<Map<String, dynamic>> tasks) {
+    if (tasks.length == 1) {
+      return tasks.first['title'] ?? tasks.first['name'] ?? '任務地點';
+    } else {
+      return '此地點的任務 (${tasks.length}個)';
+    }
   }
 
   // 新增方法：
@@ -1216,26 +1259,48 @@ class _PlayerViewState extends State<PlayerView> {
     Navigator.pushReplacementNamed(context, route);
   }
 
+  /// 更新地圖標記 - 使用Player專用的聚合邏輯
+  void _updateMarkers() {
+    if (!mounted) return;
+
+    final allMarkers = <Marker>{};
+
+    // 添加系統地點標記
+    allMarkers.addAll(_buildStaticParkMarkers());
+
+    // 添加聚合任務標記
+    allMarkers.addAll(_buildPostMarkers());
+
+    // 添加用戶位置標記
+    if (_myLocation != null) {
+      allMarkers.add(
+        Marker(
+          markerId: const MarkerId('my_location'),
+          position: _myLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ),
+      );
+    }
+
+    setState(() {
+      _markers = allMarkers;
+    });
+  }
+
+  /// 移動地圖到指定位置
+  void _moveMapToLocation(LatLng position) {
+    _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(position, 16));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final markers = <Marker>{
-      if (_myLocation != null)
-        Marker(
-          markerId: const MarkerId('me'),
-          position: _myLocation!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        ),
-      ..._buildStaticParkMarkers(),
-      ..._buildPostMarkers(),
-    };
-
     return Scaffold(
       body: Stack(
         children: [
           GoogleMap(
             initialCameraPosition: CameraPosition(target: _center, zoom: _zoom),
             onMapCreated: (c) => _mapCtrl = c..setMapStyle(mapStyleJson),
-            markers: markers,
+            markers: _markers,
             myLocationEnabled: false,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
@@ -1360,110 +1425,6 @@ class _PlayerViewState extends State<PlayerView> {
               ],
             ),
           ),
-
-          // 聚合任務列表底部彈窗
-          if (_currentBottomSheet == BottomSheetType.clusterPostsList)
-            Positioned.fill(
-              child: FullScreenPopup(
-                title: '此地點的任務',
-                onClose: () => setState(() {
-                  _currentBottomSheet = BottomSheetType.none;
-                  _selectedClusterId = null;
-                  _clusterPosts.clear();
-                }),
-                child: ClusterPostsListBottomSheet(
-                  posts: _clusterPosts,
-                  onPostTap: (post) {
-                    // 關閉聚合列表，顯示任務詳情
-                    setState(() {
-                      _currentBottomSheet = BottomSheetType.none;
-                      _selectedClusterId = null;
-                      _clusterPosts.clear();
-                    });
-                    _selectLocationMarker(post, isStatic: false);
-                  },
-                  onBack: () => setState(() {
-                    _currentBottomSheet = BottomSheetType.none;
-                    _selectedClusterId = null;
-                    _clusterPosts.clear();
-                  }),
-                ),
-              ),
-            ),
-
-          // 通用弹窗：静态公园 or 动态任务
-          if (_selectedLocation != null)
-            Positioned.fill(
-              child: FullScreenPopup(
-                title: _selectedLocation!['name'] ?? '地點',
-                onClose: _closePopup,
-                child: LocationDetailBottomSheet(
-                  location: _selectedLocation!,
-                  travelInfo: _travelInfo,
-                  isLoadingTravel: _isLoadingTravel,
-                  hasApplied: _hasApplied,
-                  isApplying: _isApplying,
-                  onApply:
-                      _selectedLocation!['userId'] != null &&
-                          FirebaseAuth.instance.currentUser!.uid !=
-                              _selectedLocation!['userId']
-                      ? () => _applyToPost(_selectedLocation!['id'])
-                      : null,
-                  onCancelApplication: _hasApplied
-                      ? () => _cancelApplication(_selectedLocation!['id'])
-                      : null,
-                  // 在 publisherInfo 的 FutureBuilder 中也要修改
-                  publisherInfo: _selectedLocation!['userId'] != null
-                      ? FutureBuilder<DocumentSnapshot>(
-                          future: _firestore
-                              .doc(
-                                'user/${_selectedLocation!['userId']}',
-                              ) // ✅ 改用 user 集合
-                              .get(),
-                          builder: (ctx, snap) {
-                            if (snap.connectionState != ConnectionState.done) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            if (!snap.hasData || !snap.data!.exists) {
-                              return const Text('無法取得發佈者資料');
-                            }
-                            final data =
-                                snap.data!.data() as Map<String, dynamic>;
-
-                            // 組合聯絡方式顯示
-                            final contacts = <String>[];
-                            if (data['phoneNumber']?.toString().isNotEmpty ==
-                                true) {
-                              contacts.add('📞 ${data['phoneNumber']}');
-                            }
-                            if (data['email']?.toString().isNotEmpty == true) {
-                              contacts.add('📧 ${data['email']}');
-                            }
-                            if (data['lineId']?.toString().isNotEmpty == true) {
-                              contacts.add('💬 Line: ${data['lineId']}');
-                            }
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('👤 名稱：${data['name'] ?? '—'}'),
-                                if (contacts.isNotEmpty)
-                                  ...contacts.map((contact) => Text(contact)),
-                                if (data['publisherResume']
-                                        ?.toString()
-                                        .isNotEmpty ==
-                                    true)
-                                  Text('📝 關於發布者：${data['publisherResume']}'),
-                              ],
-                            );
-                          },
-                        )
-                      : null,
-                ),
-              ),
-            ),
 
           // 新貼文通知彈窗
           // 隨機附近案件懸浮彈窗（新增）
@@ -1643,8 +1604,32 @@ class _PlayerViewState extends State<PlayerView> {
                     // 新增这个回调函数
                     // 关闭当前弹窗
                     _closeMyApplications();
-                    // 显示应用详情
-                    _selectLocationMarker(application, isStatic: false); // 新增參數
+
+                    // 移動地圖到任務位置並显示新的任务详情彈窗
+                    _moveMapToLocation(
+                      LatLng(application['lat'], application['lng']),
+                    );
+
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      enableDrag: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => TaskDetailSheet(
+                        taskData: application,
+                        isParentView: false,
+                        currentLocation: _myLocation,
+                        onTaskUpdated: () {
+                          // 重新載入任務列表和更新標記
+                          if (mounted) {
+                            setState(() {
+                              // 可能需要重新載入 _allPosts
+                            });
+                            _updateMarkers();
+                          }
+                        },
+                      ),
+                    );
                   },
                 ),
               ),
@@ -1703,7 +1688,30 @@ class _PlayerViewState extends State<PlayerView> {
     setState(() {
       _currentBottomSheet = BottomSheetType.none;
     });
-    _selectLocationMarker(post, isStatic: false); // 新增參數
+
+    // 移動地圖到任務位置並显示新的任务详情彈窗
+    _moveMapToLocation(LatLng(post['lat'], post['lng']));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TaskDetailSheet(
+        taskData: post,
+        isParentView: false,
+        currentLocation: _myLocation,
+        onTaskUpdated: () {
+          // 重新載入任務列表和更新標記
+          if (mounted) {
+            setState(() {
+              // 可能需要重新載入 _allPosts
+            });
+            _updateMarkers();
+          }
+        },
+      ),
+    );
 
     // 从新案件列表中移除已查看的案件
     _newPosts.removeWhere((p) => p['id'] == post['id']);

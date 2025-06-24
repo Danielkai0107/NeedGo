@@ -12,6 +12,9 @@ import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../components/full_screen_popup.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
+import '../components/task_detail_sheet.dart';
+import '../components/location_info_sheet.dart';
+import '../components/map_marker_manager.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 enum BottomSheetType {
@@ -50,6 +53,10 @@ class _ParentViewState extends State<ParentView> {
   Map<String, dynamic>? _selectedLocation;
   bool _isLoadingTravel = false;
   Map<String, String>? _travelInfo;
+
+  // 新的地圖標記管理
+  Set<Marker> _markers = {};
+  MarkerData? _selectedMarker;
   Map<String, dynamic> _postForm = {
     'name': '',
     'content': '',
@@ -96,6 +103,8 @@ class _ParentViewState extends State<ParentView> {
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
         await _loadMyPosts();
+        // 確保初始化完成後更新標記
+        _updateMarkers();
       }
     } catch (e) {
       print('初始化失敗: $e');
@@ -174,6 +183,9 @@ class _ParentViewState extends State<ParentView> {
       });
 
       print('載入了 ${locations.length} 個系統地點，${categories.length} 個類別');
+
+      // 載入系統地點後更新標記
+      _updateMarkers();
     } catch (e) {
       print('載入系統地點失敗: $e');
     }
@@ -590,6 +602,9 @@ class _ParentViewState extends State<ParentView> {
           _myPosts = ps;
         });
         print('🔄 UI 已更新，_myPosts.length = ${_myPosts.length}');
+
+        // 更新地圖標記
+        _updateMarkers();
       }
     } catch (e) {
       print('❌ 載入任務失敗: $e');
@@ -1279,22 +1294,99 @@ class _ParentViewState extends State<ParentView> {
     }
   }
 
+  /// 更新地圖標記
+  void _updateMarkers() {
+    MapMarkerManager.generateMarkers(
+      systemLocations: _systemLocations,
+      userTasks: _myPosts,
+      isParentView: true,
+      onMarkerTap: _handleMarkerTap,
+      currentLocation: _myLocation,
+    ).then((markers) {
+      if (mounted) {
+        setState(() {
+          _markers = markers;
+        });
+      }
+    });
+  }
+
+  /// 處理標記點擊
+  void _handleMarkerTap(MarkerData markerData) {
+    setState(() {
+      _selectedMarker = markerData;
+      _selectedLocation = markerData.data;
+    });
+
+    // 根據標記類型顯示不同的彈窗
+    if (markerData.type == MarkerType.custom) {
+      // 自定義任務標記 - 顯示任務詳情
+      _showTaskDetailSheet(markerData);
+    } else if (markerData.type == MarkerType.preset ||
+        markerData.type == MarkerType.activePreset) {
+      // 系統地點標記 - 顯示地點資訊
+      _showLocationInfoSheet(markerData);
+    }
+  }
+
+  /// 顯示任務詳情彈窗
+  void _showTaskDetailSheet(MarkerData markerData) {
+    // 移動地圖到任務位置
+    _moveMapToLocation(markerData.position);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TaskDetailSheet(
+        taskData: markerData.data,
+        isParentView: true,
+        currentLocation: _myLocation,
+        onTaskUpdated: () {
+          _loadMyPosts();
+          _updateMarkers();
+        },
+        onEditTask: () {
+          Navigator.of(context).pop();
+          _editingPostId = markerData.data['id'];
+          _showEditTaskSheet();
+        },
+        onDeleteTask: () async {
+          Navigator.of(context).pop();
+          await _deletePost(markerData.data['id']);
+        },
+      ),
+    );
+  }
+
+  /// 移動地圖到指定位置
+  void _moveMapToLocation(LatLng position) {
+    _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(position, 16));
+  }
+
+  /// 顯示地點資訊彈窗
+  void _showLocationInfoSheet(MarkerData markerData) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => LocationInfoSheet(
+        locationData: markerData.data,
+        isParentView: true,
+        currentLocation: _myLocation,
+        onCreateTaskAtLocation: () {
+          Navigator.of(context).pop();
+          _startCreatePostFromStatic();
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 創建所有標記
-    final myLocationMarkers = _buildMyLocationMarker();
-    final staticParkMarkers = _buildStaticParkMarkers();
-    final myPostMarkers = _buildMyPostMarkers();
-
-    final markers = <Marker>{
-      ...myLocationMarkers,
-      ...staticParkMarkers,
-      ...myPostMarkers,
-    };
-
-    print(
-      '總標記數量: ${markers.length} (我的位置: ${myLocationMarkers.length}, 公園: ${staticParkMarkers.length}, 我的任務: ${myPostMarkers.length})',
-    );
+    print('總標記數量: ${_markers.length}');
 
     return Scaffold(
       body: Stack(
@@ -1314,7 +1406,7 @@ class _ParentViewState extends State<ParentView> {
                 }
               });
             },
-            markers: markers,
+            markers: _markers,
             myLocationEnabled: false,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
@@ -1353,7 +1445,7 @@ class _ParentViewState extends State<ParentView> {
                             Text('總任務數量: ${allPosts.docs.length}'),
                             Text('我的任務數量: ${myPosts.docs.length}'),
                             Text('本地任務數量: ${_myPosts.length}'),
-                            Text('標記數量: ${markers.length}'),
+                            Text('標記數量: ${_markers.length}'),
                             const SizedBox(height: 10),
                             const Text('所有任務:'),
                             for (var doc in allPosts.docs)
@@ -1472,6 +1564,7 @@ class _ParentViewState extends State<ParentView> {
                     final newLatLng = LatLng(pos.latitude, pos.longitude);
 
                     setState(() => _myLocation = newLatLng);
+                    _updateMarkers(); // 更新標記以包含新的位置
                     _mapCtrl.animateCamera(
                       CameraUpdate.newLatLngZoom(newLatLng, 16),
                     );
@@ -1603,14 +1696,38 @@ class _ParentViewState extends State<ParentView> {
                 child: MyTasksListBottomSheet(
                   tasks: _myPosts,
                   onTaskTap: (task) {
-                    // 关闭任务列表，显示任务详情
+                    // 关闭任务列表，使用新的任务详情UI
                     setState(() {
-                      _selectedLocation = task;
-                      _currentBottomSheet = BottomSheetType.taskDetail;
-                      _travelInfo = null;
+                      _currentBottomSheet = BottomSheetType.none;
                     });
-                    // 计算交通信息
-                    _calculateTravelInfo(LatLng(task['lat'], task['lng']));
+
+                    // 移動地圖到任務位置並显示新的任务详情弹窗
+                    _moveMapToLocation(LatLng(task['lat'], task['lng']));
+
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      enableDrag: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => TaskDetailSheet(
+                        taskData: {...task, 'id': task['id']},
+                        isParentView: true,
+                        currentLocation: _myLocation,
+                        onTaskUpdated: () {
+                          _loadMyPosts();
+                          _updateMarkers();
+                        },
+                        onEditTask: () {
+                          Navigator.of(context).pop();
+                          _editingPostId = task['id'];
+                          _showEditTaskSheet();
+                        },
+                        onDeleteTask: () async {
+                          Navigator.of(context).pop();
+                          await _deletePost(task['id']);
+                        },
+                      ),
+                    );
                   },
                   onEditTask: (task) {
                     // 设置编辑任务ID和数据
