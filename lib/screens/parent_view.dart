@@ -685,8 +685,8 @@ class _ParentViewState extends State<ParentView> {
 
       for (String applicantId in applicantIds) {
         var doc = await _firestore
-            .doc('user/$applicantId')
-            .get(); // ✅ 統一使用 user 集合
+            .doc('user/$applicantId') // ✅ 改用 user 集合
+            .get();
         if (doc.exists) {
           final data = doc.data()!;
           data['id'] = applicantId;
@@ -705,6 +705,13 @@ class _ParentViewState extends State<ParentView> {
   /// 显示应徵者列表
   void _showApplicantsList() async {
     final applicants = _selectedLocation!['applicants'] as List? ?? [];
+    if (applicants.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('目前沒有應徵者')));
+      return;
+    }
+
     await _loadApplicantDetails(List<String>.from(applicants));
     setState(() {
       _currentBottomSheet = BottomSheetType.applicantsList;

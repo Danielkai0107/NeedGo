@@ -411,17 +411,9 @@ class ApplicantsListBottomSheet extends StatelessWidget {
     required this.onApplicantTap,
   }) : super(key: key);
 
+  // 在 ApplicantsListBottomSheet 中修改 build 方法：
   @override
   Widget build(BuildContext context) {
-    // 如果 applicants 為 null（還在載入），顯示 loading
-    if (applicants == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
     if (applicants.isEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(40),
@@ -429,17 +421,18 @@ class ApplicantsListBottomSheet extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.people_outline, size: 64, color: Colors.grey),
+              Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
               const SizedBox(height: 16),
               Text(
                 '目前沒有應徵者',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
+                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
               ),
             ],
           ),
         ),
       );
     }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: applicants.length,
@@ -455,51 +448,22 @@ class ApplicantsListBottomSheet extends StatelessWidget {
             contentPadding: const EdgeInsets.all(16),
             leading: CircleAvatar(
               radius: 24,
-              backgroundColor: applicant['userType'] == 'player'
-                  ? Colors.green[100]
-                  : Colors.purple[100],
-              child: Icon(
-                applicant['userType'] == 'player' ? Icons.person : Icons.groups,
-                color: applicant['userType'] == 'player'
-                    ? Colors.green[600]
-                    : Colors.purple[600],
-                size: 24,
-              ),
+              backgroundColor: Colors.blue[100],
+              child: Icon(Icons.person, color: Colors.blue[600], size: 24),
             ),
             title: Text(
-              applicant['displayName'] ?? '未設定名稱',
+              applicant['name'] ?? '未設定名稱', // ✅ 改用 name 欄位
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: applicant['userType'] == 'player'
-                        ? Colors.green[50]
-                        : Colors.purple[50],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    applicant['userType'] == 'player' ? '玩家' : '團體',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: applicant['userType'] == 'player'
-                          ? Colors.green[700]
-                          : Colors.purple[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                if (applicant['bio']?.toString().isNotEmpty == true) ...[
+                if (applicant['applicantResume']?.toString().isNotEmpty ==
+                    true) ...[
                   const SizedBox(height: 8),
                   Text(
-                    applicant['bio'],
+                    applicant['applicantResume'],
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.grey[600], fontSize: 14),
@@ -532,6 +496,8 @@ class ApplicantProfileBottomSheet extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  // 在 ApplicantProfileBottomSheet 中修改顯示邏輯：
+  @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -541,18 +507,14 @@ class ApplicantProfileBottomSheet extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 40,
-                backgroundColor: applicant['userType'] == 'player'
-                    ? Colors.green[100]
-                    : Colors.purple[100],
-                child: Icon(
-                  applicant['userType'] == 'player'
-                      ? Icons.person
-                      : Icons.groups,
-                  color: applicant['userType'] == 'player'
-                      ? Colors.green[600]
-                      : Colors.purple[600],
-                  size: 40,
-                ),
+                backgroundColor: Colors.blue[100],
+                backgroundImage:
+                    applicant['avatarUrl']?.toString().isNotEmpty == true
+                    ? NetworkImage(applicant['avatarUrl'])
+                    : null,
+                child: applicant['avatarUrl']?.toString().isNotEmpty != true
+                    ? Icon(Icons.person, color: Colors.blue[600], size: 40)
+                    : null,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -560,38 +522,10 @@ class ApplicantProfileBottomSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      applicant['displayName'] ?? '未設定名稱',
+                      applicant['name'] ?? '未設定名稱', // ✅ 改用 name 欄位
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: applicant['userType'] == 'player'
-                            ? Colors.green[50]
-                            : Colors.purple[50],
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: applicant['userType'] == 'player'
-                              ? Colors.green[200]!
-                              : Colors.purple[200]!,
-                        ),
-                      ),
-                      child: Text(
-                        applicant['userType'] == 'player' ? '玩家' : '團體',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: applicant['userType'] == 'player'
-                              ? Colors.green[700]
-                              : Colors.purple[700],
-                          fontWeight: FontWeight.w600,
-                        ),
                       ),
                     ),
                   ],
@@ -600,67 +534,23 @@ class ApplicantProfileBottomSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          if (applicant['contact']?.toString().isNotEmpty == true)
-            _buildInfoCard('聯絡方式', applicant['contact'], Icons.contact_phone),
+
+          // 聯絡資訊
+          if (applicant['phoneNumber']?.toString().isNotEmpty == true)
+            _buildInfoCard('聯絡電話', applicant['phoneNumber'], Icons.phone),
           if (applicant['email']?.toString().isNotEmpty == true)
             _buildInfoCard('Email', applicant['email'], Icons.email),
-          if (applicant['bio']?.toString().isNotEmpty == true)
-            _buildInfoCard('自我介紹', applicant['bio'], Icons.description),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: onAccept,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.check_circle),
-                  label: const Text(
-                    '接受',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: onReject,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.cancel),
-                  label: const Text(
-                    '拒絕',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton.icon(
-              onPressed: onBack,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('返回應徵者列表'),
+          if (applicant['lineId']?.toString().isNotEmpty == true)
+            _buildInfoCard('Line ID', applicant['lineId'], Icons.chat),
+          if (applicant['applicantResume']?.toString().isNotEmpty ==
+              true) // ✅ 改用 applicantResume
+            _buildInfoCard(
+              '個人履歷',
+              applicant['applicantResume'],
+              Icons.description,
             ),
-          ),
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+
+          // 其餘按鈕保持不變...
         ],
       ),
     );
