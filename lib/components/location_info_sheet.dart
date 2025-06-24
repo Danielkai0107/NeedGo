@@ -196,9 +196,6 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                       if (widget.locationData['description'] != null)
                         _buildDescriptionSection(),
 
-                      // 地址資訊
-                      _buildAddressSection(),
-
                       // 交通資訊
                       _buildTravelSection(),
 
@@ -225,7 +222,11 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
   }
 
   Widget _buildLocationHeader() {
-    final name = widget.locationData['name']?.toString() ?? '未命名地點';
+    // 使用地址作為標題，如果沒有地址則使用名稱
+    final address =
+        widget.locationData['address']?.toString() ??
+        widget.locationData['name']?.toString() ??
+        '未設定地址';
     final category = widget.locationData['category']?.toString() ?? '';
 
     return Container(
@@ -241,7 +242,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
         children: [
           // 系統道館標題
           Text(
-            '系統道館',
+            '任務點',
             style: TextStyle(
               fontSize: 14,
               color: Colors.blue[700],
@@ -250,31 +251,13 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            name,
+            address,
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
-          if (category.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.blue[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                category,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.blue[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -305,43 +288,6 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
             child: Text(
               description,
               style: const TextStyle(fontSize: 14, height: 1.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddressSection() {
-    final address =
-        widget.locationData['address']?.toString() ??
-        widget.locationData['name']?.toString() ??
-        '地址未設定';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.location_on, color: Colors.red[700], size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => _openGoogleMaps(),
-              child: Text(
-                address,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.blue,
-                  decoration: TextDecoration.none,
-                ),
-              ),
             ),
           ),
         ],
@@ -612,22 +558,6 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
       // Player 視角：查看所有任務或導航
       return Row(
         children: [
-          if (_tasksAtLocation.isNotEmpty) ...[
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  // 滾動到任務列表區域
-                  // 這裡可以實現滾動到任務區域的邏輯
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('查看任務'),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -643,28 +573,6 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
           ),
         ],
       );
-    }
-  }
-
-  /// 開啟 Google Maps 查看地址
-  Future<void> _openGoogleMaps() async {
-    final lat = widget.locationData['lat'];
-    final lng = widget.locationData['lng'];
-    final name = widget.locationData['name']?.toString() ?? '';
-
-    // 建構 Google Maps URL
-    final url = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
-    );
-
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('無法開啟地圖')));
-      }
     }
   }
 

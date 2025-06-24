@@ -124,6 +124,7 @@ class CreateEditTaskBottomSheet extends StatefulWidget {
       isScrollControlled: true,
       enableDrag: false,
       backgroundColor: Colors.transparent,
+      useSafeArea: true, // 使用安全區域
       builder: (context) => CreateEditTaskBottomSheet(
         existingTask: existingTask,
         onSubmit: onSubmit,
@@ -576,101 +577,107 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       initialChildSize: 0.75, // 降低初始高度從 0.85 到 0.75
       minChildSize: 0.4, // 降低最小高度從 0.5 到 0.4
       maxChildSize: 0.85, // 降低最大高度從 0.95 到 0.85
-      builder: (context, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10,
-              spreadRadius: 0,
-              offset: Offset(0, -5),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // 拖拽指示器
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
+      builder: (context, scrollController) => GestureDetector(
+        onTap: () {
+          // 點擊空白處關閉鍵盤
+          FocusScope.of(context).unfocus();
+        },
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 10,
+                spreadRadius: 0,
+                offset: Offset(0, -5),
               ),
-            ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // 拖拽指示器
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
 
-            // 標題欄
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      if (Navigator.of(context).canPop()) {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    icon: const Icon(Icons.close),
-                  ),
-                  Expanded(
-                    child: Text(
-                      widget.existingTask != null ? '編輯任務' : '新增任務',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
+              // 標題欄
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        if (Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                      icon: const Icon(Icons.close),
                     ),
-                  ),
-                  const SizedBox(width: 48), // 平衡關閉按鈕
-                ],
+                    Expanded(
+                      child: Text(
+                        widget.existingTask != null ? '編輯任務' : '新增任務',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 48), // 平衡關閉按鈕
+                  ],
+                ),
               ),
-            ),
 
-            // 步驟內容
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildStep1BasicInfo(),
-                  _buildStep2TaskContent(),
-                  _buildStep3AddressSelection(), // 新增地址選擇步驟
-                  _buildStep4ImageUpload(), // 原來的步驟3變成步驟4
-                  _buildStep5PriceOption(), // 原來的步驟4變成步驟5
-                  _buildStep6Preview(), // 原來的步驟5變成步驟6
-                ],
+              // 步驟內容
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _buildStep1BasicInfo(),
+                    _buildStep2TaskContent(),
+                    _buildStep3AddressSelection(), // 新增地址選擇步驟
+                    _buildStep4ImageUpload(), // 原來的步驟3變成步驟4
+                    _buildStep5PriceOption(), // 原來的步驟4變成步驟5
+                    _buildStep6Preview(), // 原來的步驟5變成步驟6
+                  ],
+                ),
               ),
-            ),
 
-            // 進度條 + 控制欄
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    spreadRadius: 1,
-                    blurRadius: 5,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
+              // 進度條 + 控制欄
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withValues(alpha: 0.1),
+                      spreadRadius: 1,
+                      blurRadius: 5,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    // 進度條移到這裡
+                    _buildProgressBar(),
+                    const SizedBox(height: 16),
+                    // 控制按鈕
+                    _buildControlBar(),
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  // 進度條移到這裡
-                  _buildProgressBar(),
-                  const SizedBox(height: 16),
-                  // 控制按鈕
-                  _buildControlBar(),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -775,7 +782,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟1：基礎資訊
   Widget _buildStep1BasicInfo() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 100, // 為控制欄留空間
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -907,7 +920,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟2：任務內容
   Widget _buildStep2TaskContent() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -950,7 +969,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟3：地址選擇
   Widget _buildStep3AddressSelection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1066,7 +1091,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟4：圖片上傳
   Widget _buildStep4ImageUpload() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1244,7 +1275,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟5：報價選項
   Widget _buildStep5PriceOption() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1345,7 +1382,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟6：預覽與送出
   Widget _buildStep6Preview() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
