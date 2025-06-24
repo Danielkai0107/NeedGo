@@ -81,21 +81,33 @@ class _ParentViewState extends State<ParentView> {
   @override
   void initState() {
     super.initState();
-    // 🔍 立即檢查 API Key
-    print('🔑 開始檢查 API Key...');
-    print('🔑 API Key 內容: "${dotenv.env['GOOGLE_MAPS_API_KEY']}"');
-    print('🔑 API Key 長度: ${(dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '').length}');
-    print('🔑 _apiKey getter 結果: "$_apiKey"');
-    _loadSystemLocations(); // 新增這行
-    _findAndRecenter();
-    _loadMyProfile();
-    _loadMyPosts();
 
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        _loadMyPosts();
-      }
+    // 延遲初始化，避免在 widget 還沒準備好時就開始載入
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeData();
     });
+  }
+
+  // 在 _initializeData 中加入錯誤處理
+  Future<void> _initializeData() async {
+    if (!mounted) return;
+
+    try {
+      // 依序初始化，每步都檢查 mounted
+      if (mounted) await _loadSystemLocations();
+      if (mounted) await _findAndRecenter();
+      if (mounted) await _loadMyProfile();
+      if (mounted) await _loadMyPosts();
+
+      // 延遲再次載入
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) {
+        await _loadMyPosts();
+      }
+    } catch (e) {
+      print('初始化失敗: $e');
+      // 不要在這裡顯示 SnackBar，可能導致問題
+    }
   }
 
   @override
@@ -541,11 +553,11 @@ class _ParentViewState extends State<ParentView> {
     try {
       print('🔄 正在載入用戶 ${u.uid} 的任務...');
 
-      // 移除 orderBy 以避免索引問題
       final snap = await _firestore
           .collection('posts')
           .where('userId', isEqualTo: u.uid)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
 
       print('📊 Firestore 查詢結果: ${snap.docs.length} 個文檔');
 
@@ -566,12 +578,6 @@ class _ParentViewState extends State<ParentView> {
         }
 
         print('✅ 載入任務: ${m['name']} (ID: ${d.id})');
-        print('   - 內容: ${m['content']}');
-        print('   - 地址: ${m['address']}');
-        print('   - 座標: (${m['lat']}, ${m['lng']})');
-        print('   - 應徵者: ${m['applicants']}');
-        print('   - 創建者: ${m['userId']}');
-
         return m;
       }).toList();
 
@@ -598,9 +604,9 @@ class _ParentViewState extends State<ParentView> {
     } catch (e) {
       print('❌ 載入任務失敗: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('載入任務失敗：$e')));
+        setState(() {
+          _myPosts = [];
+        });
       }
     }
   }
@@ -992,6 +998,56 @@ class _ParentViewState extends State<ParentView> {
     );
   }
 
+  /// 顯示角色切換確認對話框
+  void _showRoleSwitchDialog(BuildContext context, String targetRole) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.switch_account, color: Colors.orange[600]),
+              const SizedBox(width: 8),
+              const Text('切換角色'),
+            ],
+          ),
+          content: Text(
+            '確定要切換為$targetRole嗎？',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('取消', style: TextStyle(color: Colors.grey[600])),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _switchToRole('/player');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('確定切換'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 執行角色切換
+  void _switchToRole(String route) {
+    Navigator.pushReplacementNamed(context, route);
+  }
+
   @override
   Widget build(BuildContext context) {
     // 創建所有標記
@@ -1147,6 +1203,18 @@ class _ParentViewState extends State<ParentView> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blueGrey,
+                  heroTag: 'switch',
+                  mini: false,
+                  child: const Icon(Icons.switch_account),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () => _showRoleSwitchDialog(context, '陪伴者'),
+                ),
+                const SizedBox(height: 16),
                 FloatingActionButton(
                   backgroundColor: Colors.white,
                   foregroundColor: Colors.blueGrey,

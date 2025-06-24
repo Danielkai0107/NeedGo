@@ -84,7 +84,6 @@ class TaskDetailBottomSheet extends StatelessWidget {
     final Uri googleMapsUrl = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
     );
-
     try {
       // 需要在檔案頂部添加 import 'package:url_launcher/url_launcher.dart';
       if (await canLaunchUrl(googleMapsUrl)) {
@@ -101,6 +100,15 @@ class TaskDetailBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isStatic = task['isStatic'] == true;
+    // 如果沒有基本資料，顯示 loading
+    if (task['name'] == null && task['address'] == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -399,6 +407,15 @@ class ApplicantsListBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 如果 applicants 為 null（還在載入），顯示 loading
+    if (applicants == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     if (applicants.isEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(40),
@@ -1367,6 +1384,15 @@ class LocationDetailBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isTask = location['userId'] != null;
+    // 如果沒有基本資料，顯示 loading
+    if (location['name'] == null && location['address'] == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1635,6 +1661,15 @@ class MyApplicationsBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 如果 applications 為 null（還在載入），顯示 loading
+    if (applications == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     if (applications.isEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(40),
@@ -1994,6 +2029,15 @@ class NotificationPanelBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 如果 newPosts 為 null（還在載入），顯示 loading
+    if (newPosts == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     if (newPosts.isEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(40),
@@ -2203,6 +2247,15 @@ class MyTasksListBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 如果 tasks 為 null（還在載入），顯示 loading
+    if (tasks == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     if (tasks.isEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(40),
@@ -2752,6 +2805,16 @@ class ClusterPostsListBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 如果 posts 為 null（還在載入），顯示 loading
+    if (posts == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     // 按創建時間排序
     final sortedPosts = List<Map<String, dynamic>>.from(posts);
     sortedPosts.sort((a, b) {

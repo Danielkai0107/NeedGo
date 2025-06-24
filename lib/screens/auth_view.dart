@@ -1,4 +1,5 @@
 // lib/screens/auth_view.dart
+import 'dart:async'; // 加入這行
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'registration_view.dart';
@@ -22,7 +23,8 @@ class _AuthViewState extends State<AuthView>
   bool _isOtpSent = false;
   String? _error;
   String? _verificationId;
-  int _resendTimer = 0;
+  Timer? _resendTimer;
+  int _resendSeconds = 0;
 
   @override
   void initState() {
@@ -39,6 +41,7 @@ class _AuthViewState extends State<AuthView>
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _animationController.dispose();
     _phoneCtrl.dispose();
     _otpCtrl.dispose();
@@ -50,13 +53,13 @@ class _AuthViewState extends State<AuthView>
     // 移除所有非數字字符
     phone = phone.replaceAll(RegExp(r'[^\d]'), '');
 
-    // 檢查是否為測試號碼格式 (0912345678)
-    if (phone == '0912345678') {
-      return '+1 0912345678'; // Firebase 測試號碼格式
+    // 檢查是否為測試號碼格式
+    if (phone == '0912341234') {
+      return '+1 0912341234'; // Firebase 測試號碼格式
     }
 
-    if (phone == '0912938010') {
-      return '+1 0912938010'; // Firebase 測試號碼格式
+    if (phone == '0912345678') {
+      return '+1 0912345678'; // Firebase 測試號碼格式
     }
 
     if (phone == '0911111111') {
@@ -78,10 +81,10 @@ class _AuthViewState extends State<AuthView>
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
 
     // 允許測試號碼
-    if (cleanPhone == '0912345678') {
+    if (cleanPhone == '0912341234') {
       return true;
     }
-    if (cleanPhone == '0912938010') {
+    if (cleanPhone == '0912345678') {
       return true;
     }
     if (cleanPhone == '0911111111') {
@@ -111,65 +114,83 @@ class _AuthViewState extends State<AuthView>
         phoneNumber: formattedPhone,
         timeout: const Duration(seconds: 60),
         verificationCompleted: (PhoneAuthCredential credential) async {
-          // 自動驗證完成（某些設備支援）
           try {
             final userCredential = await FirebaseAuth.instance
                 .signInWithCredential(credential);
-            if (userCredential.user != null) {
+            if (userCredential.user != null && mounted) {
               _navigateToRegistration(userCredential.user!, formattedPhone);
             }
           } catch (e) {
-            setState(() => _error = '自動驗證失敗：${e.toString()}');
+            if (mounted) {
+              setState(() => _error = '自動驗證失敗：${e.toString()}');
+            }
           }
         },
         verificationFailed: (FirebaseAuthException e) {
-          setState(() {
-            _isLoading = false;
-            switch (e.code) {
-              case 'invalid-phone-number':
-                _error = '手機號碼格式不正確';
-                break;
-              case 'too-many-requests':
-                _error = '請求過於頻繁，請稍後再試';
-                break;
-              case 'quota-exceeded':
-                _error = '今日驗證次數已達上限，請明日再試';
-                break;
-              case 'operation-not-allowed':
-                _error = '手機驗證功能未啟用，請檢查 Firebase 設定';
-                break;
-              default:
-                _error = '發送驗證碼失敗：${e.message}';
-            }
-          });
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              switch (e.code) {
+                case 'invalid-phone-number':
+                  _error = '手機號碼格式不正確';
+                  break;
+                case 'too-many-requests':
+                  _error = '請求過於頻繁，請稍後再試';
+                  break;
+                case 'quota-exceeded':
+                  _error = '今日驗證次數已達上限，請明日再試';
+                  break;
+                case 'operation-not-allowed':
+                  _error = '手機驗證功能未啟用，請檢查 Firebase 設定';
+                  break;
+                default:
+                  _error = '發送驗證碼失敗：${e.message}';
+              }
+            });
+          }
         },
         codeSent: (String verificationId, int? resendToken) {
-          setState(() {
-            _verificationId = verificationId;
-            _isOtpSent = true;
-            _isLoading = false;
-            _resendTimer = 60; // 60秒後可重新發送
-          });
-          _startResendTimer();
+          if (mounted) {
+            setState(() {
+              _verificationId = verificationId;
+              _isOtpSent = true;
+              _isLoading = false;
+            });
+            _startResendTimer();
+          }
         },
         codeAutoRetrievalTimeout: (String verificationId) {
-          setState(() => _verificationId = verificationId);
+          if (mounted) {
+            setState(() => _verificationId = verificationId);
+          }
         },
       );
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = '發送驗證碼失敗，請檢查網路連接：${e.toString()}';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = '發送驗證碼失敗，請檢查網路連接：${e.toString()}';
+        });
+      }
     }
   }
 
   // 重新發送倒數計時
   void _startResendTimer() {
-    Future.delayed(const Duration(seconds: 1), () {
-      if (_resendTimer > 0) {
-        setState(() => _resendTimer--);
-        _startResendTimer();
+    _resendTimer?.cancel();
+
+    setState(() => _resendSeconds = 60);
+
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      setState(() => _resendSeconds--);
+
+      if (_resendSeconds <= 0) {
+        timer.cancel();
       }
     });
   }
@@ -240,23 +261,19 @@ class _AuthViewState extends State<AuthView>
           // 已註冊用戶，直接進入主頁面
           Navigator.of(context).pushReplacementNamed('/parent');
         } else {
-          // 新用戶，進入註冊流程
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) =>
-                  RegistrationView(uid: user.uid, phoneNumber: phoneNumber),
-            ),
+          // 新用戶，進入註冊流程 - 使用命名路由並傳遞參數
+          Navigator.of(context).pushReplacementNamed(
+            '/registration',
+            arguments: {'uid': user.uid, 'phoneNumber': phoneNumber},
           );
         }
       }
     } catch (e) {
       print('檢查用戶註冊狀態失敗: $e');
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) =>
-                RegistrationView(uid: user.uid, phoneNumber: phoneNumber),
-          ),
+        Navigator.of(context).pushReplacementNamed(
+          '/registration',
+          arguments: {'uid': user.uid, 'phoneNumber': phoneNumber},
         );
       }
     }
@@ -264,7 +281,8 @@ class _AuthViewState extends State<AuthView>
 
   // 重新發送驗證碼
   void _resendOtp() {
-    if (_resendTimer == 0) {
+    if (_resendSeconds == 0) {
+      _resendTimer?.cancel(); // 取消現有計時器
       setState(() {
         _isOtpSent = false;
         _otpCtrl.clear();
@@ -276,12 +294,13 @@ class _AuthViewState extends State<AuthView>
 
   // 返回輸入手機號碼步驟
   void _goBack() {
+    _resendTimer?.cancel(); // 先取消計時器
     setState(() {
       _isOtpSent = false;
       _otpCtrl.clear();
       _error = null;
       _verificationId = null;
-      _resendTimer = 0;
+      _resendSeconds = 0; // ✅ 修復：使用 _resendSeconds 而不是 _resendTimer
     });
   }
 
@@ -424,14 +443,16 @@ class _AuthViewState extends State<AuthView>
                               ),
                             ),
                             TextButton(
-                              onPressed: _resendTimer == 0 ? _resendOtp : null,
+                              onPressed: _resendSeconds == 0
+                                  ? _resendOtp
+                                  : null,
                               child: Text(
-                                _resendTimer > 0
-                                    ? '重新發送 ($_resendTimer)'
+                                _resendSeconds > 0
+                                    ? '重新發送 ($_resendSeconds)'
                                     : '重新發送',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: _resendTimer > 0
+                                  color: _resendSeconds > 0
                                       ? Colors.grey[400]
                                       : Colors.blue[600],
                                   fontWeight: FontWeight.w500,

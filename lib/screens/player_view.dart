@@ -158,24 +158,106 @@ class _PlayerViewState extends State<PlayerView> {
   @override
   void initState() {
     super.initState();
-    _loadSystemLocations();
-    FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user != null) {
-        _loadProfile(user.uid);
-        _initializeNotificationSystem(); // 先初始化時間
-        _attachPostsListener(); // 再檢查歷史通知並設置監聽器
-        _showRandomNearbyPost();
-      } else {
-        _postsSub?.cancel();
-        _notificationTimer?.cancel();
-        setState(() {
-          _allPosts = [];
-          _newPosts.clear(); // 清空通知
-          _unreadCount = 0;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializePlayerData();
+    });
+  }
+
+  // 改善初始化順序
+  Future<void> _initializePlayerData() async {
+    if (!mounted) return;
+
+    try {
+      if (mounted) await _loadSystemLocations();
+      if (mounted) await _findAndRecenter();
+
+      // 延遲設置監聽器
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (mounted) {
+        FirebaseAuth.instance.authStateChanges().listen((user) async {
+          // ✅ 加入 async
+          if (!mounted) return;
+
+          if (user != null) {
+            _loadProfile(user.uid);
+            await _loadMyProfile(); // ✅ 現在可以正確使用 await
+            _initializeNotificationSystem();
+            _attachPostsListener();
+
+            // 更長的延遲來顯示隨機彈窗
+            Future.delayed(const Duration(seconds: 5), () {
+              if (mounted && _myLocation != null) {
+                _showRandomNearbyPost();
+              }
+            });
+          } else {
+            _cleanup();
+          }
         });
       }
-    });
-    _findAndRecenter();
+    } catch (e) {
+      print('初始化失敗: $e');
+    }
+  }
+
+  /// 加载 Player 个人档案（新增）
+  Future<void> _loadMyProfile() async {
+    final u = FirebaseAuth.instance.currentUser;
+    if (u == null) return;
+
+    try {
+      final doc = await _firestore.doc('user/${u.uid}').get();
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _profile = data;
+          _profileForm = Map.from(_profile);
+        });
+      } else if (mounted) {
+        setState(() {
+          _profile = {
+            'name': '未設定',
+            'phoneNumber': '',
+            'email': '',
+            'lineId': '',
+            'socialLinks': {},
+            'applicantResume': '', // Player 用的是 applicantResume
+            'avatarUrl': '',
+          };
+          _profileForm = Map.from(_profile);
+        });
+      }
+    } catch (e) {
+      print('載入個人資料失敗: $e');
+      if (mounted) {
+        setState(() {
+          _profile = {
+            'name': '未設定',
+            'phoneNumber': '',
+            'email': '',
+            'lineId': '',
+            'socialLinks': {},
+            'applicantResume': '',
+            'avatarUrl': '',
+          };
+          _profileForm = Map.from(_profile);
+        });
+      }
+    }
+  }
+
+  void _cleanup() {
+    _postsSub?.cancel();
+    _notificationTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _allPosts = [];
+        _newPosts.clear();
+        _unreadCount = 0;
+      });
+    }
   }
 
   /// 顯示隨機的附近案件彈窗
@@ -501,7 +583,7 @@ class _PlayerViewState extends State<PlayerView> {
   Future<void> _saveProfile() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
-    final ref = _firestore.doc('user/${u.uid}'); // ✅ 改用 user 集合
+    final ref = _firestore.doc('user/${u.uid}');
     try {
       await ref.set(_profileForm, SetOptions(merge: true));
       setState(() {
@@ -1075,6 +1157,56 @@ class _PlayerViewState extends State<PlayerView> {
     }
   }
 
+  /// 顯示角色切換確認對話框
+  void _showRoleSwitchDialog(BuildContext context, String targetRole) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.switch_account, color: Colors.orange[600]),
+              const SizedBox(width: 8),
+              const Text('切換角色'),
+            ],
+          ),
+          content: Text(
+            '確定要切換為$targetRole嗎？',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('取消', style: TextStyle(color: Colors.grey[600])),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _switchToRole('/parent');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('確定切換'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 執行角色切換
+  void _switchToRole(String route) {
+    Navigator.pushReplacementNamed(context, route);
+  }
+
   @override
   Widget build(BuildContext context) {
     final markers = <Marker>{
@@ -1149,6 +1281,18 @@ class _PlayerViewState extends State<PlayerView> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blueGrey,
+                  heroTag: 'switch',
+                  mini: false,
+                  child: const Icon(Icons.switch_account),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () => _showRoleSwitchDialog(context, '發布者'),
+                ),
+                const SizedBox(height: 16),
                 FloatingActionButton(
                   backgroundColor: Colors.white, // 背景色
                   foregroundColor: Colors.blueGrey, // icon 顏色
