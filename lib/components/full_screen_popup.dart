@@ -63,7 +63,6 @@ class FullScreenPopup extends StatelessWidget {
   }
 }
 
-
 // 2. 應徵者列表彈窗
 class ApplicantsListBottomSheet extends StatelessWidget {
   final List<Map<String, dynamic>> applicants;
@@ -837,491 +836,7 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
   }
 }
 
-// 6. 任務/地點詳情彈窗 (PlayerView 用)
-class LocationDetailBottomSheet extends StatelessWidget {
-  final Map<String, dynamic> location;
-  final Map<String, String>? travelInfo;
-  final bool isLoadingTravel;
-  final bool hasApplied;
-  final bool isApplying;
-  final VoidCallback? onApply;
-  final VoidCallback? onCancelApplication;
-  final Widget? publisherInfo;
-
-  const LocationDetailBottomSheet({
-    Key? key,
-    required this.location,
-    this.travelInfo,
-    this.isLoadingTravel = false,
-    this.hasApplied = false,
-    this.isApplying = false,
-    this.onApply,
-    this.onCancelApplication,
-    this.publisherInfo,
-  }) : super(key: key);
-
-  // 格式化日期時間顯示
-  String _formatDateTime(
-    String? dateTimeString,
-    Map<String, dynamic>? timeMap,
-  ) {
-    if (dateTimeString != null && dateTimeString.isNotEmpty) {
-      try {
-        final dateTime = DateTime.parse(dateTimeString);
-        final date = '${dateTime.month}/${dateTime.day}';
-
-        if (timeMap != null &&
-            timeMap['hour'] != null &&
-            timeMap['minute'] != null) {
-          final hour = timeMap['hour'] as int;
-          final minute = timeMap['minute'] as int;
-          final timeStr =
-              '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-          return '$date $timeStr';
-        }
-
-        return date;
-      } catch (e) {
-        // print('日期解析錯誤: $e');
-      }
-    }
-    return '';
-  }
-
-  // 開啟Google Maps的方法
-  void _openGoogleMaps(String address) async {
-    final Uri googleMapsUrl = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
-    );
-
-    try {
-      if (await canLaunchUrl(googleMapsUrl)) {
-        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-      } else {
-        throw '無法開啟Google Maps';
-      }
-    } catch (e) {
-      // print('開啟Google Maps失敗: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isTask = location['userId'] != null;
-    // 如果沒有基本資料，顯示 loading
-    if (location['name'] == null && location['address'] == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 任務標題（新增）
-          if (location['title']?.toString().isNotEmpty == true ||
-              location['name']?.toString().isNotEmpty == true) ...[
-            _buildSection(
-              title: '任務標題',
-              icon: Icons.title,
-              child: Text(
-                location['title'] ?? location['name'] ?? '',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  height: 1.3,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // 日期和時間（新增）
-          if (location['date'] != null || location['time'] != null) ...[
-            _buildSection(
-              title: '執行時間',
-              icon: Icons.schedule,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      color: Colors.green[600],
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _formatDateTime(location['date'], location['time']),
-                      style: TextStyle(
-                        color: Colors.green[700],
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // 報酬/價格（新增）
-          if (location['price'] != null && location['price'] > 0) ...[
-            _buildSection(
-              title: '任務報酬',
-              icon: Icons.attach_money,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.amber[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.monetization_on,
-                      color: Colors.amber[600],
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'NT\$ ${location['price']}',
-                      style: TextStyle(
-                        color: Colors.amber[800],
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          if (location['address']?.toString().isNotEmpty == true) ...[
-            _buildSection(
-              title: '任務地址',
-              icon: Icons.location_city,
-              child: InkWell(
-                onTap: () => _openGoogleMaps(location['address']),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        color: Colors.orange[600],
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          location['address'],
-                          style: TextStyle(
-                            color: Colors.orange[700],
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        Icons.open_in_new,
-                        size: 16,
-                        color: Colors.orange[600],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // 任務圖片（新增）
-          if (location['images'] != null &&
-              (location['images'] as List).isNotEmpty) ...[
-            _buildSection(
-              title: '任務圖片',
-              icon: Icons.image,
-              child: SizedBox(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: (location['images'] as List).length,
-                  itemBuilder: (context, index) {
-                    final imageUrl = (location['images'] as List)[index];
-                    return Container(
-                      width: 120,
-                      height: 120,
-                      margin: EdgeInsets.only(
-                        right: index < (location['images'] as List).length - 1
-                            ? 12
-                            : 0,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[300]!),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                    : null,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[200],
-                              child: Icon(
-                                Icons.image_not_supported,
-                                color: Colors.grey[400],
-                                size: 40,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          if (isTask && location['content']?.toString().isNotEmpty == true) ...[
-            _buildSection(
-              title: '任務內容',
-              icon: Icons.description,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue[200]!),
-                ),
-                child: Text(
-                  location['content'],
-                  style: const TextStyle(fontSize: 16, height: 1.4),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          _buildSection(
-            title: '交通資訊',
-            icon: Icons.directions,
-            child: isLoadingTravel
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                : travelInfo != null
-                ? Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green[200]!),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildTravelItem(
-                          '🚗',
-                          '開車',
-                          travelInfo!['driving'] ?? '計算中',
-                        ),
-                        _buildTravelItem(
-                          '🚶',
-                          '步行',
-                          travelInfo!['walking'] ?? '計算中',
-                        ),
-                        _buildTravelItem(
-                          '🚇',
-                          '大眾運輸',
-                          travelInfo!['transit'] ?? '計算中',
-                        ),
-                      ],
-                    ),
-                  )
-                : Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange[200]!),
-                    ),
-                    child: const Text(
-                      '請先定位，才能計算交通資訊',
-                      style: TextStyle(color: Colors.orange),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 16),
-          if (publisherInfo != null) ...[
-            _buildSection(
-              title: '發布者資訊',
-              icon: Icons.person,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.purple[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.purple[200]!),
-                ),
-                child: publisherInfo!,
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-          if (isTask) ...[
-            SizedBox(
-              width: double.infinity,
-              child: hasApplied
-                  ? ElevatedButton.icon(
-                      onPressed: onCancelApplication,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[600],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: const Icon(Icons.cancel),
-                      label: const Text(
-                        '取消應徵',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    )
-                  : ElevatedButton.icon(
-                      onPressed: isApplying ? null : onApply,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[600],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: isApplying
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : const Icon(Icons.work),
-                      label: Text(
-                        isApplying ? '應徵中...' : '應徵此任務',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-            ),
-          ],
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required IconData icon,
-    required Widget child,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 20, color: Colors.grey[600]),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        child,
-      ],
-    );
-  }
-
-  Widget _buildTravelItem(String emoji, String method, String duration) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 12),
-          Text(
-            method,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
-          ),
-          const Spacer(),
-          Text(
-            duration,
-            style: TextStyle(color: Colors.grey[600], fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// LocationDetailBottomSheet 已刪除 - 沒有被使用
 
 // 7. 我的應徵列表彈窗
 class MyApplicationsBottomSheet extends StatelessWidget {
@@ -1361,7 +876,7 @@ class MyApplicationsBottomSheet extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 18,
                   color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1504,7 +1019,7 @@ class MyApplicationsBottomSheet extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.orange[600],
                             fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1539,7 +1054,7 @@ class MyApplicationsBottomSheet extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.blue[600],
                             fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1614,7 +1129,7 @@ class MyApplicationsBottomSheet extends StatelessWidget {
                 child: Text(
                   '任務：${application['name'] ?? '未命名任務'}',
                   style: const TextStyle(
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                 ),
@@ -1639,7 +1154,7 @@ class MyApplicationsBottomSheet extends StatelessWidget {
                 '再想想',
                 style: TextStyle(
                   color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -1831,7 +1346,7 @@ class NotificationPanelBottomSheet extends StatelessWidget {
                                 style: TextStyle(
                                   color: Colors.orange[600],
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -1852,7 +1367,7 @@ class NotificationPanelBottomSheet extends StatelessWidget {
                             style: TextStyle(
                               color: Colors.orange[600],
                               fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -2080,7 +1595,7 @@ class MyTasksListBottomSheet extends StatelessWidget {
                               style: TextStyle(
                                 color: Colors.grey[500],
                                 fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -2141,7 +1656,7 @@ class MyTasksListBottomSheet extends StatelessWidget {
                                   style: TextStyle(
                                     color: Colors.orange[600],
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -2186,7 +1701,7 @@ class MyTasksListBottomSheet extends StatelessWidget {
                                         ? Colors.grey[600]
                                         : Colors.blue[700],
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -2222,7 +1737,7 @@ class MyTasksListBottomSheet extends StatelessWidget {
                                   style: TextStyle(
                                     color: Colors.blue[600],
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -2384,7 +1899,7 @@ class MyTasksListBottomSheet extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.red[700],
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -2415,7 +1930,7 @@ class MyTasksListBottomSheet extends StatelessWidget {
                 '取消',
                 style: TextStyle(
                   color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -2467,280 +1982,4 @@ class MyTasksListBottomSheet extends StatelessWidget {
   }
 }
 
-// 9. 聚合任務列表彈窗 (新增)
-class ClusterPostsListBottomSheet extends StatelessWidget {
-  final List<Map<String, dynamic>> posts;
-  final Function(Map<String, dynamic>) onPostTap;
-  final VoidCallback onBack;
-
-  const ClusterPostsListBottomSheet({
-    Key? key,
-    required this.posts,
-    required this.onPostTap,
-    required this.onBack,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    // 如果 posts 為 null（還在載入），顯示 loading
-    if (posts == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    // 按創建時間排序
-    final sortedPosts = List<Map<String, dynamic>>.from(posts);
-    sortedPosts.sort((a, b) {
-      final aTime = a['createdAt'] as Timestamp?;
-      final bTime = b['createdAt'] as Timestamp?;
-      if (aTime == null && bTime == null) return 0;
-      if (aTime == null) return 1;
-      if (bTime == null) return -1;
-      return bTime.compareTo(aTime);
-    });
-
-    return Column(
-      children: [
-        // 頂部信息
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.orange[50],
-            border: Border(bottom: BorderSide(color: Colors.orange[100]!)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange[600],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.location_on,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '此地點的所有任務',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange[700],
-                      ),
-                    ),
-                    Text(
-                      '共 ${posts.length} 個任務等你來應徵',
-                      style: TextStyle(fontSize: 14, color: Colors.orange[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 任務列表
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: sortedPosts.length,
-            itemBuilder: (context, index) {
-              final post = sortedPosts[index];
-              final createdAt = (post['createdAt'] as Timestamp?)?.toDate();
-              final timeAgo = createdAt != null ? _getTimeAgo(createdAt) : '最近';
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () => onPostTap(post),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 頭部：標題和時間
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                post['name'] ?? '未命名任務',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.blue[100],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                timeAgo,
-                                style: TextStyle(
-                                  color: Colors.blue[700],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        // 任務內容
-                        if (post['content']?.toString().isNotEmpty == true) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey[200]!),
-                            ),
-                            child: Text(
-                              post['content'],
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(height: 12),
-
-                        // 發布者信息
-                        // 發布者信息
-                        FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .doc('user/${post['userId']}') // ✅ 改用 user 集合
-                              .get(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData || !snapshot.data!.exists) {
-                              return Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  '👤 發布者：無法取得資料',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                              );
-                            }
-
-                            final publisherData =
-                                snapshot.data!.data() as Map<String, dynamic>;
-                            return Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.purple[50],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.purple[200]!),
-                              ),
-                              child: Text(
-                                '👤 發布者：${publisherData['name'] ?? '未設定'}', // ✅ 改用 name 欄位
-                                style: TextStyle(
-                                  color: Colors.purple[700],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        // 底部：查看詳情按鈕
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => onPostTap(post),
-                            icon: const Icon(Icons.visibility, size: 16),
-                            label: const Text('查看詳情'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange[600],
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        // 底部返回按鈕
-        Container(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            child: TextButton.icon(
-              onPressed: onBack,
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('返回地圖'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey[300]!),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inMinutes < 1) {
-      return '剛剛';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}分鐘前';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}小時前';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}天前';
-    } else {
-      return '${dateTime.month}/${dateTime.day}';
-    }
-  }
-}
+// ClusterPostsListBottomSheet 已刪除 - 沒有被使用

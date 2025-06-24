@@ -288,8 +288,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                     children: [
                       // 任務標題
                       _buildTitleSection(),
-                      const SizedBox(height: 16),
-
+                      const SizedBox(height: 20),
                       // 執行時間
                       if (widget.taskData['date'] != null ||
                           widget.taskData['time'] != null)
@@ -345,18 +344,15 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text('任務詳情', style: TextStyle(fontSize: 15, color: Colors.grey[600])),
+          const SizedBox(height: 12),
           Text(
             title,
             style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.isParentView ? '我發布的任務' : '任務詳情',
-            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
         ],
       ),
@@ -391,23 +387,13 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green[200]!),
-      ),
       child: Row(
         children: [
-          Icon(Icons.schedule, color: Colors.green[700], size: 20),
+          Icon(Icons.schedule, color: Colors.black, size: 24),
           const SizedBox(width: 8),
           Text(
             '執行時間：$timeText',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.green[700],
-            ),
+            style: TextStyle(fontSize: 15, color: Colors.black),
           ),
         ],
       ),
@@ -416,28 +402,20 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
   Widget _buildPriceSection() {
     final price = widget.taskData['price'];
-    if (price == null || price == 0) return const SizedBox.shrink();
+
+    String priceText;
+    if (price == null || price == 0) {
+      priceText = '任務報酬：免費';
+    } else {
+      priceText = '任務報酬：NT\$ $price';
+    }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.orange[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange[200]!),
-      ),
       child: Row(
         children: [
-          Icon(Icons.attach_money, color: Colors.orange[700], size: 20),
+          Icon(Icons.attach_money_rounded, color: Colors.black, size: 24),
           const SizedBox(width: 8),
-          Text(
-            '任務報酬：NT\$ $price',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.orange[700],
-            ),
-          ),
+          Text(priceText, style: TextStyle(fontSize: 15, color: Colors.black)),
         ],
       ),
     );
@@ -452,11 +430,17 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 水平分隔線
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
+            thickness: 1.0, // 線條粗細
+            height: 50, // 線條本身佔據的高度（含上下間距）
+          ),
           const Text(
             '任務圖片',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           SizedBox(
             height: 120,
             child: ListView.builder(
@@ -464,17 +448,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               itemCount: images.length,
               itemBuilder: (context, index) {
                 return Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  width: 120,
+                  margin: const EdgeInsets.only(right: 20),
+                  width: 160,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: GestureDetector(
                     onTap: () => _showImagePreview(context, images, index),
@@ -511,52 +488,58 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 水平分隔線
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
+            thickness: 1.0, // 線條粗細
+            height: 50, // 線條本身佔據的高度（含上下間距）
+          ),
+          const Text(
+            '任務地點',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 20),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.location_on, color: Colors.red[700], size: 20),
-              const SizedBox(width: 8),
+              Icon(Icons.location_on, color: Colors.black, size: 24),
+              const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
                   onTap: () => _openGoogleMaps(lat, lng, address),
                   child: Text(
                     address,
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue[700],
-                      decoration: TextDecoration.none,
+                      fontSize: 16,
+                      color: Colors.black,
+                      decoration: TextDecoration.underline,
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          if (!widget.isParentView && lat != null && lng != null) ...[
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () => _openGoogleMapsNavigation(lat, lng),
-              icon: const Icon(Icons.navigation, size: 16),
-              label: const Text('開始導航'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[600],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                minimumSize: const Size(0, 36),
-              ),
-            ),
-          ],
+
+          // if (!widget.isParentView && lat != null && lng != null) ...[
+          //   const SizedBox(height: 8),
+          //   ElevatedButton.icon(
+          //     onPressed: () => _openGoogleMapsNavigation(lat, lng),
+          //     icon: const Icon(Icons.navigation, size: 16),
+          //     label: const Text('開始導航'),
+          //     style: ElevatedButton.styleFrom(
+          //       backgroundColor: Colors.blue[600],
+          //       foregroundColor: Colors.white,
+          //       padding: const EdgeInsets.symmetric(
+          //         horizontal: 16,
+          //         vertical: 8,
+          //       ),
+          //       minimumSize: const Size(0, 36),
+          //     ),
+          //   ),
+          // ],
         ],
       ),
     );
@@ -598,10 +581,16 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                backgroundColor: Colors.black,
+              ),
             ),
             SizedBox(width: 8),
-            Text('計算交通時間中...'),
+            Text(
+              '計算交通時間中...',
+              style: TextStyle(fontSize: 15, color: Colors.black),
+            ),
           ],
         ),
       );
@@ -616,11 +605,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 20),
           const Text(
             '交通資訊',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           ..._travelInfo!.entries.map((entry) {
             IconData icon;
             Color color;
@@ -628,35 +618,35 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
             switch (entry.key) {
               case 'driving':
-                icon = Icons.directions_car;
-                color = Colors.blue;
+                icon = Icons.directions_car_outlined;
+                color = Colors.black;
                 label = '開車';
                 break;
               case 'walking':
-                icon = Icons.directions_walk;
-                color = Colors.green;
+                icon = Icons.directions_walk_rounded;
+                color = Colors.black;
                 label = '步行';
                 break;
               case 'transit':
-                icon = Icons.directions_transit;
-                color = Colors.orange;
+                icon = Icons.directions_transit_outlined;
+                color = Colors.black;
                 label = '大眾運輸';
                 break;
               default:
-                icon = Icons.directions;
-                color = Colors.grey;
+                icon = Icons.directions_outlined;
+                color = Colors.black;
                 label = entry.key;
             }
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  Icon(icon, color: color, size: 16),
-                  const SizedBox(width: 8),
+                  Icon(icon, color: color, size: 24),
+                  const SizedBox(width: 12),
                   Text(
                     '$label：${entry.value}',
-                    style: const TextStyle(fontSize: 13),
+                    style: const TextStyle(fontSize: 15),
                   ),
                 ],
               ),
@@ -676,22 +666,21 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 水平分隔線
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
+            thickness: 1.0, // 線條粗細
+            height: 50, // 線條本身佔據的高度（含上下間距）
+          ),
           const Text(
             '任務內容',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
             child: Text(
               content,
-              style: const TextStyle(fontSize: 14, height: 1.5),
+              style: const TextStyle(fontSize: 15, height: 1.6),
             ),
           ),
         ],
@@ -705,29 +694,36 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 水平分隔線
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
+            thickness: 1.0, // 線條粗細
+            height: 50, // 線條本身佔據的高度（含上下間距）
+          ),
           Text(
             '申請者 (${_applicants.length})',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           if (_isLoadingApplicants)
             const Center(child: CircularProgressIndicator())
           else if (_applicants.isEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
+
               child: Column(
                 children: [
-                  Icon(Icons.person_off, color: Colors.grey[400], size: 32),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
+                  Icon(
+                    Icons.person_off_outlined,
+                    color: Colors.grey[400],
+                    size: 32,
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     '目前還沒有人申請這個任務',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    style: TextStyle(color: Colors.grey[500], fontSize: 15),
                   ),
                 ],
               ),
@@ -738,12 +734,19 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 onTap: () => _showApplicantDetail(applicant),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue[100]!),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
+
                   child: Row(
                     children: [
                       CircleAvatar(
@@ -764,7 +767,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                             Text(
                               applicant['name'] ?? '未設定姓名',
                               style: const TextStyle(
-                                fontWeight: FontWeight.w500,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             if (applicant['applicantResume']?.isNotEmpty ==
@@ -772,7 +776,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                               Text(
                                 applicant['applicantResume'],
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 15,
                                   color: Colors.grey[600],
                                 ),
                                 maxLines: 2,
@@ -813,51 +817,50 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         color: Colors.white,
         border: Border(top: BorderSide(color: Colors.grey[200]!)),
       ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            // 關閉按鈕
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('關閉'),
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // 主要操作按鈕
-            Expanded(flex: 2, child: _buildMainActionButton()),
-          ],
-        ),
-      ),
+      child: SafeArea(child: _buildMainActionButton()),
     );
   }
 
   Widget _buildMainActionButton() {
     if (widget.isParentView) {
-      // Parent 視角：編輯/刪除按鈕
+      // Parent 視角：關閉/編輯按鈕
       return Row(
         children: [
           Expanded(
-            child: ElevatedButton(
-              onPressed: widget.onEditTask,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
+            child: OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey[500],
+                side: BorderSide(color: Colors.grey[400]!),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0, // 文字左右內部間距
+                  vertical: 16, // 文字上下內部間距
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15, // 按鈕文字大小
+                  fontWeight: FontWeight.w600, // (選)字重
+                ),
               ),
-              child: const Text('編輯'),
+              child: const Text('關閉'),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: ElevatedButton(
-              onPressed: widget.onDeleteTask,
+              onPressed: widget.onEditTask,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: Colors.blue[700],
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0, // 文字左右內部間距
+                  vertical: 16, // 文字上下內部間距
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15, // 按鈕文字大小
+                  fontWeight: FontWeight.w600, // (選)字重
+                ),
               ),
-              child: const Text('刪除'),
+              child: const Text('編輯'),
             ),
           ),
         ],
@@ -865,46 +868,81 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     } else {
       // Player 視角：申請/取消申請按鈕
       if (_isMyTask) {
-        return ElevatedButton(
-          onPressed: null,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[400]),
-          child: const Text('這是我的任務'),
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey[400],
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 16,
+              ),
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            child: const Text('這是我的任務'),
+          ),
         );
       } else if (_hasApplied) {
-        return ElevatedButton(
-          onPressed: _isApplying ? null : _cancelApplication,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange[600],
-            foregroundColor: Colors.white,
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isApplying ? null : _cancelApplication,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[600],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 16,
+              ),
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            child: _isApplying
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('取消申請'),
           ),
-          child: _isApplying
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text('取消申請'),
         );
       } else {
-        return ElevatedButton(
-          onPressed: _isApplying ? null : _applyForTask,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isApplying ? null : _applyForTask,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 16,
+              ),
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            child: _isApplying
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('申請任務'),
           ),
-          child: _isApplying
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text('申請任務'),
         );
       }
     }
@@ -1244,7 +1282,7 @@ class ApplicantDetailSheet extends StatelessWidget {
                 value,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -1312,7 +1350,7 @@ class ApplicantDetailSheet extends StatelessWidget {
                 taskTitle,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (taskData['price'] != null && taskData['price'] > 0) ...[
@@ -1334,7 +1372,7 @@ class ApplicantDetailSheet extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey[200]!)),
+        border: Border(top: BorderSide(color: Colors.grey[100]!)),
       ),
       child: SafeArea(
         child: Row(
@@ -1343,24 +1381,23 @@ class ApplicantDetailSheet extends StatelessWidget {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('返回'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // 聯絡申請者按鈕
-            Expanded(
-              flex: 2,
-              child: ElevatedButton.icon(
-                onPressed: () => _contactApplicant(context),
-                icon: const Icon(Icons.chat),
-                label: const Text('聯絡申請者'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[600],
-                  foregroundColor: Colors.white,
+                label: const Text('關閉'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.grey[500],
+                  side: BorderSide(color: Colors.grey[400]!),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0, // 文字左右內部間距
+                    vertical: 16, // 文字上下內部間距
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15, // 按鈕文字大小
+                    fontWeight: FontWeight.w600, // (選)字重
+                  ),
                 ),
               ),
             ),
+
+            // 聯絡申請者按鈕
           ],
         ),
       ),

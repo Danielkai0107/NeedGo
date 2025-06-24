@@ -485,7 +485,7 @@ class _PlayerViewState extends State<PlayerView> {
     bool isStatic = false,
   }) {
     // 新增 isStatic 參數
-    // 調試信息：檢查傳遞給 LocationDetailBottomSheet 的數據
+    // 調試信息：檢查傳遞給任務詳情彈窗的數據
     print('選中的位置數據: $loc');
     print('地址字段: ${loc['address']}');
     print('地址字段類型: ${loc['address'].runtimeType}');

@@ -417,7 +417,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.green[700],
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               );
@@ -479,7 +479,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                         task['name']?.toString() ??
                         '未命名任務',
                     style: const TextStyle(
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),
                   ),
@@ -491,7 +491,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                           'NT\$ ${task['price']}',
                           style: TextStyle(
                             color: Colors.orange[700],
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
                         ),
@@ -530,6 +530,18 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
               child: OutlinedButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('關閉'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.grey[500],
+                  side: BorderSide(color: Colors.grey[400]!),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0, // 文字左右內部間距
+                    vertical: 16, // 文字上下內部間距
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15, // 按鈕文字大小
+                    fontWeight: FontWeight.w600, // (選)字重
+                  ),
+                ),
               ),
             ),
 
@@ -551,6 +563,14 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.green,
           foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 24.0, // 文字左右內部間距
+            vertical: 16, // 文字上下內部間距
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15, // 文字大小
+            fontWeight: FontWeight.w600, // (選) 字重
+          ),
         ),
         child: const Text('以此地點新增任務'),
       );
@@ -567,6 +587,14 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0, // 文字左右內部間距
+                  vertical: 16, // 文字上下內部間距
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15, // 按鈕文字大小
+                  fontWeight: FontWeight.w600, // (選)字重
+                ),
               ),
               child: const Text('導航'),
             ),

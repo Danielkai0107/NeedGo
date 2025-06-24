@@ -134,7 +134,7 @@ class CreateEditTaskBottomSheet extends StatefulWidget {
 }
 
 class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late PageController _pageController;
   late AnimationController _animationController;
 
@@ -151,6 +151,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   late TextEditingController _titleController;
   late TextEditingController _contentController;
   late TextEditingController _addressController; // 新增地址控制器
+
+  // 專用的 FocusNode
+  final FocusNode _titleFocusNode = FocusNode();
+  final FocusNode _contentFocusNode = FocusNode();
+  final FocusNode _addressFocusNode = FocusNode();
 
   // UI 狀態
   bool _isSubmitting = false;
@@ -169,9 +174,22 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   final FocusNode _contentFocus = FocusNode();
   final FocusNode _locationFocus = FocusNode();
 
+  // 鍵盤狀態追蹤
+  double _lastKeyboardHeight = 0.0;
+
   @override
   void initState() {
     super.initState();
+
+    // 添加鍵盤監聽器
+    WidgetsBinding.instance.addObserver(this);
+
+    // 初始化鍵盤高度
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _lastKeyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+      }
+    });
 
     if (_isLegacyMode) {
       // 兼容舊 API，不使用多步驟
@@ -222,6 +240,9 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
   @override
   void dispose() {
+    // 移除鍵盤監聽器
+    WidgetsBinding.instance.removeObserver(this);
+
     if (!_isLegacyMode) {
       _pageController.dispose();
       _animationController.dispose();
@@ -232,7 +253,34 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     _nameFocus.dispose();
     _contentFocus.dispose();
     _locationFocus.dispose();
+
+    // 釋放新增的 FocusNode
+    _titleFocusNode.dispose();
+    _contentFocusNode.dispose();
+    _addressFocusNode.dispose();
+
     super.dispose();
+  }
+
+  /// 監聽鍵盤狀態變化
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+
+    if (!mounted) return;
+
+    final currentKeyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
+    // 檢測鍵盤是否收起
+    // 當鍵盤高度從有值變為 0 或明顯減少時，取消焦點
+    if (_lastKeyboardHeight > 50 && currentKeyboardHeight < 50) {
+      // 鍵盤收起了，取消所有輸入框的焦點
+      FocusScope.of(context).unfocus();
+      print('🎹 檢測到鍵盤收起，自動取消輸入框焦點');
+    }
+
+    // 更新記錄的鍵盤高度
+    _lastKeyboardHeight = currentKeyboardHeight;
   }
 
   // 清除錯誤提示
@@ -394,13 +442,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 兼容舊版本的視圖
   Widget _buildLegacyView() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        bottom: 100, // 固定底部間距，避免鍵盤衝突
       ),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -574,37 +622,46 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 新版本的多步驟視圖
   Widget _buildNewView() {
     return DraggableScrollableSheet(
-      initialChildSize: 0.75, // 降低初始高度從 0.85 到 0.75
-      minChildSize: 0.4, // 降低最小高度從 0.5 到 0.4
-      maxChildSize: 0.85, // 降低最大高度從 0.95 到 0.85
-      builder: (context, scrollController) => GestureDetector(
-        onTap: () {
-          // 點擊空白處關閉鍵盤
-          FocusScope.of(context).unfocus();
-        },
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 10,
-                spreadRadius: 0,
-                offset: Offset(0, -5),
-              ),
-            ],
-          ),
+      initialChildSize: 0.8, // 調整初始高度
+      minChildSize: 0.5, // 調整最小高度
+      maxChildSize: 0.95, // 調整最大高度，給鍵盤留更多空間
+      expand: false, // 不強制展開
+      snap: true, // 啟用吸附
+      snapSizes: const [0.5, 0.8, 0.95], // 設置吸附點
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 10,
+              spreadRadius: 0,
+              offset: Offset(0, -5),
+            ),
+          ],
+        ),
+        child: GestureDetector(
+          onTap: () {
+            // 點擊空白處關閉鍵盤
+            FocusScope.of(context).unfocus();
+          },
           child: Column(
             children: [
               // 拖拽指示器
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(2),
+              GestureDetector(
+                onTap: () {
+                  // 點擊拖拽指示器也關閉鍵盤
+                  FocusScope.of(context).unfocus();
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
 
@@ -615,9 +672,14 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   children: [
                     IconButton(
                       onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
+                        // 先關閉鍵盤
+                        FocusScope.of(context).unfocus();
+                        // 延遲一下再關閉彈窗
+                        Future.delayed(const Duration(milliseconds: 100), () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          }
+                        });
                       },
                       icon: const Icon(Icons.close),
                     ),
@@ -636,25 +698,36 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 ),
               ),
 
-              // 步驟內容
+              // 步驟內容 - 使用 NotificationListener 處理滾動衝突
               Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildStep1BasicInfo(),
-                    _buildStep2TaskContent(),
-                    _buildStep3AddressSelection(), // 新增地址選擇步驟
-                    _buildStep4ImageUpload(), // 原來的步驟3變成步驟4
-                    _buildStep5PriceOption(), // 原來的步驟4變成步驟5
-                    _buildStep6Preview(), // 原來的步驟5變成步驟6
-                  ],
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification notification) {
+                    // 當內部有滾動時，阻止外部 DraggableScrollableSheet 處理滾動
+                    return false;
+                  },
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      _buildStep1BasicInfo(),
+                      _buildStep2TaskContent(),
+                      _buildStep3AddressSelection(), // 新增地址選擇步驟
+                      _buildStep4ImageUpload(), // 原來的步驟3變成步驟4
+                      _buildStep5PriceOption(), // 原來的步驟4變成步驟5
+                      _buildStep6Preview(), // 原來的步驟5變成步驟6
+                    ],
+                  ),
                 ),
               ),
 
               // 進度條 + 控制欄
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: 16 + MediaQuery.of(context).padding.bottom,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   boxShadow: [
@@ -742,7 +815,14 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             child: OutlinedButton(
               onPressed: _previousStep,
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0, // 文字左右內部間距
+                  vertical: 16, // 文字上下內部間距
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15, // 按鈕文字大小
+                  fontWeight: FontWeight.w600, // (選)字重
+                ),
                 side: const BorderSide(color: Colors.blue),
               ),
               child: const Text('上一步'),
@@ -760,8 +840,15 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0, // 文字左右內部間距
+                vertical: 16, // 文字上下內部間距
+              ),
               disabledBackgroundColor: Colors.grey[300],
+              textStyle: const TextStyle(
+                fontSize: 15, // 按鈕文字大小
+                fontWeight: FontWeight.w600, // (選)字重
+              ),
             ),
             child: _isSubmitting
                 ? const SizedBox(
@@ -782,27 +869,28 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟1：基礎資訊
   Widget _buildStep1BasicInfo() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 100, // 為控制欄留空間
+        bottom: 120, // 為控制欄留固定空間，避免鍵盤衝突
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 1/5: 基礎資訊',
+            '步驟 1/6: 基礎資訊',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
 
           // 任務標題
-          const Text('任務標題 *', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('任務標題 *', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           TextField(
             controller: _titleController,
+            focusNode: _titleFocusNode,
             decoration: InputDecoration(
               hintText: '請輸入任務標題',
               border: OutlineInputBorder(
@@ -830,7 +918,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           const SizedBox(height: 24),
 
           // 日期選擇
-          const Text('日期 *', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('日期 *', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           InkWell(
             onTap: () => _selectDate(),
@@ -873,7 +961,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           const SizedBox(height: 24),
 
           // 時間選擇
-          const Text('時間 *', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('時間 *', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           InkWell(
             onTap: () => _selectTime(),
@@ -920,26 +1008,27 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟2：任務內容
   Widget _buildStep2TaskContent() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+        bottom: 120, // 為控制欄留固定空間，避免鍵盤衝突
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 2/5: 任務內容',
+            '步驟 2/6: 任務內容',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
 
-          const Text('任務描述 *', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('任務描述 *', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           TextField(
             controller: _contentController,
+            focusNode: _contentFocusNode,
             maxLines: 8,
             decoration: InputDecoration(
               hintText: '請詳細描述您的任務內容...',
@@ -969,11 +1058,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟3：地址選擇
   Widget _buildStep3AddressSelection() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+        bottom: 120, // 為控制欄留固定空間，避免鍵盤衝突
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
@@ -985,10 +1074,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           ),
           const SizedBox(height: 24),
 
-          const Text('任務地點 *', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('任務地點 *', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           TextField(
             controller: _addressController,
+            focusNode: _addressFocusNode,
             decoration: InputDecoration(
               hintText: '搜尋地點...',
               prefixIcon: const Icon(Icons.search),
@@ -1075,7 +1165,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                       '已選擇: ${_taskData.address}',
                       style: TextStyle(
                         color: Colors.green[700],
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -1091,11 +1181,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟4：圖片上傳
   Widget _buildStep4ImageUpload() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+        bottom: 120, // 為控制欄留固定空間，避免鍵盤衝突
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
@@ -1275,11 +1365,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟5：報價選項
   Widget _buildStep5PriceOption() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+        bottom: 120, // 為控制欄留固定空間，避免鍵盤衝突
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
@@ -1291,7 +1381,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           ),
           const SizedBox(height: 24),
 
-          const Text('任務報酬', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('任務報酬', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Text(
             '設定您願意支付的報酬金額（以 100 為單位）',
@@ -1336,7 +1426,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           const SizedBox(height: 24),
 
           // 快速選擇按鈕
-          const Text('快速選擇', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('快速選擇', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
@@ -1366,7 +1456,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     style: TextStyle(
                       color: isSelected ? Colors.white : Colors.black,
                       fontWeight: isSelected
-                          ? FontWeight.w500
+                          ? FontWeight.w600
                           : FontWeight.normal,
                     ),
                   ),
@@ -1382,11 +1472,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 步驟6：預覽與送出
   Widget _buildStep6Preview() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+        bottom: 120, // 為控制欄留固定空間，避免鍵盤衝突
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
@@ -1438,7 +1528,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   // 內容
                   const Text(
                     '任務內容',
-                    style: TextStyle(fontWeight: FontWeight.w500),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -1452,7 +1542,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   if (_taskData.totalImageCount > 0) ...[
                     const Text(
                       '任務圖片',
-                      style: TextStyle(fontWeight: FontWeight.w500),
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
@@ -1528,7 +1618,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                         Text(
                           '報酬: ${_taskData.price == 0 ? '免費' : 'NT\$ ${_taskData.price}'}',
                           style: TextStyle(
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                             color: Colors.green[700],
                           ),
                         ),
@@ -1546,6 +1636,12 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
   // 選擇日期
   void _selectDate() async {
+    // 先清除所有輸入框的焦點，防止選擇完成後重新獲得焦點
+    FocusScope.of(context).unfocus();
+
+    // 延遲一下確保焦點清除完成
+    await Future.delayed(const Duration(milliseconds: 100));
+
     final now = DateTime.now();
     final tomorrow = now.add(const Duration(days: 1));
     final dayAfterTomorrow = now.add(const Duration(days: 2)); // 增加後天
@@ -1563,26 +1659,38 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       },
     );
 
-    if (selectedDate != null) {
+    if (selectedDate != null && mounted) {
       setState(() {
         _taskData.date = selectedDate;
         if (_dateError != null) _dateError = null; // 清除錯誤
       });
+
+      // 確保選擇完成後不會重新獲得焦點
+      FocusScope.of(context).unfocus();
     }
   }
 
   // 選擇時間
   void _selectTime() async {
+    // 先清除所有輸入框的焦點，防止選擇完成後重新獲得焦點
+    FocusScope.of(context).unfocus();
+
+    // 延遲一下確保焦點清除完成
+    await Future.delayed(const Duration(milliseconds: 100));
+
     final selectedTime = await showTimePicker(
       context: context,
       initialTime: _taskData.time ?? TimeOfDay.now(),
     );
 
-    if (selectedTime != null) {
+    if (selectedTime != null && mounted) {
       setState(() {
         _taskData.time = selectedTime;
         if (_timeError != null) _timeError = null; // 清除錯誤
       });
+
+      // 確保選擇完成後不會重新獲得焦點
+      FocusScope.of(context).unfocus();
     }
   }
 
@@ -1850,5 +1958,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       _locationSuggestions = []; // 清空建議列表
       if (_addressError != null) _addressError = null; // 清除錯誤
     });
+
+    // 選擇地點後清除焦點，關閉鍵盤
+    FocusScope.of(context).unfocus();
   }
 }

@@ -362,8 +362,10 @@ class _ParentViewState extends State<ParentView> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      enableDrag: true,
+      enableDrag: false, // 禁用外部拖拽，避免與內部 DraggableScrollableSheet 衝突
       backgroundColor: Colors.transparent,
+      useSafeArea: true, // 使用安全區域
+      isDismissible: true, // 允許點擊外部關閉
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         existingTask: {
           // 預填地址資訊，其他欄位留空
@@ -778,24 +780,60 @@ class _ParentViewState extends State<ParentView> {
   }
 
   Set<Marker> _buildStaticParkMarkers() {
-    return {
-      for (var location in _systemLocations)
-        if (_selectedCategories.contains(location['category']))
-          Marker(
-            markerId: MarkerId('system_${location['id']}'),
-            position: LatLng(location['lat'], location['lng']),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueGreen,
-            ),
-            onTap: () => _showLocationInfoSheetDirect({
-              'name': location['name'],
-              'lat': location['lat'],
-              'lng': location['lng'],
-              'address': location['address'],
-              'category': location['category'],
-            }),
+    final markers = <Marker>{};
+
+    for (var location in _systemLocations) {
+      if (!_selectedCategories.contains(location['category'])) continue;
+
+      // 檢查該地點附近（100米內）是否有自己的任務
+      final locationCoord = LatLng(location['lat'], location['lng']);
+      bool hasOwnTaskNearby = false;
+
+      for (var task in _myPosts) {
+        final taskCoord = LatLng(task['lat'], task['lng']);
+        final distance = _calculateDistance(locationCoord, taskCoord);
+
+        if (distance <= 100) {
+          // 100米內
+          hasOwnTaskNearby = true;
+          break;
+        }
+      }
+
+      // 如果附近有自己的任務，隱藏系統地點標記避免重疊
+      if (hasOwnTaskNearby) {
+        continue;
+      }
+
+      markers.add(
+        Marker(
+          markerId: MarkerId('system_${location['id']}'),
+          position: LatLng(location['lat'], location['lng']),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
           ),
-    };
+          onTap: () => _showLocationInfoSheetDirect({
+            'name': location['name'],
+            'lat': location['lat'],
+            'lng': location['lng'],
+            'address': location['address'],
+            'category': location['category'],
+          }),
+        ),
+      );
+    }
+
+    return markers;
+  }
+
+  /// 計算兩點之間的距離（米）
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    return Geolocator.distanceBetween(
+      point1.latitude,
+      point1.longitude,
+      point2.latitude,
+      point2.longitude,
+    );
   }
 
   Set<Marker> _buildMyPostMarkers() {
@@ -1058,8 +1096,10 @@ class _ParentViewState extends State<ParentView> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      enableDrag: true,
+      enableDrag: false, // 禁用外部拖拽，避免與內部 DraggableScrollableSheet 衝突
       backgroundColor: Colors.transparent,
+      useSafeArea: true, // 使用安全區域
+      isDismissible: true, // 允許點擊外部關閉
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         onSubmit: (taskData) async {
           Navigator.of(context).pop(); // 先關閉彈窗
@@ -1080,8 +1120,10 @@ class _ParentViewState extends State<ParentView> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      enableDrag: true,
+      enableDrag: false, // 禁用外部拖拽，避免與內部 DraggableScrollableSheet 衝突
       backgroundColor: Colors.transparent,
+      useSafeArea: true, // 使用安全區域
+      isDismissible: true, // 允許點擊外部關閉
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         existingTask: existingTask,
         onSubmit: (updatedTaskData) async {
@@ -1102,12 +1144,20 @@ class _ParentViewState extends State<ParentView> {
 
     for (int i = 0; i < images.length; i++) {
       try {
+        // 檢查圖片大小（限制為 5MB）
+        if (images[i].length > 5 * 1024 * 1024) {
+          print('⚠️ 圖片 $i 太大 (${images[i].length} bytes)，跳過上傳');
+          continue;
+        }
+
         // 創建檔案路徑：tasks/{taskId}/image_{index}.jpg
         final String fileName =
             'image_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg';
         final String filePath = 'tasks/$taskId/$fileName';
 
-        // 上傳圖片
+        print('📤 開始上傳圖片 $i: $filePath');
+
+        // 上傳圖片並設置超時
         final Reference ref = storage.ref().child(filePath);
         final UploadTask uploadTask = ref.putData(
           images[i],
@@ -1117,41 +1167,108 @@ class _ParentViewState extends State<ParentView> {
           ),
         );
 
-        // 等待上傳完成
-        final TaskSnapshot snapshot = await uploadTask;
+        // 等待上傳完成（設置超時）
+        final TaskSnapshot snapshot = await uploadTask.timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            uploadTask.cancel();
+            throw TimeoutException('圖片上傳超時', const Duration(seconds: 30));
+          },
+        );
 
-        // 取得下載 URL
-        final String downloadUrl = await snapshot.ref.getDownloadURL();
-        imageUrls.add(downloadUrl);
-
-        print('圖片 $i 上傳成功: $downloadUrl');
+        // 檢查上傳狀態
+        if (snapshot.state == TaskState.success) {
+          // 取得下載 URL
+          final String downloadUrl = await snapshot.ref
+              .getDownloadURL()
+              .timeout(const Duration(seconds: 10));
+          imageUrls.add(downloadUrl);
+          print('✅ 圖片 $i 上傳成功: $downloadUrl');
+        } else {
+          print('❌ 圖片 $i 上傳狀態異常: ${snapshot.state}');
+        }
       } catch (e) {
-        print('圖片 $i 上傳失敗: $e');
+        print('❌ 圖片 $i 上傳失敗: $e');
         // 即使某張圖片上傳失敗，繼續上傳其他圖片
+
+        // 如果是網路相關錯誤，可以考慮重試一次
+        if (e.toString().contains('network') ||
+            e.toString().contains('timeout')) {
+          print('🔄 網路錯誤，嘗試重新上傳圖片 $i');
+          try {
+            final String fileName =
+                'image_${i}_retry_${DateTime.now().millisecondsSinceEpoch}.jpg';
+            final String filePath = 'tasks/$taskId/$fileName';
+            final Reference ref = storage.ref().child(filePath);
+
+            final UploadTask retryUploadTask = ref.putData(
+              images[i],
+              SettableMetadata(contentType: 'image/jpeg'),
+            );
+
+            final TaskSnapshot retrySnapshot = await retryUploadTask.timeout(
+              const Duration(seconds: 15),
+            );
+
+            if (retrySnapshot.state == TaskState.success) {
+              final String downloadUrl = await retrySnapshot.ref
+                  .getDownloadURL();
+              imageUrls.add(downloadUrl);
+              print('✅ 圖片 $i 重試上傳成功: $downloadUrl');
+            }
+          } catch (retryError) {
+            print('❌ 圖片 $i 重試上傳也失敗: $retryError');
+          }
+        }
       }
     }
 
+    print('📷 圖片上傳完成，成功: ${imageUrls.length}/${images.length}');
     return imageUrls;
   }
 
   /// 保存新任務資料（新格式）
   Future<void> _saveNewTaskData(new_task_sheet.TaskData taskData) async {
     final u = FirebaseAuth.instance.currentUser;
-    if (u == null) return;
+    if (u == null) {
+      print('❌ 用戶未登入，無法創建任務');
+      return;
+    }
+
+    // 添加輸入驗證
+    if (taskData.title.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('任務標題不能為空')));
+      }
+      return;
+    }
+
+    if (taskData.lat == null || taskData.lng == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('請選擇任務地點')));
+      }
+      return;
+    }
 
     try {
+      print('🔄 開始創建任務: ${taskData.title}');
+
       // 先創建基本任務資料（不包含圖片）
       final data = {
-        'title': taskData.title,
-        'name': taskData.title, // 向下兼容
+        'title': taskData.title.trim(),
+        'name': taskData.title.trim(), // 向下兼容
         'date': taskData.date?.toIso8601String(),
         'time': taskData.time != null
             ? {'hour': taskData.time!.hour, 'minute': taskData.time!.minute}
             : null,
-        'content': taskData.content,
+        'content': taskData.content.trim(),
         'images': <String>[], // 先設為空陣列，稍後更新
         'price': taskData.price,
-        'address': taskData.address,
+        'address': taskData.address?.trim(),
         'lat': taskData.lat,
         'lng': taskData.lng,
         'userId': u.uid,
@@ -1160,61 +1277,97 @@ class _ParentViewState extends State<ParentView> {
         'status': 'open',
       };
 
+      print('📝 任務資料準備完成，開始上傳到 Firebase');
+
       // 創建任務文檔並取得 ID
       final DocumentReference docRef = await _firestore
           .collection('posts')
-          .add(data);
+          .add(data)
+          .timeout(const Duration(seconds: 10));
       final String taskId = docRef.id;
+
+      print('✅ 任務文檔創建成功，ID: $taskId');
 
       // 如果有圖片，上傳到 Firebase Storage
       List<String> imageUrls = [];
-      if (taskData.images.isNotEmpty) {
-        print('開始上傳 ${taskData.images.length} 張圖片...');
+      if (taskData.images.isNotEmpty && mounted) {
+        print('📷 開始上傳 ${taskData.images.length} 張圖片...');
 
         // 顯示上傳進度提示
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('正在上傳 ${taskData.images.length} 張圖片...'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('正在上傳 ${taskData.images.length} 張圖片...'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
 
-        imageUrls = await _uploadImagesToStorage(taskData.images, taskId);
-        print('圖片上傳完成，共 ${imageUrls.length} 張');
+        try {
+          imageUrls = await _uploadImagesToStorage(taskData.images, taskId);
+          print('✅ 圖片上傳完成，共 ${imageUrls.length} 張');
 
-        // 更新任務文檔的圖片 URL
-        if (imageUrls.isNotEmpty) {
-          await docRef.update({'images': imageUrls});
+          // 更新任務文檔的圖片 URL
+          if (imageUrls.isNotEmpty && mounted) {
+            await docRef
+                .update({'images': imageUrls})
+                .timeout(const Duration(seconds: 10));
+            print('✅ 任務圖片 URL 更新完成');
+          }
+        } catch (imageError) {
+          print('⚠️ 圖片上傳失敗，但任務已創建: $imageError');
+          // 圖片上傳失敗不影響任務創建
         }
       }
 
-      await _loadMyPosts();
-
-      setState(() {
-        _currentBottomSheet = BottomSheetType.none;
-        _editingPostId = null;
-      });
-
-      final successMessage = taskData.images.isNotEmpty
-          ? '任務創建成功！已上傳 ${imageUrls.length} 張圖片'
-          : '任務創建成功！';
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(successMessage)));
-
-      // 移動地圖到新任務位置
-      if (taskData.lat != null && taskData.lng != null) {
-        final newLatLng = LatLng(taskData.lat!, taskData.lng!);
-        _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(newLatLng, 15));
+      // 重新載入任務列表
+      if (mounted) {
+        print('🔄 重新載入任務列表');
+        await _loadMyPosts();
       }
-    } catch (e) {
-      print('創建任務錯誤詳情: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('創建任務失敗：$e')));
+
+      // 安全更新 UI 狀態
+      if (mounted) {
+        setState(() {
+          _currentBottomSheet = BottomSheetType.none;
+          _editingPostId = null;
+        });
+
+        final successMessage = taskData.images.isNotEmpty
+            ? '任務創建成功！已上傳 ${imageUrls.length} 張圖片'
+            : '任務創建成功！';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // 移動地圖到新任務位置
+        if (taskData.lat != null && taskData.lng != null) {
+          try {
+            final newLatLng = LatLng(taskData.lat!, taskData.lng!);
+            _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(newLatLng, 15));
+          } catch (mapError) {
+            print('⚠️ 地圖移動失敗: $mapError');
+            // 地圖移動失敗不影響整體流程
+          }
+        }
+      }
+
+      print('✅ 任務創建流程完成');
+    } catch (e, stackTrace) {
+      print('❌ 創建任務錯誤詳情: $e');
+      print('❌ 堆疊追蹤: $stackTrace');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('創建任務失敗：${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
