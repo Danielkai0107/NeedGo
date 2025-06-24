@@ -1,5 +1,4 @@
 // lib/components/full_screen_popup.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -85,6 +84,34 @@ class TaskDetailBottomSheet extends StatelessWidget {
     this.onCreateFromStatic,
   }) : super(key: key);
 
+  // 格式化日期時間顯示
+  String _formatDateTime(
+    String? dateTimeString,
+    Map<String, dynamic>? timeMap,
+  ) {
+    if (dateTimeString != null && dateTimeString.isNotEmpty) {
+      try {
+        final dateTime = DateTime.parse(dateTimeString);
+        final date = '${dateTime.month}/${dateTime.day}';
+
+        if (timeMap != null &&
+            timeMap['hour'] != null &&
+            timeMap['minute'] != null) {
+          final hour = timeMap['hour'] as int;
+          final minute = timeMap['minute'] as int;
+          final timeStr =
+              '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+          return '$date $timeStr';
+        }
+
+        return date;
+      } catch (e) {
+        print('日期解析錯誤: $e');
+      }
+    }
+    return '';
+  }
+
   // 開啟Google Maps的方法
   void _openGoogleMaps(String address) async {
     final Uri googleMapsUrl = Uri.parse(
@@ -99,7 +126,7 @@ class TaskDetailBottomSheet extends StatelessWidget {
       }
     } catch (e) {
       // 如果無法開啟，可以顯示錯誤訊息或使用備用方案
-      print('開啟Google Maps失敗: $e');
+      // print('開啟Google Maps失敗: $e');
     }
   }
 
@@ -120,6 +147,96 @@ class TaskDetailBottomSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 任務標題（新增）
+          if (task['title']?.toString().isNotEmpty == true ||
+              task['name']?.toString().isNotEmpty == true) ...[
+            _buildSection(
+              title: '任務標題',
+              icon: Icons.title,
+              child: Text(
+                task['title'] ?? task['name'] ?? '',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  height: 1.3,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // 日期和時間（新增）
+          if (task['date'] != null || task['time'] != null) ...[
+            _buildSection(
+              title: '執行時間',
+              icon: Icons.schedule,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      color: Colors.green[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _formatDateTime(task['date'], task['time']),
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // 報酬/價格（新增）
+          if (task['price'] != null && task['price'] > 0) ...[
+            _buildSection(
+              title: '任務報酬',
+              icon: Icons.attach_money,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.amber[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.monetization_on,
+                      color: Colors.amber[600],
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'NT\$ ${task['price']}',
+                      style: TextStyle(
+                        color: Colors.amber[800],
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // 地址信息 - 修改為可點擊的Google Maps連結
           if (task['address']?.toString().isNotEmpty == true) ...[
             _buildSection(
@@ -167,13 +284,85 @@ class TaskDetailBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
           ],
+
+          // 任務圖片（新增）
+          if (task['images'] != null &&
+              (task['images'] as List).isNotEmpty) ...[
+            _buildSection(
+              title: '任務圖片',
+              icon: Icons.image,
+              child: SizedBox(
+                height: 120,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: (task['images'] as List).length,
+                  itemBuilder: (context, index) {
+                    final imageUrl = (task['images'] as List)[index];
+                    return Container(
+                      width: 120,
+                      height: 120,
+                      margin: EdgeInsets.only(
+                        right: index < (task['images'] as List).length - 1
+                            ? 12
+                            : 0,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value:
+                                    loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[200],
+                              child: Icon(
+                                Icons.image_not_supported,
+                                color: Colors.grey[400],
+                                size: 40,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           if (!isStatic && task['content']?.toString().isNotEmpty == true) ...[
             _buildSection(
               title: '任務內容',
               icon: Icons.description,
-              child: Text(
-                task['content'],
-                style: const TextStyle(fontSize: 16, height: 1.4),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Text(
+                  task['content'],
+                  style: const TextStyle(fontSize: 16, height: 1.4),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -587,262 +776,6 @@ class ApplicantProfileBottomSheet extends StatelessWidget {
           Text(content, style: const TextStyle(fontSize: 16, height: 1.4)),
         ],
       ),
-    );
-  }
-}
-
-// 4. 創建/編輯任務彈窗
-class CreateEditTaskBottomSheet extends StatefulWidget {
-  final bool isEditing;
-  final Map<String, dynamic> taskForm;
-  final TextEditingController nameController;
-  final TextEditingController contentController;
-  final TextEditingController locationSearchController;
-  final List<Map<String, dynamic>> locationSuggestions;
-  final Function(String) onLocationSearch;
-  final Function(Map<String, dynamic>) onLocationSelect;
-  final VoidCallback onSave;
-  final VoidCallback onCancel;
-
-  const CreateEditTaskBottomSheet({
-    Key? key,
-    required this.isEditing,
-    required this.taskForm,
-    required this.nameController,
-    required this.contentController,
-    required this.locationSearchController,
-    required this.locationSuggestions,
-    required this.onLocationSearch,
-    required this.onLocationSelect,
-    required this.onSave,
-    required this.onCancel,
-  }) : super(key: key);
-
-  @override
-  State<CreateEditTaskBottomSheet> createState() =>
-      _CreateEditTaskBottomSheetState();
-}
-
-class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet> {
-  final FocusNode _nameFocus = FocusNode();
-  final FocusNode _contentFocus = FocusNode();
-  final FocusNode _locationFocus = FocusNode();
-
-  @override
-  void dispose() {
-    _nameFocus.dispose();
-    _contentFocus.dispose();
-    _locationFocus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildInputSection(
-            title: '任務名稱',
-            icon: Icons.assignment,
-            child: TextField(
-              controller: widget.nameController,
-              focusNode: _nameFocus,
-              decoration: InputDecoration(
-                hintText: '請輸入任務名稱',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (v) => widget.taskForm['name'] = v,
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _contentFocus.requestFocus(),
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildInputSection(
-            title: '任務內容',
-            icon: Icons.description,
-            child: TextField(
-              controller: widget.contentController,
-              focusNode: _contentFocus,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: '請詳細描述任務內容...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.all(16),
-              ),
-              onChanged: (v) => widget.taskForm['content'] = v,
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _locationFocus.requestFocus(),
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildInputSection(
-            title: '任務地點',
-            icon: Icons.location_on,
-            child: Column(
-              children: [
-                TextField(
-                  controller: widget.locationSearchController,
-                  focusNode: _locationFocus,
-                  decoration: InputDecoration(
-                    hintText: '搜尋地點...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.blue[500]!,
-                        width: 2,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                  onChanged: (value) {
-                    print('🔍 輸入框內容變更: "$value"');
-                    // ✅ 確保每次輸入都觸發搜尋
-                    widget.onLocationSearch(value);
-                  },
-                  textInputAction: TextInputAction.search,
-                ),
-                if (widget.locationSuggestions.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 200),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: widget.locationSuggestions.length,
-                      itemBuilder: (context, index) {
-                        final place = widget.locationSuggestions[index];
-                        return ListTile(
-                          dense: true,
-                          leading: Icon(
-                            Icons.location_on,
-                            color: Colors.grey[600],
-                            size: 20,
-                          ),
-                          title: Text(
-                            place['description'],
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          onTap: () => widget.onLocationSelect(place),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: widget.onCancel,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey[300]!),
-                    ),
-                  ),
-                  child: const Text(
-                    '取消',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: widget.onSave,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 2,
-                  ),
-                  child: Text(
-                    widget.isEditing ? '儲存修改' : '創建任務',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInputSection({
-    required String title,
-    required IconData icon,
-    required Widget child,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 20, color: Colors.grey[600]),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        child,
-      ],
     );
   }
 }
@@ -1452,6 +1385,34 @@ class LocationDetailBottomSheet extends StatelessWidget {
     this.publisherInfo,
   }) : super(key: key);
 
+  // 格式化日期時間顯示
+  String _formatDateTime(
+    String? dateTimeString,
+    Map<String, dynamic>? timeMap,
+  ) {
+    if (dateTimeString != null && dateTimeString.isNotEmpty) {
+      try {
+        final dateTime = DateTime.parse(dateTimeString);
+        final date = '${dateTime.month}/${dateTime.day}';
+
+        if (timeMap != null &&
+            timeMap['hour'] != null &&
+            timeMap['minute'] != null) {
+          final hour = timeMap['hour'] as int;
+          final minute = timeMap['minute'] as int;
+          final timeStr =
+              '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+          return '$date $timeStr';
+        }
+
+        return date;
+      } catch (e) {
+        // print('日期解析錯誤: $e');
+      }
+    }
+    return '';
+  }
+
   // 開啟Google Maps的方法
   void _openGoogleMaps(String address) async {
     final Uri googleMapsUrl = Uri.parse(
@@ -1465,7 +1426,7 @@ class LocationDetailBottomSheet extends StatelessWidget {
         throw '無法開啟Google Maps';
       }
     } catch (e) {
-      print('開啟Google Maps失敗: $e');
+      // print('開啟Google Maps失敗: $e');
     }
   }
 
@@ -1486,6 +1447,96 @@ class LocationDetailBottomSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 任務標題（新增）
+          if (location['title']?.toString().isNotEmpty == true ||
+              location['name']?.toString().isNotEmpty == true) ...[
+            _buildSection(
+              title: '任務標題',
+              icon: Icons.title,
+              child: Text(
+                location['title'] ?? location['name'] ?? '',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  height: 1.3,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // 日期和時間（新增）
+          if (location['date'] != null || location['time'] != null) ...[
+            _buildSection(
+              title: '執行時間',
+              icon: Icons.schedule,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      color: Colors.green[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _formatDateTime(location['date'], location['time']),
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // 報酬/價格（新增）
+          if (location['price'] != null && location['price'] > 0) ...[
+            _buildSection(
+              title: '任務報酬',
+              icon: Icons.attach_money,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.amber[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.monetization_on,
+                      color: Colors.amber[600],
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'NT\$ ${location['price']}',
+                      style: TextStyle(
+                        color: Colors.amber[800],
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           if (location['address']?.toString().isNotEmpty == true) ...[
             _buildSection(
               title: '任務地址',
@@ -1532,6 +1583,69 @@ class LocationDetailBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
           ],
+
+          // 任務圖片（新增）
+          if (location['images'] != null &&
+              (location['images'] as List).isNotEmpty) ...[
+            _buildSection(
+              title: '任務圖片',
+              icon: Icons.image,
+              child: SizedBox(
+                height: 120,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: (location['images'] as List).length,
+                  itemBuilder: (context, index) {
+                    final imageUrl = (location['images'] as List)[index];
+                    return Container(
+                      width: 120,
+                      height: 120,
+                      margin: EdgeInsets.only(
+                        right: index < (location['images'] as List).length - 1
+                            ? 12
+                            : 0,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value:
+                                    loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[200],
+                              child: Icon(
+                                Icons.image_not_supported,
+                                color: Colors.grey[400],
+                                size: 40,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           if (isTask && location['content']?.toString().isNotEmpty == true) ...[
             _buildSection(
               title: '任務內容',

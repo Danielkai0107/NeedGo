@@ -1,18 +1,15 @@
 // lib/screens/parent_view.dart
-// 更新後的 ParentView，使用底部滑動彈窗
-
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-
 import '../styles/map_styles.dart';
-import '../components/full_screen_popup.dart'; // 引入 FullScreenPopup 及所有 bottom sheet 組件
+import '../components/full_screen_popup.dart';
+import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 enum BottomSheetType {
@@ -36,42 +33,28 @@ class _ParentViewState extends State<ParentView> {
   final _firestore = FirebaseFirestore.instance;
   final TextEditingController _contentCtrl = TextEditingController();
   String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
-
   late GoogleMapController _mapCtrl;
   LatLng _center = const LatLng(25.0479, 121.5171);
   double _zoom = 14;
   LatLng? _myLocation;
-
   List<Map<String, dynamic>> _myPosts = [];
   Map<String, dynamic> _profile = {};
   Map<String, dynamic> _profileForm = {};
-
-  // 搜索建议
   List<Map<String, dynamic>> _locationSuggestions = [];
-
-  // 在 _ParentViewState 類別中添加相同的變數：
   Set<String> _availableCategories = {};
   Set<String> _selectedCategories = {};
   bool _showCategoryFilter = false;
   List<Map<String, dynamic>> _systemLocations = [];
-
-  // 合并用：静态公园 or 自己的任务
   Map<String, dynamic>? _selectedLocation;
   bool _isLoadingTravel = false;
   Map<String, String>? _travelInfo;
-
-  // 底部彈窗相關變量
   Map<String, dynamic> _postForm = {
     'name': '',
     'content': '',
     'lat': null,
     'lng': null,
   };
-
-  // 將多個布林變數替換為單一的枚舉狀態
   BottomSheetType _currentBottomSheet = BottomSheetType.none;
-
-  // 添加缺失的變數
   String? _editingPostId;
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _locationSearchCtrl = TextEditingController();
@@ -86,6 +69,14 @@ class _ParentViewState extends State<ParentView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
     });
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _locationSearchCtrl.dispose();
+    _contentCtrl.dispose();
+    super.dispose();
   }
 
   // 在 _initializeData 中加入錯誤處理
@@ -110,16 +101,7 @@ class _ParentViewState extends State<ParentView> {
     }
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _locationSearchCtrl.dispose();
-    _contentCtrl.dispose();
-    super.dispose();
-  }
-
   /// 获取当前定位
-  /// 把这个方法放在你的 State 里，替换现有的 _findAndRecenter 或者 _findAndRecenter
   Future<void> _findAndRecenter() async {
     // 1. 申请定位权限
     var perm = await Geolocator.checkPermission();
@@ -223,7 +205,6 @@ class _ParentViewState extends State<ParentView> {
   }
 
   /// 搜地点建议
-  /// 搜地点建议 - 調試版本
   Future<void> _fetchLocationSuggestions(String input) async {
     print('🔍 開始搜尋地點: "$input"');
 
@@ -387,19 +368,7 @@ class _ParentViewState extends State<ParentView> {
 
   /// 手动新建任务
   void _startCreatePostManually() {
-    setState(() {
-      _currentBottomSheet = BottomSheetType.createEditPost;
-      _postForm = {
-        'name': '',
-        'content': '',
-        'address': '',
-        'lat': null,
-        'lng': null,
-      };
-      _nameCtrl.clear();
-      _contentCtrl.clear();
-      _locationSearchCtrl.clear();
-    });
+    _showCreateTaskSheet();
   }
 
   Future<void> _saveNewPost() async {
@@ -865,7 +834,6 @@ class _ParentViewState extends State<ParentView> {
           };
   }
 
-  // 新增方法：
   Widget _buildCategoryFilter() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -1050,6 +1018,157 @@ class _ParentViewState extends State<ParentView> {
   /// 執行角色切換
   void _switchToRole(String route) {
     Navigator.pushReplacementNamed(context, route);
+  }
+
+  /// 顯示新建任務彈窗（使用新的 5 步驟流程）
+  void _showCreateTaskSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
+        onSubmit: (taskData) async {
+          Navigator.of(context).pop(); // 先關閉彈窗
+          await _saveNewTaskData(taskData);
+        },
+      ),
+    );
+  }
+
+  /// 顯示編輯任務彈窗（使用新的 5 步驟流程）
+  void _showEditTaskSheet() {
+    // 將現有任務資料轉換為格式
+    final existingTask = _myPosts.firstWhere(
+      (task) => task['id'] == _editingPostId,
+      orElse: () => _postForm,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
+        existingTask: existingTask,
+        onSubmit: (updatedTaskData) async {
+          Navigator.of(context).pop(); // 先關閉彈窗
+          await _saveEditedTaskData(updatedTaskData);
+        },
+      ),
+    );
+  }
+
+  /// 保存新任務資料（新格式）
+  Future<void> _saveNewTaskData(new_task_sheet.TaskData taskData) async {
+    final u = FirebaseAuth.instance.currentUser;
+    if (u == null) return;
+
+    try {
+      // 處理圖片上傳到 Firebase Storage（如果有圖片的話）
+      List<String> imageUrls = [];
+      if (taskData.images.isNotEmpty) {
+        // 暫時將圖片轉為 base64 字串保存
+        // 未來可以改為上傳到 Firebase Storage
+        for (int i = 0; i < taskData.images.length; i++) {
+          final base64String = base64Encode(taskData.images[i]);
+          imageUrls.add('data:image/jpeg;base64,$base64String');
+        }
+      }
+
+      final data = {
+        'title': taskData.title,
+        'name': taskData.title, // 向下兼容
+        'date': taskData.date?.toIso8601String(),
+        'time': taskData.time != null
+            ? {'hour': taskData.time!.hour, 'minute': taskData.time!.minute}
+            : null,
+        'content': taskData.content,
+        'images': imageUrls, // 保存為字串陣列而不是 Uint8List 陣列
+        'price': taskData.price,
+        'address': taskData.address,
+        'lat': taskData.lat,
+        'lng': taskData.lng,
+        'userId': u.uid,
+        'applicants': [],
+        'createdAt': Timestamp.now(),
+        'status': 'open',
+      };
+
+      await _firestore.collection('posts').add(data);
+      await _loadMyPosts();
+
+      setState(() {
+        _currentBottomSheet = BottomSheetType.none;
+        _editingPostId = null;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任務創建成功！')));
+
+      // 移動地圖到新任務位置
+      if (taskData.lat != null && taskData.lng != null) {
+        final newLatLng = LatLng(taskData.lat!, taskData.lng!);
+        _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(newLatLng, 15));
+      }
+    } catch (e) {
+      print('創建任務錯誤詳情: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('創建任務失敗：$e')));
+    }
+  }
+
+  /// 保存編輯後的任務資料（新格式）
+  Future<void> _saveEditedTaskData(new_task_sheet.TaskData taskData) async {
+    if (_editingPostId == null) return;
+
+    try {
+      // 處理圖片上傳到 Firebase Storage（如果有圖片的話）
+      List<String> imageUrls = [];
+      if (taskData.images.isNotEmpty) {
+        // 暫時將圖片轉為 base64 字串保存
+        // 未來可以改為上傳到 Firebase Storage
+        for (int i = 0; i < taskData.images.length; i++) {
+          final base64String = base64Encode(taskData.images[i]);
+          imageUrls.add('data:image/jpeg;base64,$base64String');
+        }
+      }
+
+      final data = {
+        'title': taskData.title,
+        'name': taskData.title, // 向下兼容
+        'date': taskData.date?.toIso8601String(),
+        'time': taskData.time != null
+            ? {'hour': taskData.time!.hour, 'minute': taskData.time!.minute}
+            : null,
+        'content': taskData.content,
+        'images': imageUrls, // 保存為字串陣列而不是 Uint8List 陣列
+        'price': taskData.price,
+        'address': taskData.address,
+        'lat': taskData.lat,
+        'lng': taskData.lng,
+        // 不更新 userId, applicants, createdAt, status
+      };
+
+      await _firestore.doc('posts/$_editingPostId').update(data);
+      await _loadMyPosts();
+
+      setState(() {
+        _currentBottomSheet = BottomSheetType.none;
+        _editingPostId = null;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任務更新成功！')));
+    } catch (e) {
+      print('更新任務錯誤詳情: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('更新任務失敗：$e')));
+    }
   }
 
   @override
@@ -1386,26 +1505,16 @@ class _ParentViewState extends State<ParentView> {
                     _calculateTravelInfo(LatLng(task['lat'], task['lng']));
                   },
                   onEditTask: (task) {
-                    // 关闭任务列表，打开编辑模式
-                    setState(() {
-                      _currentBottomSheet = BottomSheetType.createEditPost;
-                      _editingPostId = task['id'];
-                      _postForm = {
-                        'name': task['name'],
-                        'content': task['content'],
-                        'address': task['address'],
-                        'lat': task['lat'],
-                        'lng': task['lng'],
-                      };
+                    // 设置编辑任务ID和数据
+                    _editingPostId = task['id'];
 
-                      // 预填输入框
-                      _nameCtrl.text = task['name']?.toString() ?? '';
-                      _contentCtrl.text = task['content']?.toString() ?? '';
-                      _locationSearchCtrl.text =
-                          task['address']?.toString() ??
-                          task['name']?.toString() ??
-                          '';
+                    // 关闭任务列表
+                    setState(() {
+                      _currentBottomSheet = BottomSheetType.none;
                     });
+
+                    // 显示编辑弹窗
+                    _showEditTaskSheet();
                   },
                   onDeleteTask: (taskId) async {
                     try {
@@ -1427,55 +1536,20 @@ class _ParentViewState extends State<ParentView> {
                     }
                   },
                   onCreateNew: () {
-                    // 关闭任务列表，打开新建任务页面
+                    // 关闭任务列表
                     setState(() {
-                      _currentBottomSheet = BottomSheetType.createEditPost;
+                      _currentBottomSheet = BottomSheetType.none;
                       _editingPostId = null;
-                      _postForm = {
-                        'name': '',
-                        'content': '',
-                        'address': '',
-                        'lat': null,
-                        'lng': null,
-                      };
-                      _nameCtrl.clear();
-                      _contentCtrl.clear();
-                      _locationSearchCtrl.clear();
                     });
+
+                    // 显示新建任务弹窗
+                    _showCreateTaskSheet();
                   },
                 ),
               ),
             ),
 
-          // 創建/編輯任務底部彈窗
-          if (_currentBottomSheet == BottomSheetType.createEditPost)
-            Positioned.fill(
-              child: FullScreenPopup(
-                title: _editingPostId == null ? '新增任務' : '編輯任務',
-                onClose: () =>
-                    setState(() => _currentBottomSheet = BottomSheetType.none),
-                child: CreateEditTaskBottomSheet(
-                  isEditing: _editingPostId != null,
-                  taskForm: _postForm,
-                  nameController: _nameCtrl,
-                  contentController: _contentCtrl,
-                  locationSearchController: _locationSearchCtrl,
-                  locationSuggestions: _locationSuggestions,
-                  onLocationSearch: _fetchLocationSuggestions,
-                  onLocationSelect: _selectLocation,
-                  onSave: () async {
-                    if (_editingPostId != null) {
-                      await _saveEditedPost();
-                    } else {
-                      await _saveNewPost();
-                    }
-                  },
-                  onCancel: () => setState(
-                    () => _currentBottomSheet = BottomSheetType.none,
-                  ),
-                ),
-              ),
-            ),
+          // 創建/編輯任務底部彈窗已移至 showModalBottomSheet 方式
 
           // 編輯個人資料底部彈窗
           if (_currentBottomSheet == BottomSheetType.profileEditing)

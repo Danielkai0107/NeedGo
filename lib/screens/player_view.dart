@@ -1,15 +1,12 @@
 // lib/screens/player_view.dart
-
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-
 import '../styles/map_styles.dart';
 import '../components/full_screen_popup.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -37,64 +34,40 @@ class _PlayerViewState extends State<PlayerView> {
   LatLng _center = const LatLng(25.0479, 121.5171);
   double _zoom = 14;
   LatLng? _myLocation;
-
   final _firestore = FirebaseFirestore.instance;
-
   String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
-
   StreamSubscription<QuerySnapshot>? _postsSub;
   List<Map<String, dynamic>> _allPosts = [];
   Timestamp? _listenerAttachedTs;
-
-  // 被选中的，无论是静态公园还是某条贴文
   Map<String, dynamic>? _selectedLocation;
   bool _isLoadingTravel = false;
   Map<String, String>? _travelInfo;
-
-  // 將多個布林變數替換為單一的枚舉狀態
   BottomSheetType _currentBottomSheet = BottomSheetType.none;
-
-  // 在 _PlayerViewState 類別中添加：
   List<Map<String, dynamic>> _systemLocations = [];
   Set<String> _availableCategories = {};
   Set<String> _selectedCategories = {};
   bool _showCategoryFilter = false;
-
-  // 添加缺失的變數
   Map<String, dynamic> _profile = {};
   Map<String, dynamic> _profileForm = {};
   String? _profileStatusType;
   String? _profileStatusMessage;
   Map<String, dynamic>? _newPostToShow;
   bool _isApplying = false;
-
-  // 新增：聚合相關變數
   Map<String, List<Map<String, dynamic>>> _clusteredPosts = {};
   String? _selectedClusterId;
   List<Map<String, dynamic>> _clusterPosts = [];
 
-  // 新增：聚合 marker 的方法
-  // 修改：聚合 marker 的方法，使用距離計算而非精確座標
   Map<String, List<Map<String, dynamic>>> _clusterPostsByLocation() {
     final clusters = <String, List<Map<String, dynamic>>>{};
     final currentUser = FirebaseAuth.instance.currentUser;
     final processedPosts = <String>{};
-
     for (var post in _allPosts) {
-      // 排除自己發布的任務
       if (post['userId'] == currentUser?.uid) continue;
-
-      // 如果已經被處理過，跳過
       if (processedPosts.contains(post['id'])) continue;
-
       final postLat = post['lat'] as double;
       final postLng = post['lng'] as double;
-
-      // 建立新的聚合群組
       final cluster = <Map<String, dynamic>>[post];
       processedPosts.add(post['id']);
-
-      // 找出50米內的其他任務加入同一聚合
       for (var otherPost in _allPosts) {
         if (otherPost['userId'] == currentUser?.uid) continue;
         if (processedPosts.contains(otherPost['id'])) continue;
@@ -162,6 +135,14 @@ class _PlayerViewState extends State<PlayerView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializePlayerData();
     });
+  }
+
+  @override
+  void dispose() {
+    _postsSub?.cancel();
+    _notificationTimer?.cancel();
+    _mapCtrl.dispose(); // 新增：清理地圖控制器
+    super.dispose();
   }
 
   // 改善初始化順序
@@ -481,14 +462,6 @@ class _PlayerViewState extends State<PlayerView> {
         }
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _postsSub?.cancel();
-    _notificationTimer?.cancel();
-    _mapCtrl.dispose(); // 新增：清理地圖控制器
-    super.dispose();
   }
 
   /// 初始化通知系统
