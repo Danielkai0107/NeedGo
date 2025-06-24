@@ -295,9 +295,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         _buildTimeSection(),
 
                       // 任務報酬
-                      if (widget.taskData['price'] != null &&
-                          widget.taskData['price'] > 0)
-                        _buildPriceSection(),
+                      _buildPriceSection(),
 
                       // 任務圖片
                       if (widget.taskData['images'] != null &&
