@@ -918,7 +918,7 @@ class _PlayerViewState extends State<PlayerView> {
       children: [
         FloatingActionButton(
           backgroundColor: _unreadCount > 0 ? Colors.orange[600] : Colors.white,
-          foregroundColor: _unreadCount > 0 ? Colors.white : Colors.blueGrey,
+          foregroundColor: _unreadCount > 0 ? Colors.white : Colors.black,
           heroTag: 'notifications',
           mini: false,
           child: Icon(Icons.notifications),
@@ -1330,14 +1330,14 @@ class _PlayerViewState extends State<PlayerView> {
                 // 新增：篩選切換按鈕
                 FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
+                  foregroundColor: Colors.black,
                   heroTag: 'filter',
                   mini: false,
                   child: Icon(
                     _showCategoryFilter
                         ? Icons
                               .close // 選單打開時顯示 X
-                        : Icons.filter_list,
+                        : Icons.tune_rounded,
                   ), // 選單關閉時顯示篩選圖標
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
@@ -1361,10 +1361,10 @@ class _PlayerViewState extends State<PlayerView> {
               children: [
                 FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
+                  foregroundColor: Colors.black,
                   heroTag: 'switch',
                   mini: false,
-                  child: const Icon(Icons.switch_account),
+                  child: const Icon(Icons.group_rounded),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
@@ -1373,7 +1373,7 @@ class _PlayerViewState extends State<PlayerView> {
                 const SizedBox(height: 16),
                 FloatingActionButton(
                   backgroundColor: Colors.white, // 背景色
-                  foregroundColor: Colors.blueGrey, // icon 顏色
+                  foregroundColor: Colors.black, // icon 顏色
                   heroTag: 'loc',
                   mini: false,
                   child: const Icon(Icons.my_location),
@@ -1390,7 +1390,7 @@ class _PlayerViewState extends State<PlayerView> {
 
                 FloatingActionButton(
                   backgroundColor: Colors.white, // 背景色
-                  foregroundColor: Colors.blueGrey, // icon 顏色
+                  foregroundColor: Colors.black, // icon 顏色
                   heroTag: 'profile',
                   mini: false,
                   child: const Icon(Icons.person),
@@ -1402,7 +1402,7 @@ class _PlayerViewState extends State<PlayerView> {
                 const SizedBox(height: 16),
                 FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
+                  foregroundColor: Colors.black,
                   heroTag: 'apps',
                   mini: false,
                   child: const Icon(Icons.note),
@@ -1414,7 +1414,7 @@ class _PlayerViewState extends State<PlayerView> {
                 const SizedBox(height: 16),
                 FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
+                  foregroundColor: Colors.black,
                   heroTag: 'logout',
                   mini: false,
                   child: const Icon(Icons.logout),

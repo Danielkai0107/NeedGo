@@ -85,6 +85,8 @@ class TaskDetailSheet extends StatefulWidget {
   final VoidCallback? onTaskUpdated; // 任務更新回調
   final VoidCallback? onEditTask; // 編輯任務回調（僅Parent）
   final VoidCallback? onDeleteTask; // 刪除任務回調（僅Parent）
+  final bool showBackButton; // 是否顯示返回按鈕
+  final VoidCallback? onBack; // 返回按鈕回調
 
   const TaskDetailSheet({
     Key? key,
@@ -94,6 +96,8 @@ class TaskDetailSheet extends StatefulWidget {
     this.onTaskUpdated,
     this.onEditTask,
     this.onDeleteTask,
+    this.showBackButton = false,
+    this.onBack,
   }) : super(key: key);
 
   @override
@@ -520,7 +524,14 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('任務詳情', style: TextStyle(fontSize: 15, color: Colors.grey[600])),
+          Text(
+            '任務詳情',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
             title,
@@ -1187,84 +1198,101 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ],
       );
     } else {
-      // Player 視角：申請/取消申請按鈕
+      // Player 視角：申請/取消申請按鈕（可能包含返回按鈕）
+      Widget actionButton;
+
       if (_isMyTask) {
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey[400],
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16,
-              ),
-              textStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+        actionButton = ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey[400],
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
-            child: const Text('這是我的任務'),
           ),
+          child: const Text('這是我的任務'),
         );
       } else if (_hasApplied) {
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isApplying ? null : _cancelApplication,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[600],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16,
-              ),
-              textStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+        actionButton = ElevatedButton(
+          onPressed: _isApplying ? null : _cancelApplication,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange[600],
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
-            child: _isApplying
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('取消申請'),
           ),
+          child: _isApplying
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Text('取消申請'),
         );
       } else {
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isApplying ? null : _applyForTask,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16,
-              ),
-              textStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
+        actionButton = ElevatedButton(
+          onPressed: _isApplying ? null : _applyForTask,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          child: _isApplying
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Text('申請任務'),
+        );
+      }
+
+      // 如果需要顯示返回按鈕，使用 Row 佈局
+      if (widget.showBackButton && widget.onBack != null) {
+        return Row(
+          children: [
+            // 返回按鈕
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onBack,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                  side: BorderSide(color: Colors.grey[400]!),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: const Text('返回'),
               ),
             ),
-            child: _isApplying
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('申請任務'),
-          ),
+            const SizedBox(width: 12),
+            // 主要操作按鈕
+            Expanded(flex: 2, child: actionButton),
+          ],
         );
+      } else {
+        // 不顯示返回按鈕時，全寬顯示操作按鈕
+        return SizedBox(width: double.infinity, child: actionButton);
       }
     }
   }

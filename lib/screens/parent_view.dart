@@ -1683,32 +1683,114 @@ class _ParentViewState extends State<ParentView> {
               ),
             ),
 
+          // 類別篩選器
           Positioned(
-            bottom: 100,
-            left: 0, // 從左邊 20px 開始
-            width: 320, // 固定寬度 300px
+            bottom: 140,
+            left: 0,
+            width: 320,
             child: _buildCategoryFilter(),
           ),
 
-          // 篩選選單按鈕
+          // 1. 左上角 (Top-Left) – 設定入口
           Positioned(
-            bottom: 40, // 動態調整位置
-            left: 24,
+            top: MediaQuery.of(context).padding.top + 16,
+            left: 16,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 個人資料設定按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'profile',
+                  mini: true,
+                  child: const Icon(Icons.person_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.profileEditing,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 角色切換按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'switch',
+                  mini: true,
+                  child: const Icon(Icons.group_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () => _showRoleSwitchDialog(context, '陪伴者'),
+                ),
+              ],
+            ),
+          ),
+
+          // 2. 右上角 (Top-Right) – 操作群組
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            right: 16,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 通知按鈕（UI預留）
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'notifications',
+                  mini: true,
+                  child: const Icon(Icons.notifications_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () {
+                    // TODO: 實作通知功能
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('通知功能開發中...')));
+                  },
+                ),
+                const SizedBox(width: 12),
+                // 登出按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'logout',
+                  mini: true,
+                  child: const Icon(Icons.logout_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                    Navigator.pushReplacementNamed(context, '/');
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // 3. 左下角 (Bottom-Left) – 篩選 & 定位
+          Positioned(
+            bottom: 40,
+            left: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 新增：篩選切換按鈕
+                // 篩選按鈕
                 FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
+                  foregroundColor: Colors.black,
                   heroTag: 'filter',
                   mini: false,
                   child: Icon(
                     _showCategoryFilter
-                        ? Icons
-                              .close // 選單打開時顯示 X
-                        : Icons.filter_list,
-                  ), // 選單關閉時顯示篩選圖標
+                        ? Icons.close_rounded
+                        : Icons.tune_rounded,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
@@ -1718,35 +1800,14 @@ class _ParentViewState extends State<ParentView> {
                     });
                   },
                 ),
-              ],
-            ),
-          ),
-
-          // 工具按鈕
-          Positioned(
-            bottom: 40, // 動態調整位置
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
-                  heroTag: 'switch',
-                  mini: false,
-                  child: const Icon(Icons.switch_account),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56),
-                  ),
-                  onPressed: () => _showRoleSwitchDialog(context, '陪伴者'),
-                ),
                 const SizedBox(height: 16),
+                // 定位按鈕
                 FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
-                  heroTag: 'loc',
+                  foregroundColor: Colors.black,
+                  heroTag: 'location',
                   mini: false,
-                  child: const Icon(Icons.my_location),
+                  child: const Icon(Icons.my_location_rounded),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
@@ -1767,45 +1828,30 @@ class _ParentViewState extends State<ParentView> {
                     final newLatLng = LatLng(pos.latitude, pos.longitude);
 
                     setState(() => _myLocation = newLatLng);
-                    _updateMarkers(); // 更新標記以包含新的位置
+                    _updateMarkers();
                     _mapCtrl.animateCamera(
                       CameraUpdate.newLatLngZoom(newLatLng, 16),
                     );
                   },
                 ),
-                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+
+          // 4. 右下角 (Bottom-Right) – 發佈相關
+          Positioned(
+            bottom: 40,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 我的發佈清單
                 FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
-                  heroTag: 'create',
+                  foregroundColor: Colors.black,
+                  heroTag: 'myPosts',
                   mini: false,
-                  child: const Icon(Icons.add),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56),
-                  ),
-                  onPressed: _startCreatePostManually,
-                ),
-                const SizedBox(height: 16),
-                FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
-                  heroTag: 'profile',
-                  mini: false,
-                  child: const Icon(Icons.person),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56),
-                  ),
-                  onPressed: () => setState(
-                    () => _currentBottomSheet = BottomSheetType.profileEditing,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
-                  heroTag: 'list',
-                  mini: false,
-                  child: const Icon(Icons.list),
+                  child: const Icon(Icons.list_rounded),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
@@ -1814,19 +1860,17 @@ class _ParentViewState extends State<ParentView> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                // 創建任務
                 FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.blueGrey,
-                  heroTag: 'logout',
+                  backgroundColor: Colors.orange[600],
+                  foregroundColor: Colors.white,
+                  heroTag: 'create',
                   mini: false,
-                  child: const Icon(Icons.logout),
+                  child: const Icon(Icons.add_rounded),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-                    Navigator.pushReplacementNamed(context, '/');
-                  },
+                  onPressed: _startCreatePostManually,
                 ),
               ],
             ),

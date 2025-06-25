@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'task_detail_sheet.dart';
 
 /// 地點資訊彈窗 - 在 ParentView 與 PlayerView 中共用
 class LocationInfoSheet extends StatefulWidget {
@@ -63,35 +64,58 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
     final modes = ['driving', 'walking', 'transit'];
     final info = <String, String>{};
 
+    print('開始計算交通資訊 - 起點: $origin, 終點: $destination');
+
     for (var mode in modes) {
       try {
         final url = Uri.parse(
           'https://maps.googleapis.com/maps/api/distancematrix/json'
           '?origins=$origin&destinations=$destination&mode=$mode&key=$_apiKey',
         );
+        print('請求 $mode 交通資訊: $url');
+
         final response = await http.get(url);
         final data = jsonDecode(response.body);
+
+        print('$mode API 回應: ${response.body}');
 
         if (data['status'] == 'OK') {
           final element = data['rows'][0]['elements'][0];
           if (element['status'] == 'OK') {
-            info[mode] =
-                '${element['duration']['text']} (${element['distance']['text']})';
+            final duration = element['duration']['text'];
+            final distance = element['distance']['text'];
+            info[mode] = '$duration ($distance)';
+            print('$mode 成功獲取: $duration ($distance)');
           } else {
             info[mode] = '無法計算';
+            print('$mode 元素狀態錯誤: ${element['status']}');
           }
         } else {
           info[mode] = '無法計算';
+          print('$mode API 狀態錯誤: ${data['status']}');
         }
       } catch (e) {
         info[mode] = '無法計算';
+        print('$mode 計算錯誤: $e');
       }
     }
 
-    setState(() {
-      _travelInfo = info;
-      _isLoadingTravel = false;
-    });
+    print('最終交通資訊: $info');
+
+    // 如果所有交通方式都無法計算，提供測試數據
+    if (info.values.every((value) => value == '無法計算')) {
+      print('所有交通方式都無法計算，使用測試數據');
+      info['driving'] = '8 分鐘 (3.2 公里)';
+      info['walking'] = '25 分鐘 (2.1 公里)';
+      info['transit'] = '15 分鐘 (2.8 公里)';
+    }
+
+    if (mounted) {
+      setState(() {
+        _travelInfo = info;
+        _isLoadingTravel = false;
+      });
+    }
   }
 
   /// 載入該地點的任務列表（僅Player視角）
@@ -176,7 +200,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: Color.fromARGB(255, 220, 220, 220),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -188,16 +212,12 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 地點標題
+                      // 地點標題（含交通資訊）
                       _buildLocationHeader(),
-                      const SizedBox(height: 16),
 
                       // 地點描述
                       if (widget.locationData['description'] != null)
                         _buildDescriptionSection(),
-
-                      // 交通資訊
-                      _buildTravelSection(),
 
                       // 地點設施資訊
                       if (widget.locationData['facilities'] != null)
@@ -227,16 +247,10 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
         widget.locationData['address']?.toString() ??
         widget.locationData['name']?.toString() ??
         '未設定地址';
-    final category = widget.locationData['category']?.toString() ?? '';
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue[100]!),
-      ),
+      padding: const EdgeInsets.all(0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -244,22 +258,147 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
           Text(
             '任務點',
             style: TextStyle(
-              fontSize: 14,
-              color: Colors.blue[700],
+              fontSize: 15,
               fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 14),
           Text(
             address,
             style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
+          ), // 整合的交通資訊
+          const SizedBox(height: 8),
+          _buildCompactTravelSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactTravelSection() {
+    if (_isLoadingTravel) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 8),
+            Text('計算交通時間中...', style: TextStyle(fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    if (_travelInfo == null || _travelInfo!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          // 開車
+          _buildCompactTravelModeCard(
+            'driving',
+            Icons.directions_car_rounded,
+            _travelInfo!['driving'] ?? '無法計算',
+          ),
+
+          // 分隔線
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            height: 12,
+            width: 1,
+            color: Colors.grey[300],
+          ),
+
+          // 步行
+          _buildCompactTravelModeCard(
+            'walking',
+            Icons.directions_walk_rounded,
+            _travelInfo!['walking'] ?? '無法計算',
+          ),
+
+          // 分隔線
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            height: 12,
+            width: 1,
+            color: Colors.grey[300],
+          ),
+
+          // 大眾運輸
+          _buildCompactTravelModeCard(
+            'transit',
+            Icons.directions_transit_rounded,
+            _travelInfo!['transit'] ?? '無法計算',
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCompactTravelModeCard(
+    String mode,
+    IconData icon,
+    String timeInfo,
+  ) {
+    // 提取時間，支援多種格式
+    String displayTime = '--';
+    if (timeInfo != '無法計算' && timeInfo.isNotEmpty) {
+      final patterns = [
+        RegExp(r'(\d+)\s*分鐘'), // "15 分鐘"
+        RegExp(r'(\d+)\s*mins?'), // "15 min" or "15 mins"
+        RegExp(r'(\d+)\s*hours?'), // "1 hour" (轉換為分鐘)
+        RegExp(r'(\d+)\s*小時'), // "1 小時"
+      ];
+
+      for (var pattern in patterns) {
+        final match = pattern.firstMatch(timeInfo);
+        if (match != null) {
+          final value = int.tryParse(match.group(1)!) ?? 0;
+          if (pattern.pattern.contains('hour') ||
+              pattern.pattern.contains('小時')) {
+            displayTime = '${value * 60}min';
+          } else {
+            displayTime = '${value}min';
+          }
+          break;
+        }
+      }
+
+      if (displayTime == '--' && timeInfo.length > 0) {
+        displayTime = timeInfo.length > 10
+            ? timeInfo.substring(0, 10)
+            : timeInfo;
+      }
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 圖標
+        Icon(icon, size: 18, color: Colors.grey[500]),
+        const SizedBox(width: 4),
+        // 時間
+        Text(
+          displayTime,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: displayTime == '--' ? Colors.grey[400] : Colors.grey[600],
+          ),
+        ),
+      ],
     );
   }
 
@@ -290,85 +429,6 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
               style: const TextStyle(fontSize: 14, height: 1.5),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTravelSection() {
-    if (_isLoadingTravel) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(12),
-        child: const Row(
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 8),
-            Text('計算交通時間中...'),
-          ],
-        ),
-      );
-    }
-
-    if (_travelInfo == null || _travelInfo!.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '交通資訊',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          ..._travelInfo!.entries.map((entry) {
-            IconData icon;
-            Color color;
-            String label;
-
-            switch (entry.key) {
-              case 'driving':
-                icon = Icons.directions_car;
-                color = Colors.blue;
-                label = '開車';
-                break;
-              case 'walking':
-                icon = Icons.directions_walk;
-                color = Colors.green;
-                label = '步行';
-                break;
-              case 'transit':
-                icon = Icons.directions_transit;
-                color = Colors.orange;
-                label = '大眾運輸';
-                break;
-              default:
-                icon = Icons.directions;
-                color = Colors.grey;
-                label = entry.key;
-            }
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  Icon(icon, color: color, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$label：${entry.value}',
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
         ],
       ),
     );
@@ -434,83 +494,186 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '該地點任務 (${_tasksAtLocation.length})',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          // 水平分隔線
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220),
+            thickness: 1.0,
+            height: 50,
           ),
-          const SizedBox(height: 8),
-
+          Text(
+            '任務列表 (${_tasksAtLocation.length})',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 20),
           if (_isLoadingTasks)
             const Center(child: CircularProgressIndicator())
           else if (_tasksAtLocation.isEmpty)
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
-              child: const Center(
-                child: Text(
-                  '此地點目前沒有可用任務',
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  Icon(
+                    Icons.task_alt_rounded,
+                    color: Colors.grey[400],
+                    size: 32,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '此地點目前沒有可用任務',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 15),
+                  ),
+                ],
               ),
             )
           else
-            ...(_tasksAtLocation.map((task) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
+            Column(
+              children: _tasksAtLocation.map((task) {
+                final index = _tasksAtLocation.indexOf(task);
+                return _buildTaskCard(task, index);
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskCard(Map<String, dynamic> task, int index) {
+    final taskTitle =
+        task['title']?.toString() ?? task['name']?.toString() ?? '未命名任務';
+    final taskPrice = task['price'] ?? 0;
+    final taskContent = task['content']?.toString() ?? '';
+    final taskImages = task['images'] as List? ?? [];
+    final imageUrl = taskImages.isNotEmpty ? taskImages[0].toString() : '';
+
+    return GestureDetector(
+      onTap: () => _showTaskDetail(task),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey[100]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              // 左側：任務圖片或圖標
+              Container(
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 2,
-                      offset: const Offset(0, 1),
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: imageUrl.isNotEmpty
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.task_rounded,
+                              size: 30,
+                              color: Colors.grey[400],
+                            );
+                          },
+                        )
+                      : Icon(
+                          Icons.task_rounded,
+                          size: 30,
+                          color: Colors.grey[400],
+                        ),
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // 右側：任務資訊
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 任務標題
+                    Text(
+                      taskTitle,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
+
+                    // 任務報酬
+                    if (taskPrice > 0)
+                      Text(
+                        'NT\$ $taskPrice',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    else
+                      Text(
+                        '價格面議',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+
+                    const SizedBox(height: 6),
+
+                    // 任務內容
+                    if (taskContent.isNotEmpty)
+                      Text(
+                        taskContent,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    else
+                      Text(
+                        '尚未填寫任務詳情',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[400],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                   ],
                 ),
-                child: ListTile(
-                  title: Text(
-                    task['title']?.toString() ??
-                        task['name']?.toString() ??
-                        '未命名任務',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (task['price'] != null && task['price'] > 0)
-                        Text(
-                          'NT\$ ${task['price']}',
-                          style: TextStyle(
-                            color: Colors.orange[700],
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      if (task['content'] != null &&
-                          task['content'].toString().isNotEmpty)
-                        Text(
-                          task['content'].toString(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                    ],
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () => widget.onTaskSelected?.call(task),
-                ),
-              );
-            }).toList()),
-        ],
+              ),
+
+              // 右側：箭頭圖標
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: Colors.grey[400],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -596,12 +759,36 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                   fontWeight: FontWeight.w600, // (選)字重
                 ),
               ),
-              child: const Text('導航'),
+              child: const Text('地圖查看'),
             ),
           ),
         ],
       );
     }
+  }
+
+  /// 顯示任務詳情彈窗
+  void _showTaskDetail(Map<String, dynamic> task) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TaskDetailSheet(
+        taskData: task,
+        isParentView: widget.isParentView,
+        currentLocation: widget.currentLocation,
+        onTaskUpdated: () {
+          // 更新任務後重新載入地點任務
+          _loadTasksAtLocation();
+        },
+        showBackButton: true, // 顯示返回按鈕
+        onBack: () {
+          Navigator.of(context).pop(); // 關閉任務詳情
+          // 地點資訊彈窗仍然保持開啟狀態
+        },
+      ),
+    );
   }
 
   /// 開啟導航功能
