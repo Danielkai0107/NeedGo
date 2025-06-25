@@ -845,6 +845,12 @@ class _ParentViewState extends State<ParentView> {
         if (post['id'] == null || post['lat'] == null || post['lng'] == null) {
           continue;
         }
+
+        // 檢查任務是否應該在地圖上顯示
+        if (!_shouldShowTaskOnMap(post)) {
+          continue;
+        }
+
         final lat = post['lat'];
         final lng = post['lng'];
         // 檢查座標是否為有效數字
@@ -856,7 +862,7 @@ class _ParentViewState extends State<ParentView> {
           markerId: MarkerId(post['id']),
           position: position,
           icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueYellow,
+            _getTaskMarkerColor(post),
           ),
           onTap: () {
             _showTaskDetailSheetDirect({
@@ -866,15 +872,18 @@ class _ParentViewState extends State<ParentView> {
               'content': post['content'],
               'address': post['address'],
               'applicants': post['applicants'],
+              'acceptedApplicant': post['acceptedApplicant'],
               'lat': lat.toDouble(),
               'lng': lng.toDouble(),
               'userId': post['userId'],
               'createdAt': post['createdAt'],
+              'updatedAt': post['updatedAt'],
               'status': post['status'],
               'date': post['date'],
               'time': post['time'],
               'price': post['price'],
               'images': post['images'],
+              'isActive': post['isActive'],
             });
           },
         );
@@ -885,6 +894,59 @@ class _ParentViewState extends State<ParentView> {
     }
     print('成功創建 ${markers.length} 個任務標記');
     return markers;
+  }
+
+  // 檢查任務是否應該在地圖上顯示
+  bool _shouldShowTaskOnMap(Map<String, dynamic> task) {
+    // 檢查 isActive 欄位
+    if (task['isActive'] == false) return false;
+
+    // 檢查任務狀態
+    final status = task['status'] ?? 'open';
+    if (status == 'completed') return false;
+
+    // 檢查是否過期
+    if (_isTaskExpired(task)) return false;
+
+    return true;
+  }
+
+  // 檢查任務是否過期
+  bool _isTaskExpired(Map<String, dynamic> task) {
+    if (task['date'] == null) return false;
+
+    try {
+      DateTime taskDate;
+      if (task['date'] is String) {
+        taskDate = DateTime.parse(task['date']);
+      } else if (task['date'] is DateTime) {
+        taskDate = task['date'];
+      } else {
+        return false;
+      }
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final taskDay = DateTime(taskDate.year, taskDate.month, taskDate.day);
+
+      return taskDay.isBefore(today);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 獲取任務標記顏色
+  double _getTaskMarkerColor(Map<String, dynamic> task) {
+    final status = task['status'] ?? 'open';
+    final hasAcceptedApplicant = task['acceptedApplicant'] != null;
+
+    if (hasAcceptedApplicant || status == 'accepted') {
+      return BitmapDescriptor.hueBlue; // 藍色：已接受應徵者
+    } else if (status == 'open') {
+      return BitmapDescriptor.hueYellow; // 黃色：開放中
+    } else {
+      return BitmapDescriptor.hueRed; // 紅色：其他狀態
+    }
   }
 
   Set<Marker> _buildMyLocationMarker() {
@@ -1273,8 +1335,11 @@ class _ParentViewState extends State<ParentView> {
         'lng': taskData.lng,
         'userId': u.uid,
         'applicants': [],
+        'acceptedApplicant': null, // 被接受的應徵者
         'createdAt': Timestamp.now(),
-        'status': 'open',
+        'updatedAt': Timestamp.now(),
+        'status': 'open', // open, accepted, completed, expired
+        'isActive': true, // 是否在地圖上顯示
       };
 
       print('📝 任務資料準備完成，開始上傳到 Firebase');
@@ -1415,7 +1480,8 @@ class _ParentViewState extends State<ParentView> {
         'address': taskData.address,
         'lat': taskData.lat,
         'lng': taskData.lng,
-        // 不更新 userId, applicants, createdAt, status
+        'updatedAt': Timestamp.now(),
+        // 不更新 userId, applicants, createdAt, status, acceptedApplicant, isActive
       };
 
       await _firestore.doc('posts/$_editingPostId').update(data);

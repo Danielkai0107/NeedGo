@@ -58,15 +58,23 @@ class _PlayerViewState extends State<PlayerView> {
     final clusters = <String, List<Map<String, dynamic>>>{};
     final currentUser = FirebaseAuth.instance.currentUser;
     final processedPosts = <String>{};
-    for (var post in _allPosts) {
-      if (post['userId'] == currentUser?.uid) continue;
+
+    // 只處理活躍的任務
+    final activePosts = _allPosts
+        .where(
+          (post) =>
+              post['userId'] != currentUser?.uid && _shouldShowTaskOnMap(post),
+        )
+        .toList();
+
+    for (var post in activePosts) {
       if (processedPosts.contains(post['id'])) continue;
       final postLat = post['lat'] as double;
       final postLng = post['lng'] as double;
       final cluster = <Map<String, dynamic>>[post];
       processedPosts.add(post['id']);
-      for (var otherPost in _allPosts) {
-        if (otherPost['userId'] == currentUser?.uid) continue;
+
+      for (var otherPost in activePosts) {
         if (processedPosts.contains(otherPost['id'])) continue;
 
         final otherLat = otherPost['lat'] as double;
@@ -670,6 +678,9 @@ class _PlayerViewState extends State<PlayerView> {
       final posts = entry.value;
       if (posts.isEmpty) continue;
 
+      // posts 已經在聚合時過濾過了，這裡不需要再次過濾
+      if (posts.isEmpty) continue;
+
       // 使用第一個任務的位置作為代表位置
       final representativePost = posts.first;
       final position = LatLng(
@@ -697,6 +708,45 @@ class _PlayerViewState extends State<PlayerView> {
     }
 
     return markers;
+  }
+
+  // 檢查任務是否應該在地圖上顯示（Player View）
+  bool _shouldShowTaskOnMap(Map<String, dynamic> task) {
+    // 檢查 isActive 欄位
+    if (task['isActive'] == false) return false;
+
+    // 檢查任務狀態
+    final status = task['status'] ?? 'open';
+    if (status == 'completed') return false;
+
+    // 檢查是否過期
+    if (_isTaskExpired(task)) return false;
+
+    return true;
+  }
+
+  // 檢查任務是否過期（Player View）
+  bool _isTaskExpired(Map<String, dynamic> task) {
+    if (task['date'] == null) return false;
+
+    try {
+      DateTime taskDate;
+      if (task['date'] is String) {
+        taskDate = DateTime.parse(task['date']);
+      } else if (task['date'] is DateTime) {
+        taskDate = task['date'];
+      } else {
+        return false;
+      }
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final taskDay = DateTime(taskDate.year, taskDate.month, taskDate.day);
+
+      return taskDay.isBefore(today);
+    } catch (e) {
+      return false;
+    }
   }
 
   /// 顯示聚合地點的 LocationInfoSheet 與任務列表

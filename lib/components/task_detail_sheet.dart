@@ -524,13 +524,19 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '任務詳情',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
+          Row(
+            children: [
+              Text(
+                '任務詳情',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const Spacer(),
+              _buildTaskStatusChip(),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
@@ -544,6 +550,120 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ],
       ),
     );
+  }
+
+  Widget _buildTaskStatusChip() {
+    final status = _getTaskStatus();
+    final colors = _getStatusColors(status);
+    final statusText = _getStatusText(status);
+    final icon = _getStatusIcon(status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: colors[0].withOpacity(0.3),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            statusText,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getTaskStatus() {
+    final status = widget.taskData['status'] ?? 'open';
+    final acceptedApplicant = widget.taskData['acceptedApplicant'];
+
+    if (status == 'completed') return 'completed';
+    if (acceptedApplicant != null) return 'accepted';
+    if (_isTaskExpired()) return 'expired';
+    return status;
+  }
+
+  bool _isTaskExpired() {
+    if (widget.taskData['date'] == null) return false;
+
+    try {
+      DateTime taskDate;
+      final date = widget.taskData['date'];
+      if (date is String) {
+        taskDate = DateTime.parse(date);
+      } else if (date is DateTime) {
+        taskDate = date;
+      } else {
+        return false;
+      }
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final taskDay = DateTime(taskDate.year, taskDate.month, taskDate.day);
+
+      return taskDay.isBefore(today);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  List<Color> _getStatusColors(String status) {
+    switch (status) {
+      case 'completed':
+        return [Colors.green[500]!, Colors.green[700]!];
+      case 'accepted':
+        return [Colors.blue[500]!, Colors.blue[700]!];
+      case 'expired':
+        return [Colors.grey[500]!, Colors.grey[700]!];
+      default:
+        return [Colors.orange[500]!, Colors.orange[700]!];
+    }
+  }
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'completed':
+        return '已完成';
+      case 'accepted':
+        return '已接受';
+      case 'expired':
+        return '已過期';
+      default:
+        return '進行中';
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'completed':
+        return Icons.check_circle_rounded;
+      case 'accepted':
+        return Icons.handshake_rounded;
+      case 'expired':
+        return Icons.schedule_rounded;
+      default:
+        return Icons.work_rounded;
+    }
   }
 
   Widget _buildTimeSection() {
@@ -1143,6 +1263,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   }
 
   Widget _buildActionButtons() {
+    // 如果是過去的任務，不顯示操作按鈕
+    if (_isPastTask()) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1153,9 +1278,150 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     );
   }
 
+  // 檢查是否是過去的任務（已完成或過期）
+  bool _isPastTask() {
+    final status = _getTaskStatus();
+    return status == 'completed' || status == 'expired';
+  }
+
+  // 完成任務
+  Future<void> _completeTask() async {
+    final confirmed = await _showCompleteTaskDialog();
+    if (!confirmed) return;
+
+    try {
+      // 更新任務狀態為已完成
+      await FirebaseFirestore.instance
+          .doc('posts/${widget.taskData['id']}')
+          .update({
+            'status': 'completed',
+            'updatedAt': Timestamp.now(),
+            'completedAt': Timestamp.now(),
+          });
+
+      if (mounted) {
+        // 通知父組件任務已更新
+        widget.onTaskUpdated?.call();
+
+        // 顯示成功訊息
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('任務已標記為完成'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // 關閉詳情頁
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('操作失敗：$e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // 顯示任務完成確認對話框
+  Future<bool> _showCompleteTaskDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.green[600],
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('確認任務完成'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('您確定要將此任務標記為完成嗎？'),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '任務：${widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務'}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '✓ 任務將被標記為已完成',
+                          style: TextStyle(fontSize: 12, color: Colors.green),
+                        ),
+                        const Text(
+                          '✓ 任務將從地圖上移除',
+                          style: TextStyle(fontSize: 12, color: Colors.green),
+                        ),
+                        const Text(
+                          '✓ 任務將移至"過去發布"區域',
+                          style: TextStyle(fontSize: 12, color: Colors.green),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '完成後此操作無法復原。',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text('取消', style: TextStyle(color: Colors.grey[600])),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('確認完成'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
   Widget _buildMainActionButton() {
     if (widget.isParentView) {
-      // Parent 視角：關閉/編輯按鈕
+      // Parent 視角：檢查任務狀態來決定按鈕
+      final status = _getTaskStatus();
+
       return Row(
         children: [
           Expanded(
@@ -1165,12 +1431,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 foregroundColor: Colors.grey[500],
                 side: BorderSide(color: Colors.grey[400]!),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24.0, // 文字左右內部間距
-                  vertical: 16, // 文字上下內部間距
+                  horizontal: 24.0,
+                  vertical: 16,
                 ),
                 textStyle: const TextStyle(
-                  fontSize: 15, // 按鈕文字大小
-                  fontWeight: FontWeight.w600, // (選)字重
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               child: const Text('關閉'),
@@ -1179,20 +1445,32 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           const SizedBox(width: 8),
           Expanded(
             child: ElevatedButton(
-              onPressed: widget.onEditTask,
+              onPressed: () {
+                if (status == 'open' || status == 'accepted') {
+                  // 如果是進行中的任務，執行任務結束
+                  _completeTask();
+                } else {
+                  // 其他狀態執行編輯
+                  widget.onEditTask?.call();
+                }
+              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[700],
+                backgroundColor: (status == 'open' || status == 'accepted')
+                    ? Colors.green[600] // 任務結束用綠色
+                    : Colors.blue[700], // 編輯任務用藍色
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24.0, // 文字左右內部間距
-                  vertical: 16, // 文字上下內部間距
+                  horizontal: 24.0,
+                  vertical: 16,
                 ),
                 textStyle: const TextStyle(
-                  fontSize: 15, // 按鈕文字大小
-                  fontWeight: FontWeight.w600, // (選)字重
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              child: const Text('編輯任務'),
+              child: Text(
+                (status == 'open' || status == 'accepted') ? '任務結束' : '編輯任務',
+              ),
             ),
           ),
         ],
@@ -1200,6 +1478,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     } else {
       // Player 視角：申請/取消申請按鈕（可能包含返回按鈕）
       Widget actionButton;
+      final status = _getTaskStatus();
 
       if (_isMyTask) {
         actionButton = ElevatedButton(
@@ -1213,6 +1492,20 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             ),
           ),
           child: const Text('這是我的任務'),
+        );
+      } else if (status == 'completed' || status == 'expired') {
+        // 已完成或過期的任務
+        actionButton = ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey[400],
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          child: Text(status == 'completed' ? '任務已完成' : '任務已過期'),
         );
       } else if (_hasApplied) {
         actionButton = ElevatedButton(
