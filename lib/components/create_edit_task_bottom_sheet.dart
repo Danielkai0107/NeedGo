@@ -294,6 +294,31 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     });
   }
 
+  // 檢查時間是否有效（不能是過去時間或未來5分鐘內）
+  bool _isTimeValid(DateTime date, TimeOfDay time) {
+    final now = DateTime.now();
+    final selectedDateTime = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+
+    // 檢查是否是過去的時間
+    if (selectedDateTime.isBefore(now)) {
+      return false;
+    }
+
+    // 檢查是否是未來5分鐘內的時間
+    final fiveMinutesLater = now.add(const Duration(minutes: 5));
+    if (selectedDateTime.isBefore(fiveMinutesLater)) {
+      return false;
+    }
+
+    return true;
+  }
+
   // 驗證當前步驟
   bool _validateCurrentStep() {
     _clearErrors();
@@ -317,6 +342,27 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         if (_taskData.time == null) {
           _timeError = '請選擇時間';
           isValid = false;
+        }
+
+        // 檢查時間有效性
+        if (_taskData.date != null && _taskData.time != null) {
+          if (!_isTimeValid(_taskData.date!, _taskData.time!)) {
+            final now = DateTime.now();
+            final selectedDateTime = DateTime(
+              _taskData.date!.year,
+              _taskData.date!.month,
+              _taskData.date!.day,
+              _taskData.time!.hour,
+              _taskData.time!.minute,
+            );
+
+            if (selectedDateTime.isBefore(now)) {
+              _timeError = '不能選擇過去的時間';
+            } else {
+              _timeError = '請選擇至少5分鐘後的時間';
+            }
+            isValid = false;
+          }
         }
 
         if (!isValid) {
@@ -1662,7 +1708,29 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     if (selectedDate != null && mounted) {
       setState(() {
         _taskData.date = selectedDate;
-        if (_dateError != null) _dateError = null; // 清除錯誤
+        _dateError = null; // 清除日期錯誤
+
+        // 重新檢查已選擇的時間是否仍然有效
+        if (_taskData.time != null) {
+          if (!_isTimeValid(selectedDate, _taskData.time!)) {
+            final now = DateTime.now();
+            final selectedDateTime = DateTime(
+              selectedDate.year,
+              selectedDate.month,
+              selectedDate.day,
+              _taskData.time!.hour,
+              _taskData.time!.minute,
+            );
+
+            if (selectedDateTime.isBefore(now)) {
+              _timeError = '不能選擇過去的時間';
+            } else {
+              _timeError = '請選擇至少5分鐘後的時間';
+            }
+          } else {
+            _timeError = null; // 時間有效，清除錯誤
+          }
+        }
       });
 
       // 確保選擇完成後不會重新獲得焦點
@@ -1686,7 +1754,30 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     if (selectedTime != null && mounted) {
       setState(() {
         _taskData.time = selectedTime;
-        if (_timeError != null) _timeError = null; // 清除錯誤
+
+        // 即時檢查時間有效性
+        if (_taskData.date != null) {
+          if (!_isTimeValid(_taskData.date!, selectedTime)) {
+            final now = DateTime.now();
+            final selectedDateTime = DateTime(
+              _taskData.date!.year,
+              _taskData.date!.month,
+              _taskData.date!.day,
+              selectedTime.hour,
+              selectedTime.minute,
+            );
+
+            if (selectedDateTime.isBefore(now)) {
+              _timeError = '不能選擇過去的時間';
+            } else {
+              _timeError = '請選擇至少5分鐘後的時間';
+            }
+          } else {
+            _timeError = null; // 清除錯誤
+          }
+        } else {
+          _timeError = null; // 如果還沒選日期，清除時間錯誤
+        }
       });
 
       // 確保選擇完成後不會重新獲得焦點

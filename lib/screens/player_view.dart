@@ -118,6 +118,10 @@ class _PlayerViewState extends State<PlayerView> {
   Timer? _notificationTimer;
   DateTime? _lastCheckTime;
 
+  // 任務計時器相關
+  Timer? _taskTimer;
+  static const Duration _checkInterval = Duration(minutes: 1); // 每分鐘檢查一次
+
   @override
   void initState() {
     super.initState();
@@ -125,12 +129,16 @@ class _PlayerViewState extends State<PlayerView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializePlayerData();
     });
+
+    // 啟動任務計時器
+    _startTaskTimer();
   }
 
   @override
   void dispose() {
     _postsSub?.cancel();
     _notificationTimer?.cancel();
+    _taskTimer?.cancel(); // 停止任務計時器
     _mapCtrl.dispose(); // 新增：清理地圖控制器
     super.dispose();
   }
@@ -286,6 +294,117 @@ class _PlayerViewState extends State<PlayerView> {
     double lon2,
   ) {
     return Geolocator.distanceBetween(lat1, lon1, lat2, lon2) / 1000;
+  }
+
+  /// 啟動任務計時器
+  void _startTaskTimer() {
+    _taskTimer = Timer.periodic(_checkInterval, (timer) {
+      if (mounted) {
+        _checkAndUpdateExpiredTasks();
+      }
+    });
+    print('🕒 Player任務計時器已啟動，每 ${_checkInterval.inMinutes} 分鐘檢查一次');
+  }
+
+  /// 檢查並更新過期任務（Player視角）
+  Future<void> _checkAndUpdateExpiredTasks() async {
+    if (_allPosts.isEmpty) return;
+
+    print('🔍 Player檢查任務是否過期...');
+
+    List<String> expiredTaskIds = [];
+
+    for (var task in _allPosts) {
+      if (_isTaskExpiredNow(task) && task['status'] != 'expired') {
+        expiredTaskIds.add(task['id']);
+      }
+    }
+
+    // 批量更新過期任務
+    for (String taskId in expiredTaskIds) {
+      await _markTaskAsExpired(taskId);
+    }
+
+    if (expiredTaskIds.isNotEmpty && mounted) {
+      // 重新載入任務以反映狀態變化
+      _updateMarkers();
+
+      // 可選：顯示過期通知
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('有 ${expiredTaskIds.length} 個任務已過期'),
+          backgroundColor: Colors.orange[600],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// 檢查任務是否已過期（基於精確時間）
+  bool _isTaskExpiredNow(Map<String, dynamic> task) {
+    if (task['date'] == null) return false;
+
+    try {
+      DateTime taskDateTime;
+      final date = task['date'];
+      final time = task['time'];
+
+      // 解析日期
+      if (date is String) {
+        taskDateTime = DateTime.parse(date);
+      } else if (date is DateTime) {
+        taskDateTime = date;
+      } else {
+        return false;
+      }
+
+      // 如果有時間資訊，使用精確時間
+      if (time != null && time is Map) {
+        final hour = time['hour'] ?? 0;
+        final minute = time['minute'] ?? 0;
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          hour,
+          minute,
+        );
+      } else {
+        // 如果沒有時間資訊，設定為當天 23:59
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          23,
+          59,
+        );
+      }
+
+      final now = DateTime.now();
+      return now.isAfter(taskDateTime);
+    } catch (e) {
+      print('檢查任務過期時間失敗: $e');
+      return false;
+    }
+  }
+
+  /// 將任務標記為過期（Player視角）
+  Future<void> _markTaskAsExpired(String taskId) async {
+    try {
+      print('⏰ Player檢測到任務過期 (ID: $taskId)');
+
+      // 更新資料庫中的任務狀態
+      await _firestore.doc('posts/$taskId').update({
+        'status': 'expired',
+        'isActive': false, // 從地圖上隱藏
+        'updatedAt': Timestamp.now(),
+        'expiredAt': Timestamp.now(),
+      });
+
+      print('✅ 任務狀態已更新為過期');
+    } catch (e) {
+      print('❌ 更新任務過期狀態失敗: $e');
+    }
   }
 
   Future<void> _loadSystemLocations() async {

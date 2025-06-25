@@ -1,6 +1,7 @@
 // lib/routes.dart
 
 import 'package:flutter/material.dart';
+import 'screens/auth_gate.dart';
 import 'screens/auth_view.dart';
 import 'screens/registration_view.dart';
 import 'screens/player_view.dart';
@@ -10,6 +11,7 @@ class Routes {
   static Route<dynamic> generate(RouteSettings settings) {
     switch (settings.name) {
       case '/':
+        return MaterialPageRoute(builder: (_) => const AuthGate());
       case '/auth':
         return MaterialPageRoute(builder: (_) => const AuthView());
       case '/registration':

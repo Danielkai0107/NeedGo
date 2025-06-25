@@ -124,6 +124,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   @override
   void initState() {
     super.initState();
+
+    // 第一個動作：檢查任務是否過期
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkTaskExpiredOnOpen();
+    });
+
     _calculateTravelInfo();
     if (widget.isParentView) {
       _loadApplicants();
@@ -295,6 +301,229 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         setState(() => _isLoadingPublisher = false);
       }
     }
+  }
+
+  /// 檢查任務是否過期（打開詳情時檢查）
+  Future<void> _checkTaskExpiredOnOpen() async {
+    if (!mounted) return;
+
+    print(
+      '🔍 檢查任務詳情時是否過期: ${widget.taskData['title'] ?? widget.taskData['name']}',
+    );
+
+    try {
+      // 檢查任務是否已過期
+      if (_isTaskExpiredNow(widget.taskData)) {
+        final currentStatus = widget.taskData['status'] ?? 'open';
+
+        // 如果任務已過期但狀態還不是 expired，需要更新
+        if (currentStatus != 'expired') {
+          print('⏰ 發現過期任務，正在更新狀態...');
+
+          // 更新資料庫狀態
+          await _markTaskAsExpired(widget.taskData['id']);
+
+          // 更新本地數據並刷新UI
+          if (mounted) {
+            setState(() {
+              widget.taskData['status'] = 'expired';
+              widget.taskData['isActive'] = false;
+              widget.taskData['expiredAt'] = Timestamp.now();
+            });
+          }
+
+          // 通知父組件更新
+          widget.onTaskUpdated?.call();
+
+          // 顯示過期提示框（只在狀態剛變更時顯示一次）
+          if (mounted) {
+            _showTaskExpiredDialog();
+          }
+        } else {
+          // 任務已經是過期狀態，不需要再次顯示提示
+          print('ℹ️ 任務已經是過期狀態，跳過提示顯示');
+        }
+      }
+    } catch (e) {
+      print('❌ 檢查任務過期狀態失敗: $e');
+    }
+  }
+
+  /// 檢查任務是否已過期（基於精確時間）
+  bool _isTaskExpiredNow(Map<String, dynamic> task) {
+    if (task['date'] == null) return false;
+
+    try {
+      DateTime taskDateTime;
+      final date = task['date'];
+      final time = task['time'];
+
+      // 解析日期
+      if (date is String) {
+        taskDateTime = DateTime.parse(date);
+      } else if (date is DateTime) {
+        taskDateTime = date;
+      } else {
+        return false;
+      }
+
+      // 如果有時間資訊，使用精確時間
+      if (time != null && time is Map) {
+        final hour = time['hour'] ?? 0;
+        final minute = time['minute'] ?? 0;
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          hour,
+          minute,
+        );
+      } else {
+        // 如果沒有時間資訊，設定為當天 23:59
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          23,
+          59,
+        );
+      }
+
+      final now = DateTime.now();
+      return now.isAfter(taskDateTime);
+    } catch (e) {
+      print('檢查任務過期時間失敗: $e');
+      return false;
+    }
+  }
+
+  /// 將任務標記為過期
+  Future<void> _markTaskAsExpired(String taskId) async {
+    try {
+      print('⏰ 正在標記任務為過期: $taskId');
+
+      await _firestore.doc('posts/$taskId').update({
+        'status': 'expired',
+        'isActive': false, // 從地圖上隱藏
+        'updatedAt': Timestamp.now(),
+        'expiredAt': Timestamp.now(),
+      });
+
+      print('✅ 任務狀態已更新為過期');
+    } catch (e) {
+      print('❌ 更新任務過期狀態失敗: $e');
+    }
+  }
+
+  /// 顯示任務過期提示框
+  void _showTaskExpiredDialog() {
+    final taskTitle =
+        widget.taskData['title'] ?? widget.taskData['name'] ?? '任務';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // 不能點擊外部關閉
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.schedule_rounded, color: Colors.orange[600], size: 28),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  '任務已結束',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '「$taskTitle」已超過執行時間，系統已自動結束此任務。',
+                style: const TextStyle(fontSize: 16, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.orange[700],
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '任務結束後：',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.isParentView
+                          ? '• 任務已從地圖上移除\n• 應徵者無法再申請\n• 可在「我的發佈清單」中查看'
+                          : '• 任務已從地圖上移除\n• 無法申請或取消申請\n• 可在「我的應徵清單」中查看',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.orange[700],
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // 關閉對話框
+                Navigator.of(context).pop(); // 關閉任務詳情頁
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                '我知道了',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+          actionsPadding: const EdgeInsets.only(
+            left: 24,
+            right: 24,
+            bottom: 16,
+          ),
+        );
+      },
+    );
   }
 
   /// 申請任務（僅Player視角）
@@ -599,7 +828,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
     if (status == 'completed') return 'completed';
     if (acceptedApplicant != null) return 'accepted';
-    if (_isTaskExpired()) return 'expired';
+    // 使用精確時間檢查來判斷是否過期
+    if (_isTaskExpiredNow(widget.taskData)) return 'expired';
     return status;
   }
 
@@ -1742,6 +1972,52 @@ class ApplicantDetailSheet extends StatefulWidget {
 }
 
 class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
+  final _firestore = FirebaseFirestore.instance;
+
+  // 動態統計資料
+  int _applicationCount = 0;
+  double _rating = 4.8;
+  bool _isLoadingStats = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApplicantStats();
+  }
+
+  /// 載入申請者統計資料
+  Future<void> _loadApplicantStats() async {
+    if (!mounted) return;
+
+    setState(() => _isLoadingStats = true);
+
+    try {
+      final applicantId = widget.applicantData['uid'];
+      if (applicantId != null) {
+        // 查詢申請次數
+        final applicationsQuery = await _firestore
+            .collection('posts')
+            .where('applicants', arrayContains: applicantId)
+            .get();
+
+        _applicationCount = applicationsQuery.docs.length;
+
+        // 這裡可以加入評分計算邏輯
+        // 暫時使用用戶資料中的評分，如果沒有則用預設值
+        _rating = (widget.applicantData['rating']?.toDouble()) ?? 4.8;
+      }
+
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
+      }
+    } catch (e) {
+      print('載入申請者統計資料失敗: $e');
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
+      }
+    }
+  }
+
   /// 計算用戶加入App的時間
   String _calculateJoinTime(Map<String, dynamic> userData) {
     try {
@@ -1926,14 +2202,20 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
                         style: TextStyle(fontSize: 13, color: Colors.black),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '${widget.applicantData['applicationCount'] ?? 0}',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
+                      _isLoadingStats
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              '$_applicationCount',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
                     ],
                   ),
                   const Divider(
@@ -1949,24 +2231,30 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
                         style: TextStyle(fontSize: 13, color: Colors.black),
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.star_rounded,
-                            color: Colors.black,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${widget.applicantData['rating']?.toStringAsFixed(1) ?? '4.8'}',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                      _isLoadingStats
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Row(
+                              children: [
+                                Icon(
+                                  Icons.star_rounded,
+                                  color: Colors.black,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _rating.toStringAsFixed(1),
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ],
@@ -2345,7 +2633,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
 }
 
 /// 發布者詳情彈窗
-class PublisherDetailSheet extends StatelessWidget {
+class PublisherDetailSheet extends StatefulWidget {
   final Map<String, dynamic> publisherData;
   final int taskCount;
   final Map<String, dynamic> currentTaskData;
@@ -2356,6 +2644,58 @@ class PublisherDetailSheet extends StatelessWidget {
     required this.taskCount,
     required this.currentTaskData,
   }) : super(key: key);
+
+  @override
+  State<PublisherDetailSheet> createState() => _PublisherDetailSheetState();
+}
+
+class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
+  final _firestore = FirebaseFirestore.instance;
+
+  // 動態統計資料
+  int _taskCount = 0;
+  double _rating = 4.8;
+  bool _isLoadingStats = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _taskCount = widget.taskCount; // 先使用傳入的值
+    _loadPublisherStats();
+  }
+
+  /// 載入發布者統計資料
+  Future<void> _loadPublisherStats() async {
+    if (!mounted) return;
+
+    setState(() => _isLoadingStats = true);
+
+    try {
+      final publisherId = widget.publisherData['uid'];
+      if (publisherId != null) {
+        // 查詢最新的任務數量
+        final tasksQuery = await _firestore
+            .collection('posts')
+            .where('userId', isEqualTo: publisherId)
+            .get();
+
+        _taskCount = tasksQuery.docs.length;
+
+        // 這裡可以加入評分計算邏輯
+        // 暫時使用用戶資料中的評分，如果沒有則用預設值
+        _rating = (widget.publisherData['rating']?.toDouble()) ?? 4.8;
+      }
+
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
+      }
+    } catch (e) {
+      print('載入發布者統計資料失敗: $e');
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2425,8 +2765,8 @@ class PublisherDetailSheet extends StatelessWidget {
   }
 
   Widget _buildPublisherHeader() {
-    final publisherName = publisherData['name'] ?? '未設定姓名';
-    final avatarUrl = publisherData['avatarUrl']?.toString() ?? '';
+    final publisherName = widget.publisherData['name'] ?? '未設定姓名';
+    final avatarUrl = widget.publisherData['avatarUrl']?.toString() ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -2456,7 +2796,7 @@ class PublisherDetailSheet extends StatelessWidget {
                   VerifiedAvatar(
                     avatarUrl: avatarUrl,
                     radius: 50,
-                    isVerified: publisherData['isVerified'] == true,
+                    isVerified: widget.publisherData['isVerified'] == true,
                     badgeSize: 28,
                   ),
                   const SizedBox(height: 12),
@@ -2470,7 +2810,7 @@ class PublisherDetailSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '已發布 $taskCount 個任務',
+                    '已發布 $_taskCount 個任務',
                     style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                     textAlign: TextAlign.center,
                   ),
@@ -2493,14 +2833,20 @@ class PublisherDetailSheet extends StatelessWidget {
                         style: TextStyle(fontSize: 13, color: Colors.black),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '$taskCount',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
+                      _isLoadingStats
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              '$_taskCount',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
                     ],
                   ),
                   const Divider(
@@ -2516,24 +2862,30 @@ class PublisherDetailSheet extends StatelessWidget {
                         style: TextStyle(fontSize: 13, color: Colors.black),
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.star_rounded,
-                            color: Colors.black,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '4.8',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                      _isLoadingStats
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Row(
+                              children: [
+                                Icon(
+                                  Icons.star_rounded,
+                                  color: Colors.black,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _rating.toStringAsFixed(1),
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ],
@@ -2548,38 +2900,39 @@ class PublisherDetailSheet extends StatelessWidget {
   Widget _buildContactInfo(BuildContext context) {
     final contacts = <Widget>[];
 
-    if (publisherData['phoneNumber']?.toString().isNotEmpty == true) {
+    if (widget.publisherData['phoneNumber']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
           Icons.phone_rounded,
           '電話',
-          publisherData['phoneNumber'],
+          widget.publisherData['phoneNumber'],
           Colors.black,
-          onTap: () => _makePhoneCall(publisherData['phoneNumber'], context),
+          onTap: () =>
+              _makePhoneCall(widget.publisherData['phoneNumber'], context),
         ),
       );
     }
 
-    if (publisherData['email']?.toString().isNotEmpty == true) {
+    if (widget.publisherData['email']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
           Icons.email_rounded,
           '電子郵件',
-          publisherData['email'],
+          widget.publisherData['email'],
           Colors.black,
-          onTap: () => _sendEmail(publisherData['email'], context),
+          onTap: () => _sendEmail(widget.publisherData['email'], context),
         ),
       );
     }
 
-    if (publisherData['lineId']?.toString().isNotEmpty == true) {
+    if (widget.publisherData['lineId']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
           Icons.chat_rounded,
           'Line ID',
-          publisherData['lineId'],
+          widget.publisherData['lineId'],
           Colors.black,
-          onTap: () => _openLine(publisherData['lineId'], context),
+          onTap: () => _openLine(widget.publisherData['lineId'], context),
         ),
       );
     }
@@ -2730,8 +3083,8 @@ class PublisherDetailSheet extends StatelessWidget {
   }
 
   Widget _buildResumeSection() {
-    final resume = publisherData['applicantResume']?.toString() ?? '';
-    final bio = publisherData['bio']?.toString() ?? '';
+    final resume = widget.publisherData['applicantResume']?.toString() ?? '';
+    final bio = widget.publisherData['bio']?.toString() ?? '';
     final displayText = bio.isNotEmpty ? bio : resume;
 
     return Column(
@@ -2821,14 +3174,14 @@ class PublisherDetailSheet extends StatelessWidget {
   void _contactPublisher(BuildContext context) {
     final contacts = <String>[];
 
-    if (publisherData['phoneNumber']?.toString().isNotEmpty == true) {
-      contacts.add('電話: ${publisherData['phoneNumber']}');
+    if (widget.publisherData['phoneNumber']?.toString().isNotEmpty == true) {
+      contacts.add('電話: ${widget.publisherData['phoneNumber']}');
     }
-    if (publisherData['email']?.toString().isNotEmpty == true) {
-      contacts.add('Email: ${publisherData['email']}');
+    if (widget.publisherData['email']?.toString().isNotEmpty == true) {
+      contacts.add('Email: ${widget.publisherData['email']}');
     }
-    if (publisherData['lineId']?.toString().isNotEmpty == true) {
-      contacts.add('Line: ${publisherData['lineId']}');
+    if (widget.publisherData['lineId']?.toString().isNotEmpty == true) {
+      contacts.add('Line: ${widget.publisherData['lineId']}');
     }
 
     if (contacts.isEmpty) {
