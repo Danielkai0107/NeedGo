@@ -163,14 +163,6 @@ class _PlayerViewState extends State<PlayerView> {
             if (mounted) await _loadMyProfile();
             if (mounted) _initializeNotificationSystem();
             if (mounted) _attachPostsListener();
-
-            // 更長的延遲來顯示隨機彈窗
-            Future.delayed(const Duration(seconds: 5), () {
-              if (mounted && _myLocation != null) {
-                // 新增 mounted 檢查
-                _showRandomNearbyPost();
-              }
-            });
           } else {
             _cleanup();
           }
@@ -236,53 +228,6 @@ class _PlayerViewState extends State<PlayerView> {
         _newPosts.clear();
         _unreadCount = 0;
       });
-    }
-  }
-
-  /// 顯示隨機的附近案件彈窗
-  Future<void> _showRandomNearbyPost() async {
-    if (!mounted) return; // 新增檢查
-
-    if (_myLocation == null) {
-      // 如果還沒取得位置，等一下再試
-      await Future.delayed(const Duration(seconds: 2));
-      if (!mounted || _myLocation == null) return; // 新增 mounted 檢查
-    }
-
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null || !mounted) return; // 新增 mounted 檢查
-
-    // 找出5KM內的所有案件，排除自己發布的
-    final nearbyPosts = _allPosts.where((post) {
-      // 排除自己發布的案件
-      if (post['userId'] == currentUser.uid) return false;
-
-      final distance = _calculateDistance(
-        _myLocation!.latitude,
-        _myLocation!.longitude,
-        post['lat'],
-        post['lng'],
-      );
-      return distance <= 5.0; // 5公里內
-    }).toList();
-
-    if (nearbyPosts.isNotEmpty && mounted) {
-      // 新增 mounted 檢查
-      // 隨機選一個
-      final randomPost =
-          nearbyPosts[DateTime.now().millisecondsSinceEpoch %
-              nearbyPosts.length];
-
-      // 延遲1秒顯示彈窗，避免與其他初始化衝突
-      await Future.delayed(const Duration(seconds: 1));
-
-      if (mounted) {
-        // 新增 mounted 檢查
-        setState(() {
-          _newPostToShow = randomPost;
-          _currentBottomSheet = BottomSheetType.randomNearbyNotification;
-        });
-      }
     }
   }
 
@@ -446,11 +391,6 @@ class _PlayerViewState extends State<PlayerView> {
       final doc = await _firestore.doc('user/$uid').get(); // ✅ 改用 user 集合
       if (doc.exists && mounted) {
         setState(() => _profile = doc.data()!);
-
-        // 只有當用戶開啟此功能時才顯示隨機彈窗
-        if (_profile['showRandomPosts'] != false) {
-          _showRandomNearbyPost();
-        }
       }
     } catch (e) {
       print('載入個人資料失敗: $e');

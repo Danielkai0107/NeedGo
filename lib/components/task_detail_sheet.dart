@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -104,7 +105,8 @@ class TaskDetailSheet extends StatefulWidget {
   State<TaskDetailSheet> createState() => _TaskDetailSheetState();
 }
 
-class _TaskDetailSheetState extends State<TaskDetailSheet> {
+class _TaskDetailSheetState extends State<TaskDetailSheet>
+    with TickerProviderStateMixin {
   final _firestore = FirebaseFirestore.instance;
   String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
 
@@ -121,9 +123,38 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   bool _isLoadingPublisher = false;
   int _publisherTaskCount = 0;
 
+  // 倒數計時器相關
+  Timer? _countdownTimer;
+  String _countdownText = '';
+  late AnimationController _countdownAnimationController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _fadeAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    // 初始化動畫控制器
+    _countdownAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    // 創建縮放動畫
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _countdownAnimationController,
+        curve: Curves.elasticOut,
+      ),
+    );
+
+    // 創建淡入動畫
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _countdownAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
 
     // 第一個動作：檢查任務是否過期
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -135,6 +166,16 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       _loadApplicants();
     }
     _loadPublisherInfo();
+
+    // 啟動倒數計時器
+    _startCountdownTimer();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _countdownAnimationController.dispose();
+    super.dispose();
   }
 
   /// 計算交通資訊
@@ -300,6 +341,128 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       if (mounted) {
         setState(() => _isLoadingPublisher = false);
       }
+    }
+  }
+
+  /// 啟動倒數計時器
+  void _startCountdownTimer() {
+    // 先更新一次倒數文字
+    _updateCountdownText();
+
+    // 啟動初始動畫
+    _countdownAnimationController.forward();
+
+    // 每秒更新一次
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        _updateCountdownText();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  /// 更新倒數計時文字
+  void _updateCountdownText() {
+    final status = _getTaskStatus();
+
+    // 只有進行中的任務才顯示倒數計時
+    if (status != 'open') {
+      if (_countdownTimer != null && _countdownTimer!.isActive) {
+        _countdownTimer!.cancel();
+      }
+      return;
+    }
+
+    final remainingTime = _calculateRemainingTime();
+    final newText = remainingTime != null
+        ? _formatRemainingTime(remainingTime)
+        : '進行中';
+
+    // 只有當文字改變時才觸發動畫和更新
+    if (_countdownText != newText) {
+      setState(() {
+        _countdownText = newText;
+      });
+
+      // 重啟動畫
+      _countdownAnimationController.reset();
+      _countdownAnimationController.forward();
+    }
+  }
+
+  /// 計算任務剩餘時間
+  Duration? _calculateRemainingTime() {
+    if (widget.taskData['date'] == null) return null;
+
+    try {
+      DateTime taskDateTime;
+      final date = widget.taskData['date'];
+      final time = widget.taskData['time'];
+
+      // 解析日期
+      if (date is String) {
+        taskDateTime = DateTime.parse(date);
+      } else if (date is DateTime) {
+        taskDateTime = date;
+      } else {
+        return null;
+      }
+
+      // 如果有時間資訊，使用精確時間
+      if (time != null && time is Map) {
+        final hour = time['hour'] ?? 0;
+        final minute = time['minute'] ?? 0;
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          hour,
+          minute,
+        );
+      } else {
+        // 如果沒有時間資訊，設定為當天 23:59
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          23,
+          59,
+        );
+      }
+
+      final now = DateTime.now();
+      final remaining = taskDateTime.difference(now);
+
+      // 如果已經過期，返回 null
+      if (remaining.isNegative) {
+        return null;
+      }
+
+      return remaining;
+    } catch (e) {
+      print('計算剩餘時間失敗: $e');
+      return null;
+    }
+  }
+
+  /// 格式化剩餘時間顯示
+  String _formatRemainingTime(Duration remaining) {
+    if (remaining.inDays > 0) {
+      final days = remaining.inDays;
+      final hours = remaining.inHours % 24;
+      return '${days}天${hours}小時';
+    } else if (remaining.inHours > 0) {
+      final hours = remaining.inHours;
+      final minutes = remaining.inMinutes % 60;
+      return '${hours}小時${minutes}分';
+    } else if (remaining.inMinutes > 0) {
+      final minutes = remaining.inMinutes;
+      final seconds = remaining.inSeconds % 60;
+      return '${minutes}分${seconds.toString().padLeft(2, '0')}秒';
+    } else {
+      final seconds = remaining.inSeconds;
+      return '${seconds.toString().padLeft(2, '0')}秒';
     }
   }
 
@@ -705,13 +868,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                       // 任務報酬
                       _buildPriceSection(),
 
-                      // 發布者資訊
-                      _buildPublisherSection(),
-
-                      // 任務圖片
-                      if (widget.taskData['images'] != null &&
-                          (widget.taskData['images'] as List).isNotEmpty)
-                        _buildImagesSection(),
+                      // 任務內容
+                      _buildContentSection(),
 
                       // 地點資訊
                       _buildLocationSection(),
@@ -719,8 +877,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                       // 交通資訊
                       _buildTravelSection(),
 
-                      // 任務內容
-                      _buildContentSection(),
+                      // 任務圖片
+                      if (widget.taskData['images'] != null &&
+                          (widget.taskData['images'] as List).isNotEmpty)
+                        _buildImagesSection(),
 
                       // 申請者列表（僅Parent視角）
                       if (widget.isParentView) _buildApplicantsSection(),
@@ -767,7 +927,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               _buildTaskStatusChip(),
             ],
           ),
-          const SizedBox(height: 12),
+          _buildPublisherSection(),
           Text(
             title,
             style: const TextStyle(
@@ -787,6 +947,75 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     final statusText = _getStatusText(status);
     final icon = _getStatusIcon(status);
 
+    // 如果是進行中狀態，應用動畫效果
+    if (status == 'open' && _countdownText.isNotEmpty) {
+      return AnimatedBuilder(
+        animation: _countdownAnimationController,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: Opacity(
+              opacity: _fadeAnimation.value,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: colors,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors[0].withOpacity(0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 16, color: Colors.white),
+                    const SizedBox(width: 6),
+                    // 數字變化時有特殊效果
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Text(
+                        statusText,
+                        key: ValueKey(statusText), // 重要：為每個不同的文字提供唯一key
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      transitionBuilder: (child, animation) {
+                        return SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.5),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // 其他狀態使用原來的樣式
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -879,7 +1108,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       case 'expired':
         return '已過期';
       default:
-        return '進行中';
+        // 進行中的任務顯示倒數計時，如果沒有則顯示進行中
+        return _countdownText.isNotEmpty ? _countdownText : '進行中';
     }
   }
 
@@ -989,19 +1219,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       child: GestureDetector(
         onTap: () => _showPublisherDetail(),
         child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey[100]!),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 20,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+          // padding: const EdgeInsets.all(16),
+          // decoration: BoxDecoration(
+          //   color: Colors.white,
+          //   borderRadius: BorderRadius.circular(16),
+          //   border: Border.all(color: Colors.grey[100]!),
+          // ),
           child: Row(
             children: [
               VerifiedAvatar(
@@ -1018,15 +1241,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   children: [
                     Row(
                       children: [
-                        const Text(
-                          '發布者 / 達人 ：',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
                         Text(
-                          publisherName,
+                          '$publisherName',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
