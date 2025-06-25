@@ -8,6 +8,75 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// 可重複使用的頭像組件，支援認證圖標
+class VerifiedAvatar extends StatelessWidget {
+  final String? avatarUrl;
+  final double radius;
+  final bool isVerified;
+  final IconData? defaultIcon;
+  final double? badgeSize; // 認證徽章大小參數（可選）
+
+  const VerifiedAvatar({
+    Key? key,
+    this.avatarUrl,
+    required this.radius,
+    this.isVerified = false,
+    this.defaultIcon,
+    this.badgeSize, // 可選參數，控制認證徽章大小
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // 計算認證圖標大小：使用提供的參數，否則默認為頭像半徑的0.28倍
+    final verifiedBadgeSize = badgeSize ?? (radius * 0.28).clamp(16.0, 32.0);
+    // 認證圖標內的icon大小（badge大小的0.6倍）
+    final badgeIconSize = (verifiedBadgeSize * 0.6).clamp(10.0, 20.0);
+    // 認證圖標位置偏移（從右下角向內偏移）
+    final badgeOffset = radius * 0.05;
+    // 頭像內圖標大小（默認為半徑的1.2倍）
+    final avatarIconSize = radius * 1.2;
+
+    return Stack(
+      children: [
+        CircleAvatar(
+          radius: radius,
+          backgroundImage: (avatarUrl?.isNotEmpty == true)
+              ? NetworkImage(avatarUrl!)
+              : null,
+          child: (avatarUrl?.isEmpty != false)
+              ? Icon(defaultIcon ?? Icons.person_rounded, size: avatarIconSize)
+              : null,
+        ),
+        if (isVerified)
+          Positioned(
+            bottom: badgeOffset,
+            right: badgeOffset,
+            child: Container(
+              width: verifiedBadgeSize,
+              height: verifiedBadgeSize,
+              decoration: BoxDecoration(
+                color: Colors.blue[700],
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.verified_user_rounded,
+                color: Colors.white,
+                size: badgeIconSize,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// 任務詳情彈窗 - 在 ParentView 與 PlayerView 中共用
 class TaskDetailSheet extends StatefulWidget {
   final Map<String, dynamic> taskData;
@@ -496,10 +565,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       margin: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
-          Icon(Icons.schedule, color: Colors.black, size: 24),
+          Icon(Icons.calendar_month_rounded, color: Colors.black, size: 24),
           const SizedBox(width: 8),
           Text(
-            '執行時間：$timeText',
+            '時間 ：$timeText',
             style: TextStyle(fontSize: 15, color: Colors.black),
           ),
         ],
@@ -512,15 +581,15 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
     String priceText;
     if (price == null || price == 0) {
-      priceText = '任務報酬：免費';
+      priceText = '任務報酬 ： 免費';
     } else {
-      priceText = '任務報酬：NT\$ $price';
+      priceText = '任務報酬 ： NT\$ $price';
     }
 
     return Container(
       child: Row(
         children: [
-          Icon(Icons.attach_money_rounded, color: Colors.black, size: 24),
+          Icon(Icons.paid_rounded, color: Colors.black, size: 24),
           const SizedBox(width: 8),
           Text(priceText, style: TextStyle(fontSize: 15, color: Colors.black)),
         ],
@@ -574,14 +643,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           ),
           child: Row(
             children: [
-              CircleAvatar(
+              VerifiedAvatar(
+                avatarUrl: avatarUrl,
                 radius: 30,
-                backgroundImage: avatarUrl.isNotEmpty
-                    ? NetworkImage(avatarUrl)
-                    : null,
-                child: avatarUrl.isEmpty
-                    ? const Icon(Icons.person, size: 36)
-                    : null,
+                isVerified: _publisherData!['isVerified'] == true,
+                defaultIcon: Icons.person_2_rounded,
+                badgeSize: 20,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -665,7 +732,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           return Container(
                             color: Colors.grey[300],
                             child: const Icon(
-                              Icons.image_not_supported,
+                              Icons.image_not_supported_rounded,
                               color: Colors.grey,
                             ),
                           );
@@ -706,7 +773,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.location_on, color: Colors.black, size: 24),
+              Icon(Icons.location_on_rounded, color: Colors.black, size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
@@ -731,7 +798,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           //     icon: const Icon(Icons.navigation, size: 16),
           //     label: const Text('開始導航'),
           //     style: ElevatedButton.styleFrom(
-          //       backgroundColor: Colors.blue[600],
+          //       backgroundColor: Colors.blue[700],
           //       foregroundColor: Colors.white,
           //       padding: const EdgeInsets.symmetric(
           //         horizontal: 16,
@@ -819,7 +886,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
             switch (entry.key) {
               case 'driving':
-                icon = Icons.directions_car_outlined;
+                icon = Icons.directions_car_rounded;
                 color = Colors.black;
                 label = '開車';
                 break;
@@ -829,12 +896,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 label = '步行';
                 break;
               case 'transit':
-                icon = Icons.directions_transit_outlined;
+                icon = Icons.directions_transit_rounded;
                 color = Colors.black;
                 label = '大眾運輸';
                 break;
               default:
-                icon = Icons.directions_outlined;
+                icon = Icons.directions_bike_rounded;
                 color = Colors.black;
                 label = entry.key;
             }
@@ -916,7 +983,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                 children: [
                   const SizedBox(height: 20),
                   Icon(
-                    Icons.person_off_outlined,
+                    Icons.person_off_rounded,
                     color: Colors.grey[400],
                     size: 32,
                   ),
@@ -977,14 +1044,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // 頭像
-              CircleAvatar(
+              VerifiedAvatar(
+                avatarUrl: avatarUrl,
                 radius: 40,
-                backgroundImage: avatarUrl.isNotEmpty
-                    ? NetworkImage(avatarUrl)
-                    : null,
-                child: avatarUrl.isEmpty
-                    ? const Icon(Icons.person, size: 40)
-                    : null,
+                isVerified: applicant['isVerified'] == true,
+                badgeSize: 24,
               ),
               const SizedBox(height: 12),
 
@@ -1278,7 +1342,11 @@ class _ImagePreviewWidgetState extends State<ImagePreviewWidget> {
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) {
                       return const Center(
-                        child: Icon(Icons.error, color: Colors.white, size: 64),
+                        child: Icon(
+                          Icons.error_rounded,
+                          color: Colors.white,
+                          size: 64,
+                        ),
                       );
                     },
                   ),
@@ -1299,7 +1367,11 @@ class _ImagePreviewWidgetState extends State<ImagePreviewWidget> {
                   color: Colors.black.withOpacity(0.5),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close, color: Colors.white, size: 24),
+                child: const Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
             ),
           ),
@@ -1493,14 +1565,11 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  CircleAvatar(
+                  VerifiedAvatar(
+                    avatarUrl: avatarUrl,
                     radius: 50,
-                    backgroundImage: avatarUrl.isNotEmpty
-                        ? NetworkImage(avatarUrl)
-                        : null,
-                    child: avatarUrl.isEmpty
-                        ? const Icon(Icons.person, size: 50)
-                        : null,
+                    isVerified: widget.applicantData['isVerified'] == true,
+                    badgeSize: 28,
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -1561,7 +1630,11 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.star, color: Colors.black, size: 20),
+                          Icon(
+                            Icons.star_rounded,
+                            color: Colors.black,
+                            size: 20,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '${widget.applicantData['rating']?.toStringAsFixed(1) ?? '4.8'}',
@@ -1590,7 +1663,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     if (widget.applicantData['phoneNumber']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
-          Icons.phone,
+          Icons.call_rounded,
           '電話',
           widget.applicantData['phoneNumber'],
           Colors.black,
@@ -1602,7 +1675,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     if (widget.applicantData['email']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
-          Icons.email,
+          Icons.email_rounded,
           '電子郵件',
           widget.applicantData['email'],
           Colors.black,
@@ -1614,7 +1687,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     if (widget.applicantData['lineId']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
-          Icons.chat,
+          Icons.chat_rounded,
           'Line ID',
           widget.applicantData['lineId'],
           Colors.black,
@@ -1629,7 +1702,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Icon(Icons.info_outline, color: Colors.grey[400], size: 32),
+              Icon(Icons.info_rounded, color: Colors.grey[400], size: 32),
               const SizedBox(height: 12),
               Text(
                 '申請者尚未提供聯絡資訊',
@@ -2059,14 +2132,11 @@ class PublisherDetailSheet extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  CircleAvatar(
+                  VerifiedAvatar(
+                    avatarUrl: avatarUrl,
                     radius: 50,
-                    backgroundImage: avatarUrl.isNotEmpty
-                        ? NetworkImage(avatarUrl)
-                        : null,
-                    child: avatarUrl.isEmpty
-                        ? const Icon(Icons.person, size: 50)
-                        : null,
+                    isVerified: publisherData['isVerified'] == true,
+                    badgeSize: 28,
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -2127,7 +2197,11 @@ class PublisherDetailSheet extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.star, color: Colors.black, size: 20),
+                          Icon(
+                            Icons.star_rounded,
+                            color: Colors.black,
+                            size: 20,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '4.8',
@@ -2156,7 +2230,7 @@ class PublisherDetailSheet extends StatelessWidget {
     if (publisherData['phoneNumber']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
-          Icons.phone,
+          Icons.phone_rounded,
           '電話',
           publisherData['phoneNumber'],
           Colors.black,
@@ -2168,7 +2242,7 @@ class PublisherDetailSheet extends StatelessWidget {
     if (publisherData['email']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
-          Icons.email,
+          Icons.email_rounded,
           '電子郵件',
           publisherData['email'],
           Colors.black,
@@ -2180,7 +2254,7 @@ class PublisherDetailSheet extends StatelessWidget {
     if (publisherData['lineId']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
-          Icons.chat,
+          Icons.chat_rounded,
           'Line ID',
           publisherData['lineId'],
           Colors.black,
@@ -2195,7 +2269,7 @@ class PublisherDetailSheet extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Icon(Icons.info_outline, color: Colors.grey[400], size: 32),
+              Icon(Icons.info_rounded, color: Colors.grey[400], size: 32),
               const SizedBox(height: 12),
               Text(
                 '發布者尚未提供聯絡資訊',
