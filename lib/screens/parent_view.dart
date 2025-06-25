@@ -1685,7 +1685,7 @@ class _ParentViewState extends State<ParentView> {
 
           // 類別篩選器
           Positioned(
-            bottom: 140,
+            bottom: 160,
             left: 0,
             width: 320,
             child: _buildCategoryFilter(),

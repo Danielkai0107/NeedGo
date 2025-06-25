@@ -1313,21 +1313,130 @@ class _PlayerViewState extends State<PlayerView> {
             zoomGesturesEnabled: true,
           ),
 
+          // 類別篩選器
           Positioned(
-            bottom: 100,
-            left: 0, // 從左邊 20px 開始
-            width: 320, // 固定寬度 300px
+            bottom: 160,
+            left: 0,
+            width: 320,
             child: _buildCategoryFilter(),
           ),
 
-          // 篩選選單按鈕
+          // 1. 左上角 (Top-Left) – 設定入口
           Positioned(
-            bottom: 40, // 動態調整位置
-            left: 24,
+            top: MediaQuery.of(context).padding.top + 16,
+            left: 16,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 個人資料設定按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'profile',
+                  mini: true,
+                  child: const Icon(Icons.person_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: _openProfileEditor,
+                ),
+                const SizedBox(width: 12),
+                // 角色切換按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'switch',
+                  mini: true,
+                  child: const Icon(Icons.business_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () => _showRoleSwitchDialog(context, '發布者'),
+                ),
+              ],
+            ),
+          ),
+
+          // 2. 右上角 (Top-Right) – 操作群組
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            right: 16,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 通知按鈕
+                Stack(
+                  children: [
+                    FloatingActionButton(
+                      backgroundColor: _unreadCount > 0
+                          ? Colors.orange[600]
+                          : Colors.white,
+                      foregroundColor: _unreadCount > 0
+                          ? Colors.white
+                          : Colors.black,
+                      heroTag: 'notifications',
+                      mini: true,
+                      child: const Icon(Icons.notifications_rounded),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(56),
+                      ),
+                      onPressed: _openNotificationPanel,
+                    ),
+                    if (_unreadCount > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            _unreadCount > 99 ? '99+' : _unreadCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                // 登出按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'logout',
+                  mini: true,
+                  child: const Icon(Icons.logout_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                    Navigator.pushReplacementNamed(context, '/');
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // 3. 左下角 (Bottom-Left) – 篩選 & 定位
+          Positioned(
+            bottom: 40,
+            left: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 新增：篩選切換按鈕
+                // 篩選按鈕
                 FloatingActionButton(
                   backgroundColor: Colors.white,
                   foregroundColor: Colors.black,
@@ -1335,10 +1444,9 @@ class _PlayerViewState extends State<PlayerView> {
                   mini: false,
                   child: Icon(
                     _showCategoryFilter
-                        ? Icons
-                              .close // 選單打開時顯示 X
+                        ? Icons.close_rounded
                         : Icons.tune_rounded,
-                  ), // 選單關閉時顯示篩選圖標
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
@@ -1348,83 +1456,41 @@ class _PlayerViewState extends State<PlayerView> {
                     });
                   },
                 ),
+                const SizedBox(height: 16),
+                // 定位按鈕
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  heroTag: 'location',
+                  mini: false,
+                  child: const Icon(Icons.my_location_rounded),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(56),
+                  ),
+                  onPressed: _findAndRecenter,
+                ),
               ],
             ),
           ),
 
-          // 右下角工具栏（添加通知按钮）
+          // 4. 右下角 (Bottom-Right) – Player 專用功能
           Positioned(
-            bottom: 40, // 動態調整位置
+            bottom: 40,
             right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 我的應徵清單
                 FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  heroTag: 'switch',
+                  backgroundColor: Colors.blue[600],
+                  foregroundColor: Colors.white,
+                  heroTag: 'applications',
                   mini: false,
-                  child: const Icon(Icons.group_rounded),
+                  child: const Icon(Icons.assignment_turned_in_rounded),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
-                  onPressed: () => _showRoleSwitchDialog(context, '發布者'),
-                ),
-                const SizedBox(height: 16),
-                FloatingActionButton(
-                  backgroundColor: Colors.white, // 背景色
-                  foregroundColor: Colors.black, // icon 顏色
-                  heroTag: 'loc',
-                  mini: false,
-                  child: const Icon(Icons.my_location),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
-                  ),
-                  onPressed: _findAndRecenter,
-                ),
-                const SizedBox(height: 16),
-
-                // 新增通知按钮
-                _buildNotificationButton(),
-                const SizedBox(height: 16),
-
-                FloatingActionButton(
-                  backgroundColor: Colors.white, // 背景色
-                  foregroundColor: Colors.black, // icon 顏色
-                  heroTag: 'profile',
-                  mini: false,
-                  child: const Icon(Icons.person),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
-                  ),
-                  onPressed: _openProfileEditor,
-                ),
-                const SizedBox(height: 16),
-                FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  heroTag: 'apps',
-                  mini: false,
-                  child: const Icon(Icons.note),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
-                  ),
                   onPressed: _openMyApplications,
-                ),
-                const SizedBox(height: 16),
-                FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  heroTag: 'logout',
-                  mini: false,
-                  child: const Icon(Icons.logout),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56), // 半徑 12
-                  ),
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-                    Navigator.pushReplacementNamed(context, '/');
-                  },
                 ),
               ],
             ),
