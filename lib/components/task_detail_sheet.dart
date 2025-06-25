@@ -43,6 +43,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   List<Map<String, dynamic>> _applicants = [];
   bool _isLoadingApplicants = false;
 
+  // 發布者資訊
+  Map<String, dynamic>? _publisherData;
+  bool _isLoadingPublisher = false;
+  int _publisherTaskCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -50,13 +55,16 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     if (widget.isParentView) {
       _loadApplicants();
     }
+    _loadPublisherInfo();
   }
 
   /// 計算交通資訊
   Future<void> _calculateTravelInfo() async {
     if (widget.currentLocation == null) return;
 
-    setState(() => _isLoadingTravel = true);
+    if (mounted) {
+      setState(() => _isLoadingTravel = true);
+    }
 
     final origin =
         '${widget.currentLocation!.latitude},${widget.currentLocation!.longitude}';
@@ -89,17 +97,21 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
       }
     }
 
-    setState(() {
-      _travelInfo = info;
-      _isLoadingTravel = false;
-    });
+    if (mounted) {
+      setState(() {
+        _travelInfo = info;
+        _isLoadingTravel = false;
+      });
+    }
   }
 
   /// 載入申請者列表（僅Parent視角）
   Future<void> _loadApplicants() async {
     if (!widget.isParentView) return;
 
-    setState(() => _isLoadingApplicants = true);
+    if (mounted) {
+      setState(() => _isLoadingApplicants = true);
+    }
 
     try {
       final applicantIds = List<String>.from(
@@ -116,13 +128,99 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         }
       }
 
-      setState(() {
-        _applicants = applicants;
-        _isLoadingApplicants = false;
-      });
+      if (mounted) {
+        setState(() {
+          _applicants = applicants;
+          _isLoadingApplicants = false;
+        });
+      }
     } catch (e) {
       print('載入申請者失敗: $e');
-      setState(() => _isLoadingApplicants = false);
+      if (mounted) {
+        setState(() => _isLoadingApplicants = false);
+      }
+    }
+  }
+
+  /// 計算用戶加入App的時間
+  String _calculateJoinTime(Map<String, dynamic> userData) {
+    try {
+      // 嘗試從不同可能的欄位獲取註冊時間
+      dynamic createdAtField =
+          userData['createdAt'] ??
+          userData['registrationDate'] ??
+          userData['joinDate'] ??
+          userData['created_at'];
+
+      if (createdAtField == null) {
+        return '新用戶';
+      }
+
+      DateTime createdAt;
+      if (createdAtField is Timestamp) {
+        // Firestore Timestamp
+        createdAt = createdAtField.toDate();
+      } else if (createdAtField is String) {
+        // 字串格式的日期
+        createdAt = DateTime.parse(createdAtField);
+      } else {
+        return '新用戶';
+      }
+
+      final now = DateTime.now();
+      final difference = now.difference(createdAt);
+      final months = (difference.inDays / 30).floor();
+
+      if (months < 1) {
+        return '新用戶';
+      } else if (months < 12) {
+        return '加入 ${months} 個月';
+      } else {
+        final years = (months / 12).floor();
+        final remainingMonths = months % 12;
+        if (remainingMonths == 0) {
+          return '加入 ${years} 年';
+        } else {
+          return '加入 ${years} 年 ${remainingMonths} 個月';
+        }
+      }
+    } catch (e) {
+      return '新用戶';
+    }
+  }
+
+  /// 載入發布者資訊
+  Future<void> _loadPublisherInfo() async {
+    if (mounted) {
+      setState(() => _isLoadingPublisher = true);
+    }
+
+    try {
+      final publisherId = widget.taskData['userId'];
+      if (publisherId != null) {
+        // 獲取發布者資訊
+        final userDoc = await _firestore.doc('user/$publisherId').get();
+        if (userDoc.exists) {
+          _publisherData = userDoc.data()!;
+          _publisherData!['uid'] = publisherId;
+        }
+
+        // 計算發布者的任務數量
+        final tasksQuery = await _firestore
+            .collection('posts')
+            .where('userId', isEqualTo: publisherId)
+            .get();
+        _publisherTaskCount = tasksQuery.docs.length;
+      }
+
+      if (mounted) {
+        setState(() => _isLoadingPublisher = false);
+      }
+    } catch (e) {
+      print('載入發布者資訊失敗: $e');
+      if (mounted) {
+        setState(() => _isLoadingPublisher = false);
+      }
     }
   }
 
@@ -133,7 +231,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    setState(() => _isApplying = true);
+    if (mounted) {
+      setState(() => _isApplying = true);
+    }
 
     try {
       final taskRef = _firestore.doc('posts/${widget.taskData['id']}');
@@ -163,7 +263,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         context,
       ).showSnackBar(SnackBar(content: Text('申請失敗：$e')));
     } finally {
-      setState(() => _isApplying = false);
+      if (mounted) {
+        setState(() => _isApplying = false);
+      }
     }
   }
 
@@ -174,7 +276,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    setState(() => _isApplying = true);
+    if (mounted) {
+      setState(() => _isApplying = true);
+    }
 
     try {
       final taskRef = _firestore.doc('posts/${widget.taskData['id']}');
@@ -204,7 +308,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         context,
       ).showSnackBar(SnackBar(content: Text('取消申請失敗：$e')));
     } finally {
-      setState(() => _isApplying = false);
+      if (mounted) {
+        setState(() => _isApplying = false);
+      }
     }
   }
 
@@ -296,6 +402,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
 
                       // 任務報酬
                       _buildPriceSection(),
+
+                      // 發布者資訊
+                      _buildPublisherSection(),
 
                       // 任務圖片
                       if (widget.taskData['images'] != null &&
@@ -419,6 +528,99 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     );
   }
 
+  Widget _buildPublisherSection() {
+    if (_isLoadingPublisher) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16, top: 20),
+        padding: const EdgeInsets.all(16),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 8),
+            Text('載入發布者資訊中...', style: TextStyle(fontSize: 14)),
+          ],
+        ),
+      );
+    }
+
+    if (_publisherData == null) {
+      return const SizedBox.shrink();
+    }
+
+    final publisherName = _publisherData!['name'] ?? '未設定姓名';
+    final avatarUrl = _publisherData!['avatarUrl']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16, top: 20),
+      child: GestureDetector(
+        onTap: () => _showPublisherDetail(),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey[100]!),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 20,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 30,
+                backgroundImage: avatarUrl.isNotEmpty
+                    ? NetworkImage(avatarUrl)
+                    : null,
+                child: avatarUrl.isEmpty
+                    ? const Icon(Icons.person, size: 36)
+                    : null,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          '發布者 / 達人 ：',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          publisherName,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _calculateJoinTime(_publisherData!),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildImagesSection() {
     final images = widget.taskData['images'] as List? ?? [];
     if (images.isEmpty) return const SizedBox.shrink();
@@ -449,12 +651,13 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   margin: const EdgeInsets.only(right: 20),
                   width: 160,
                   decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[100]!),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: GestureDetector(
                     onTap: () => _showImagePreview(context, images, index),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                       child: Image.network(
                         images[index],
                         fit: BoxFit.cover,
@@ -694,9 +897,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         children: [
           // 水平分隔線
           const Divider(
-            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
-            thickness: 1.0, // 線條粗細
-            height: 50, // 線條本身佔據的高度（含上下間距）
+            color: Color.fromARGB(255, 220, 220, 220),
+            thickness: 1.0,
+            height: 50,
           ),
           Text(
             '申請者 (${_applicants.length})',
@@ -709,7 +912,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-
               child: Column(
                 children: [
                   const SizedBox(height: 20),
@@ -727,69 +929,126 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
               ),
             )
           else
-            ...(_applicants.map((applicant) {
-              return GestureDetector(
-                onTap: () => _showApplicantDetail(applicant),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 8,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
+            SizedBox(
+              height: 300,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _applicants.length,
+                padding: EdgeInsets.zero,
+                itemBuilder: (context, index) {
+                  final applicant = _applicants[index];
+                  return _buildApplicantCard(applicant, index);
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage:
-                            applicant['avatarUrl']?.isNotEmpty == true
-                            ? NetworkImage(applicant['avatarUrl'])
-                            : null,
-                        child: applicant['avatarUrl']?.isEmpty != false
-                            ? const Icon(Icons.person)
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              applicant['name'] ?? '未設定姓名',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (applicant['applicantResume']?.isNotEmpty ==
-                                true)
-                              Text(
-                                applicant['applicantResume'],
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: Colors.grey[600],
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, color: Colors.grey[400]),
-                    ],
+  Widget _buildApplicantCard(Map<String, dynamic> applicant, int index) {
+    final applicantName = applicant['name'] ?? '未設定姓名';
+    final avatarUrl = applicant['avatarUrl']?.toString() ?? '';
+    final resume = applicant['applicantResume']?.toString() ?? '';
+    final joinTimeText = _calculateJoinTime(applicant);
+
+    return GestureDetector(
+      onTap: () => _showApplicantDetail(applicant),
+      child: Container(
+        width: 220,
+        margin: EdgeInsets.only(
+          right: index == _applicants.length - 1 ? 0 : 24,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.grey[100]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 20,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // 頭像
+              CircleAvatar(
+                radius: 40,
+                backgroundImage: avatarUrl.isNotEmpty
+                    ? NetworkImage(avatarUrl)
+                    : null,
+                child: avatarUrl.isEmpty
+                    ? const Icon(Icons.person, size: 40)
+                    : null,
+              ),
+              const SizedBox(height: 12),
+
+              // 姓名
+              Text(
+                applicantName,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+
+              const SizedBox(height: 4),
+
+              // 加入時間
+              Text(
+                joinTimeText,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[500],
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 12),
+
+              // 簡介
+              if (resume.isNotEmpty)
+                SizedBox(
+                  height: 60,
+                  child: Text(
+                    resume,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 60,
+                  child: Text(
+                    '尚未填寫簡介',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey[400],
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              );
-            }).toList()),
-        ],
+
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -858,7 +1117,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   fontWeight: FontWeight.w600, // (選)字重
                 ),
               ),
-              child: const Text('編輯'),
+              child: const Text('編輯任務'),
             ),
           ),
         ],
@@ -944,6 +1203,23 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         );
       }
     }
+  }
+
+  /// 顯示發布者詳情彈窗
+  void _showPublisherDetail() {
+    if (_publisherData == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PublisherDetailSheet(
+        publisherData: _publisherData!,
+        taskCount: _publisherTaskCount,
+        currentTaskData: widget.taskData,
+      ),
+    );
   }
 }
 
@@ -1058,7 +1334,7 @@ class _ImagePreviewWidgetState extends State<ImagePreviewWidget> {
 }
 
 /// 申請者詳情彈窗
-class ApplicantDetailSheet extends StatelessWidget {
+class ApplicantDetailSheet extends StatefulWidget {
   final Map<String, dynamic> applicantData;
   final Map<String, dynamic> taskData;
 
@@ -1067,6 +1343,58 @@ class ApplicantDetailSheet extends StatelessWidget {
     required this.applicantData,
     required this.taskData,
   }) : super(key: key);
+
+  @override
+  State<ApplicantDetailSheet> createState() => _ApplicantDetailSheetState();
+}
+
+class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
+  /// 計算用戶加入App的時間
+  String _calculateJoinTime(Map<String, dynamic> userData) {
+    try {
+      // 嘗試從不同可能的欄位獲取註冊時間
+      dynamic createdAtField =
+          userData['createdAt'] ??
+          userData['registrationDate'] ??
+          userData['joinDate'] ??
+          userData['created_at'];
+
+      if (createdAtField == null) {
+        return '新用戶';
+      }
+
+      DateTime createdAt;
+      if (createdAtField is Timestamp) {
+        // Firestore Timestamp
+        createdAt = createdAtField.toDate();
+      } else if (createdAtField is String) {
+        // 字串格式的日期
+        createdAt = DateTime.parse(createdAtField);
+      } else {
+        return '新用戶';
+      }
+
+      final now = DateTime.now();
+      final difference = now.difference(createdAt);
+      final months = (difference.inDays / 30).floor();
+
+      if (months < 1) {
+        return '新用戶';
+      } else if (months < 12) {
+        return '加入 ${months} 個月';
+      } else {
+        final years = (months / 12).floor();
+        final remainingMonths = months % 12;
+        if (remainingMonths == 0) {
+          return '加入 ${years} 年';
+        } else {
+          return '加入 ${years} 年 ${remainingMonths} 個月';
+        }
+      }
+    } catch (e) {
+      return '新用戶';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1107,6 +1435,8 @@ class ApplicantDetailSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const SizedBox(height: 20),
+
                       // 申請者頭像和基本資訊
                       _buildApplicantHeader(),
                       const SizedBox(height: 20),
@@ -1117,10 +1447,6 @@ class ApplicantDetailSheet extends StatelessWidget {
 
                       // 個人簡介
                       _buildResumeSection(),
-                      const SizedBox(height: 20),
-
-                      // 申請任務資訊
-                      _buildTaskInfo(),
 
                       const SizedBox(height: 100), // 為按鈕留出空間
                     ],
@@ -1129,7 +1455,7 @@ class ApplicantDetailSheet extends StatelessWidget {
               ),
 
               // 底部操作按鈕
-              _buildActionButtons(context),
+              // _buildActionButtons(context),
             ],
           ),
         );
@@ -1138,46 +1464,122 @@ class ApplicantDetailSheet extends StatelessWidget {
   }
 
   Widget _buildApplicantHeader() {
+    final applicantName = widget.applicantData['name'] ?? '未設定姓名';
+    final avatarUrl = widget.applicantData['avatarUrl']?.toString() ?? '';
+    final joinTimeText = _calculateJoinTime(widget.applicantData);
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue[100]!),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundImage: applicantData['avatarUrl']?.isNotEmpty == true
-                ? NetworkImage(applicantData['avatarUrl'])
-                : null,
-            child: applicantData['avatarUrl']?.isEmpty != false
-                ? const Icon(Icons.person, size: 35)
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  applicantData['name'] ?? '未設定姓名',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '申請者詳情',
-                  style: TextStyle(fontSize: 12, color: Colors.blue[700]),
-                ),
-              ],
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.grey[100]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 20,
+              offset: const Offset(0, 2),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Row(
+          children: [
+            // 左側：申請者資訊
+            Expanded(
+              flex: 3,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundImage: avatarUrl.isNotEmpty
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl.isEmpty
+                        ? const Icon(Icons.person, size: 50)
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    applicantName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    joinTimeText,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 32),
+            // 右側：申請統計
+            Expanded(
+              flex: 2,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '申請次數',
+                        style: TextStyle(fontSize: 13, color: Colors.black),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${widget.applicantData['applicationCount'] ?? 0}',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(
+                    color: Color.fromARGB(255, 220, 220, 220),
+                    thickness: 1.0,
+                    height: 44,
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '評分',
+                        style: TextStyle(fontSize: 13, color: Colors.black),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.star, color: Colors.black, size: 20),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${widget.applicantData['rating']?.toStringAsFixed(1) ?? '4.8'}',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1185,35 +1587,38 @@ class ApplicantDetailSheet extends StatelessWidget {
   Widget _buildContactInfo() {
     final contacts = <Widget>[];
 
-    if (applicantData['phoneNumber']?.toString().isNotEmpty == true) {
+    if (widget.applicantData['phoneNumber']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
           Icons.phone,
           '電話',
-          applicantData['phoneNumber'],
-          Colors.green,
+          widget.applicantData['phoneNumber'],
+          Colors.black,
+          onTap: () => _makePhoneCall(widget.applicantData['phoneNumber']),
         ),
       );
     }
 
-    if (applicantData['email']?.toString().isNotEmpty == true) {
+    if (widget.applicantData['email']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
           Icons.email,
           '電子郵件',
-          applicantData['email'],
-          Colors.orange,
+          widget.applicantData['email'],
+          Colors.black,
+          onTap: () => _sendEmail(widget.applicantData['email']),
         ),
       );
     }
 
-    if (applicantData['lineId']?.toString().isNotEmpty == true) {
+    if (widget.applicantData['lineId']?.toString().isNotEmpty == true) {
       contacts.add(
         _buildContactItem(
           Icons.chat,
           'Line ID',
-          applicantData['lineId'],
-          Colors.green,
+          widget.applicantData['lineId'],
+          Colors.black,
+          onTap: () => _openLine(widget.applicantData['lineId']),
         ),
       );
     }
@@ -1222,16 +1627,14 @@ class ApplicantDetailSheet extends StatelessWidget {
       contacts.add(
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
           child: Row(
             children: [
-              Icon(Icons.info_outline, color: Colors.grey[500]),
-              const SizedBox(width: 8),
-              Text('申請者尚未提供聯絡資訊', style: TextStyle(color: Colors.grey[600])),
+              Icon(Icons.info_outline, color: Colors.grey[400], size: 32),
+              const SizedBox(height: 12),
+              Text(
+                '申請者尚未提供聯絡資訊',
+                style: TextStyle(color: Colors.grey[500], fontSize: 15),
+              ),
             ],
           ),
         ),
@@ -1243,9 +1646,8 @@ class ApplicantDetailSheet extends StatelessWidget {
       children: [
         const Text(
           '聯絡資訊',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 8),
         ...contacts,
       ],
     );
@@ -1255,66 +1657,65 @@ class ApplicantDetailSheet extends StatelessWidget {
     IconData icon,
     String label,
     String value,
-    Color color,
-  ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(top: 24),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(
+                    value,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: onTap != null ? color : Colors.black,
+                      decoration: onTap != null ? TextDecoration.none : null,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildResumeSection() {
-    final resume = applicantData['applicantResume']?.toString() ?? '';
+    final resume = widget.applicantData['applicantResume']?.toString() ?? '';
+    final bio = widget.applicantData['bio']?.toString() ?? '';
+    final displayText = bio.isNotEmpty ? bio : resume;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 水平分隔線
+        const Divider(
+          color: Color.fromARGB(255, 220, 220, 220),
+          thickness: 1.0,
+          height: 50,
+        ),
         const Text(
           '個人簡介',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 20),
         Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
           child: Text(
-            resume.isNotEmpty ? resume : '申請者尚未填寫個人簡介',
+            displayText.isNotEmpty ? displayText : '申請者尚未填寫個人簡介',
             style: TextStyle(
-              fontSize: 14,
-              height: 1.5,
-              color: resume.isNotEmpty ? Colors.black87 : Colors.grey[600],
+              fontSize: 15,
+              height: 1.6,
+              color: displayText.isNotEmpty ? Colors.black : Colors.grey[600],
             ),
           ),
         ),
@@ -1323,16 +1724,23 @@ class ApplicantDetailSheet extends StatelessWidget {
   }
 
   Widget _buildTaskInfo() {
-    final taskTitle = taskData['title'] ?? taskData['name'] ?? '未命名任務';
+    final taskTitle =
+        widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 水平分隔線
+        const Divider(
+          color: Color.fromARGB(255, 220, 220, 220),
+          thickness: 1.0,
+          height: 50,
+        ),
         const Text(
           '申請的任務',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 20),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
@@ -1347,15 +1755,16 @@ class ApplicantDetailSheet extends StatelessWidget {
               Text(
                 taskTitle,
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (taskData['price'] != null && taskData['price'] > 0) ...[
+              if (widget.taskData['price'] != null &&
+                  widget.taskData['price'] > 0) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '報酬：NT\$ ${taskData['price']}',
-                  style: TextStyle(fontSize: 12, color: Colors.orange[700]),
+                  '報酬：NT\$ ${widget.taskData['price']}',
+                  style: TextStyle(fontSize: 15, color: Colors.orange[700]),
                 ),
               ],
             ],
@@ -1363,6 +1772,96 @@ class ApplicantDetailSheet extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// 撥打電話
+  void _makePhoneCall(String phoneNumber) async {
+    try {
+      print('嘗試撥打電話: $phoneNumber');
+      final uri = Uri.parse('tel:$phoneNumber');
+
+      final canLaunch = await canLaunchUrl(uri);
+      print('是否可以撥打電話: $canLaunch');
+
+      if (canLaunch) {
+        final result = await launchUrl(uri);
+        print('撥打電話結果: $result');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('無法撥打電話，請檢查設備是否支援通話功能')));
+        }
+      }
+    } catch (e) {
+      print('撥打電話錯誤: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('撥打電話失敗: $e')));
+      }
+    }
+  }
+
+  /// 發送郵件
+  void _sendEmail(String email) async {
+    try {
+      print('嘗試發送郵件至: $email');
+      final uri = Uri.parse('mailto:$email');
+
+      final canLaunch = await canLaunchUrl(uri);
+      print('是否可以發送郵件: $canLaunch');
+
+      if (canLaunch) {
+        final result = await launchUrl(uri);
+        print('發送郵件結果: $result');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('無法開啟郵件應用程式，請檢查設備是否已安裝郵件應用程式')),
+          );
+        }
+      }
+    } catch (e) {
+      print('發送郵件錯誤: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('開啟郵件應用程式失敗: $e')));
+      }
+    }
+  }
+
+  /// 開啟 Line
+  void _openLine(String lineId) async {
+    try {
+      print('嘗試開啟 Line: $lineId');
+      final uri = Uri.parse('https://line.me/ti/p/$lineId');
+
+      final canLaunch = await canLaunchUrl(uri);
+      print('是否可以開啟 Line: $canLaunch');
+
+      if (canLaunch) {
+        final result = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        print('開啟 Line 結果: $result');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('無法開啟 Line，請檢查設備是否已安裝 Line 應用程式')),
+          );
+        }
+      }
+    } catch (e) {
+      print('開啟 Line 錯誤: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('開啟 Line 失敗: $e')));
+      }
+    }
   }
 
   Widget _buildActionButtons(BuildContext context) {
@@ -1405,14 +1904,14 @@ class ApplicantDetailSheet extends StatelessWidget {
   void _contactApplicant(BuildContext context) {
     final contacts = <String>[];
 
-    if (applicantData['phoneNumber']?.toString().isNotEmpty == true) {
-      contacts.add('電話: ${applicantData['phoneNumber']}');
+    if (widget.applicantData['phoneNumber']?.toString().isNotEmpty == true) {
+      contacts.add('電話: ${widget.applicantData['phoneNumber']}');
     }
-    if (applicantData['email']?.toString().isNotEmpty == true) {
-      contacts.add('Email: ${applicantData['email']}');
+    if (widget.applicantData['email']?.toString().isNotEmpty == true) {
+      contacts.add('Email: ${widget.applicantData['email']}');
     }
-    if (applicantData['lineId']?.toString().isNotEmpty == true) {
-      contacts.add('Line: ${applicantData['lineId']}');
+    if (widget.applicantData['lineId']?.toString().isNotEmpty == true) {
+      contacts.add('Line: ${widget.applicantData['lineId']}');
     }
 
     if (contacts.isEmpty) {
@@ -1431,6 +1930,528 @@ class ApplicantDetailSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('可透過以下方式聯絡申請者：'),
+            const SizedBox(height: 12),
+            ...contacts.map(
+              (contact) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('• $contact', style: const TextStyle(fontSize: 14)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 發布者詳情彈窗
+class PublisherDetailSheet extends StatelessWidget {
+  final Map<String, dynamic> publisherData;
+  final int taskCount;
+  final Map<String, dynamic> currentTaskData;
+
+  const PublisherDetailSheet({
+    Key? key,
+    required this.publisherData,
+    required this.taskCount,
+    required this.currentTaskData,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 10,
+                offset: Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // 拖拽指示器
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+
+                      // 發布者頭像和基本資訊
+                      _buildPublisherHeader(),
+                      const SizedBox(height: 20),
+
+                      // 聯絡資訊
+                      _buildContactInfo(context),
+                      const SizedBox(height: 20),
+
+                      // 個人簡介
+                      _buildResumeSection(),
+
+                      const SizedBox(height: 100), // 為按鈕留出空間
+                    ],
+                  ),
+                ),
+              ),
+
+              // 底部操作按鈕
+              // _buildActionButtons(context),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPublisherHeader() {
+    final publisherName = publisherData['name'] ?? '未設定姓名';
+    final avatarUrl = publisherData['avatarUrl']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.grey[100]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 20,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // 左側：發布者資訊
+            Expanded(
+              flex: 3,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundImage: avatarUrl.isNotEmpty
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl.isEmpty
+                        ? const Icon(Icons.person, size: 50)
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '$publisherName',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '已發布 $taskCount 個任務',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 32),
+            // 右側：任務統計
+            Expanded(
+              flex: 2,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '已發布任務',
+                        style: TextStyle(fontSize: 13, color: Colors.black),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$taskCount',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(
+                    color: Color.fromARGB(255, 220, 220, 220),
+                    thickness: 1.0,
+                    height: 44,
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '評分',
+                        style: TextStyle(fontSize: 13, color: Colors.black),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.star, color: Colors.black, size: 20),
+                          const SizedBox(width: 4),
+                          Text(
+                            '4.8',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactInfo(BuildContext context) {
+    final contacts = <Widget>[];
+
+    if (publisherData['phoneNumber']?.toString().isNotEmpty == true) {
+      contacts.add(
+        _buildContactItem(
+          Icons.phone,
+          '電話',
+          publisherData['phoneNumber'],
+          Colors.black,
+          onTap: () => _makePhoneCall(publisherData['phoneNumber'], context),
+        ),
+      );
+    }
+
+    if (publisherData['email']?.toString().isNotEmpty == true) {
+      contacts.add(
+        _buildContactItem(
+          Icons.email,
+          '電子郵件',
+          publisherData['email'],
+          Colors.black,
+          onTap: () => _sendEmail(publisherData['email'], context),
+        ),
+      );
+    }
+
+    if (publisherData['lineId']?.toString().isNotEmpty == true) {
+      contacts.add(
+        _buildContactItem(
+          Icons.chat,
+          'Line ID',
+          publisherData['lineId'],
+          Colors.black,
+          onTap: () => _openLine(publisherData['lineId'], context),
+        ),
+      );
+    }
+
+    if (contacts.isEmpty) {
+      contacts.add(
+        Container(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.grey[400], size: 32),
+              const SizedBox(height: 12),
+              Text(
+                '發布者尚未提供聯絡資訊',
+                style: TextStyle(color: Colors.grey[500], fontSize: 15),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '聯絡資訊',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+        ),
+        ...contacts,
+      ],
+    );
+  }
+
+  Widget _buildContactItem(
+    IconData icon,
+    String label,
+    String value,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(top: 24),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(
+                    value,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: onTap != null ? color : Colors.black,
+                      decoration: onTap != null ? TextDecoration.none : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 撥打電話
+  void _makePhoneCall(String phoneNumber, BuildContext context) async {
+    try {
+      print('嘗試撥打電話: $phoneNumber');
+      final uri = Uri.parse('tel:$phoneNumber');
+
+      final canLaunch = await canLaunchUrl(uri);
+      print('是否可以撥打電話: $canLaunch');
+
+      if (canLaunch) {
+        final result = await launchUrl(uri);
+        print('撥打電話結果: $result');
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('無法撥打電話，請檢查設備是否支援通話功能')));
+      }
+    } catch (e) {
+      print('撥打電話錯誤: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('撥打電話失敗: $e')));
+    }
+  }
+
+  /// 發送郵件
+  void _sendEmail(String email, BuildContext context) async {
+    try {
+      print('嘗試發送郵件至: $email');
+      final uri = Uri.parse('mailto:$email');
+
+      final canLaunch = await canLaunchUrl(uri);
+      print('是否可以發送郵件: $canLaunch');
+
+      if (canLaunch) {
+        final result = await launchUrl(uri);
+        print('發送郵件結果: $result');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('無法開啟郵件應用程式，請檢查設備是否已安裝郵件應用程式')),
+        );
+      }
+    } catch (e) {
+      print('發送郵件錯誤: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('開啟郵件應用程式失敗: $e')));
+    }
+  }
+
+  /// 開啟 Line
+  void _openLine(String lineId, BuildContext context) async {
+    try {
+      print('嘗試開啟 Line: $lineId');
+      final uri = Uri.parse('https://line.me/ti/p/$lineId');
+
+      final canLaunch = await canLaunchUrl(uri);
+      print('是否可以開啟 Line: $canLaunch');
+
+      if (canLaunch) {
+        final result = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        print('開啟 Line 結果: $result');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('無法開啟 Line，請檢查設備是否已安裝 Line 應用程式')),
+        );
+      }
+    } catch (e) {
+      print('開啟 Line 錯誤: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('開啟 Line 失敗: $e')));
+    }
+  }
+
+  Widget _buildResumeSection() {
+    final resume = publisherData['applicantResume']?.toString() ?? '';
+    final bio = publisherData['bio']?.toString() ?? '';
+    final displayText = bio.isNotEmpty ? bio : resume;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 水平分隔線
+        const Divider(
+          color: Color.fromARGB(255, 220, 220, 220),
+          thickness: 1.0,
+          height: 50,
+        ),
+        const Text(
+          '個人簡介',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          child: Text(
+            displayText.isNotEmpty ? displayText : '發布者尚未填寫個人簡介',
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: displayText.isNotEmpty ? Colors.black : Colors.grey[600],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey[100]!)),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            // 關閉按鈕
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.grey[500],
+                  side: BorderSide(color: Colors.grey[400]!),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: const Text('關閉'),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // 聯絡發布者按鈕
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _contactPublisher(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange[600],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: const Text('聯絡發布者'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _contactPublisher(BuildContext context) {
+    final contacts = <String>[];
+
+    if (publisherData['phoneNumber']?.toString().isNotEmpty == true) {
+      contacts.add('電話: ${publisherData['phoneNumber']}');
+    }
+    if (publisherData['email']?.toString().isNotEmpty == true) {
+      contacts.add('Email: ${publisherData['email']}');
+    }
+    if (publisherData['lineId']?.toString().isNotEmpty == true) {
+      contacts.add('Line: ${publisherData['lineId']}');
+    }
+
+    if (contacts.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('發布者尚未提供聯絡資訊')));
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('聯絡發布者'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('可透過以下方式聯絡發布者：'),
             const SizedBox(height: 12),
             ...contacts.map(
               (contact) => Padding(
