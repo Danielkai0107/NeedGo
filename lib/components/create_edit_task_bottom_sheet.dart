@@ -169,6 +169,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   String? _timeError;
   String? _contentError;
   String? _addressError; // 新增地址錯誤提示
+  String? _imageError; // 新增圖片錯誤提示
 
   // Legacy API 相關
   final FocusNode _nameFocus = FocusNode();
@@ -292,6 +293,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       _timeError = null;
       _contentError = null;
       _addressError = null; // 清除地址錯誤
+      _imageError = null; // 清除圖片錯誤
     });
   }
 
@@ -1401,6 +1403,36 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               }
             },
           ),
+
+          // 顯示圖片錯誤提示
+          if (_imageError != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _imageError!,
+                      style: TextStyle(
+                        color: Colors.red[700],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1785,6 +1817,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
   // 選擇圖片 - 改進版本，直接自動裁切
   void _pickImage() async {
+    // 開始選擇圖片時清除之前的錯誤
+    if (mounted) {
+      setState(() {
+        _imageError = null;
+      });
+    }
+
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -1795,8 +1834,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
         // 檢查檔案大小（2MB限制）
         if (bytes.length > 2 * 1024 * 1024) {
-          // 不使用 SnackBar，可以考慮其他提示方式
-          print('圖片檔案大小超過 2MB 限制');
+          if (mounted) {
+            setState(() {
+              _imageError = '圖片檔案大小不能超過 2MB';
+            });
+          }
           return;
         }
 
@@ -1804,7 +1846,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         await _autoCropAndAddImage(bytes);
       }
     } catch (e) {
-      // 不使用 SnackBar，避免當機
+      if (mounted) {
+        setState(() {
+          _imageError = '選擇圖片失敗，請重試';
+        });
+      }
       print('選擇圖片失敗: $e');
     }
   }
@@ -1845,13 +1891,17 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       if (byteData != null && mounted) {
         setState(() {
           _taskData.images.add(byteData.buffer.asUint8List());
+          _imageError = null; // 成功時清除錯誤
         });
 
-        // 不使用 SnackBar，圖片已添加到列表中
         print('圖片已自動裁切並添加');
       }
     } catch (e) {
-      // 不使用 SnackBar，避免當機
+      if (mounted) {
+        setState(() {
+          _imageError = '圖片處理失敗，請重試';
+        });
+      }
       print('圖片處理失敗: $e');
     }
   }
@@ -1861,6 +1911,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     if (mounted) {
       setState(() {
         _taskData.existingImageUrls.removeAt(index);
+        _imageError = null; // 移除圖片時清除錯誤
       });
     }
   }
@@ -1870,6 +1921,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     if (mounted) {
       setState(() {
         _taskData.images.removeAt(index);
+        _imageError = null; // 移除圖片時清除錯誤
       });
     }
   }
