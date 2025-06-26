@@ -60,13 +60,15 @@ class _PlayerViewState extends State<PlayerView> {
     final currentUser = FirebaseAuth.instance.currentUser;
     final processedPosts = <String>{};
 
-    // 只處理活躍的任務
+    // 只處理活躍的任務（排除自己發布的、過期的、已完成的）
     final activePosts = _allPosts
         .where(
           (post) =>
               post['userId'] != currentUser?.uid && _shouldShowTaskOnMap(post),
         )
         .toList();
+
+    print('聚合處理 - 總任務數: ${_allPosts.length}, 有效任務數: ${activePosts.length}');
 
     for (var post in activePosts) {
       if (processedPosts.contains(post['id'])) continue;
@@ -469,6 +471,13 @@ class _PlayerViewState extends State<PlayerView> {
 
         // 更新地圖標記
         _updateMarkers();
+
+        // 輸出調試信息
+        final activeTasks = list
+            .where((task) => _shouldShowTaskOnMap(task))
+            .length;
+        final totalTasks = list.length;
+        print('總任務數: $totalTasks, 有效任務數: $activeTasks');
       }
 
       final currentUser = FirebaseAuth.instance.currentUser;
@@ -554,6 +563,12 @@ class _PlayerViewState extends State<PlayerView> {
 
     // 如果是任務（有 userId），使用新的 TaskDetailSheet
     if (loc['userId'] != null && !isStatic) {
+      // 檢查任務是否有效（未過期且未完成）
+      if (!_shouldShowTaskOnMap(loc)) {
+        CustomSnackBar.showWarning(context, '此任務已過期或不可用');
+        return;
+      }
+
       // 移動地圖到任務位置
       _moveMapToLocation(LatLng(loc['lat'], loc['lng']));
 
@@ -771,7 +786,11 @@ class _PlayerViewState extends State<PlayerView> {
 
     // 檢查任務狀態
     final status = task['status'] ?? 'open';
-    if (status == 'completed') return false;
+    if (status == 'completed' || status == 'expired' || status == '已完成')
+      return false;
+
+    // 檢查是否已完成
+    if (task['isCompleted'] == true) return false;
 
     // 檢查是否過期
     if (_isTaskExpired(task)) return false;
@@ -779,36 +798,105 @@ class _PlayerViewState extends State<PlayerView> {
     return true;
   }
 
-  // 檢查任務是否過期（Player View）
+  // 檢查任務是否過期（Player View） - 更新為支持多種過期時間格式
   bool _isTaskExpired(Map<String, dynamic> task) {
-    if (task['date'] == null) return false;
+    final now = DateTime.now();
 
-    try {
-      DateTime taskDate;
-      if (task['date'] is String) {
-        taskDate = DateTime.parse(task['date']);
-      } else if (task['date'] is DateTime) {
-        taskDate = task['date'];
-      } else {
-        return false;
-      }
-
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final taskDay = DateTime(taskDate.year, taskDate.month, taskDate.day);
-
-      return taskDay.isBefore(today);
-    } catch (e) {
-      return false;
+    // 檢查明確的過期標記
+    if (task['isExpired'] == true) {
+      return true;
     }
+
+    // 檢查多種可能的過期時間字段
+    final expiryFields = [
+      'expiryDate',
+      'dueDate',
+      'endDate',
+      'expireTime',
+      'date',
+    ];
+
+    for (String field in expiryFields) {
+      if (task[field] != null) {
+        try {
+          DateTime? expiryDate;
+
+          if (task[field] is Timestamp) {
+            // Firestore Timestamp
+            expiryDate = (task[field] as Timestamp).toDate();
+          } else if (task[field] is String) {
+            // ISO 8601 字符串
+            expiryDate = DateTime.parse(task[field] as String);
+          } else if (task[field] is int) {
+            // Unix timestamp (milliseconds)
+            expiryDate = DateTime.fromMillisecondsSinceEpoch(
+              task[field] as int,
+            );
+          } else if (task[field] is DateTime) {
+            expiryDate = task[field] as DateTime;
+          }
+
+          if (expiryDate != null) {
+            // 如果是 date 字段，結合 time 字段獲取精確時間
+            if (field == 'date' &&
+                task['time'] != null &&
+                task['time'] is Map) {
+              final time = task['time'] as Map;
+              final hour = time['hour'] ?? 23;
+              final minute = time['minute'] ?? 59;
+              expiryDate = DateTime(
+                expiryDate.year,
+                expiryDate.month,
+                expiryDate.day,
+                hour,
+                minute,
+              );
+            } else if (field == 'date') {
+              // 如果只有日期沒有時間，設定為當天結束
+              expiryDate = DateTime(
+                expiryDate.year,
+                expiryDate.month,
+                expiryDate.day,
+                23,
+                59,
+              );
+            }
+
+            if (now.isAfter(expiryDate)) {
+              print(
+                '任務已過期: ${task['title'] ?? task['name'] ?? task['id']} (過期時間: $expiryDate)',
+              );
+              return true;
+            }
+          }
+        } catch (e) {
+          print(
+            '解析任務過期時間失敗: ${task['title'] ?? task['id']}, 字段: $field, 錯誤: $e',
+          );
+        }
+      }
+    }
+
+    return false;
   }
 
   /// 顯示聚合地點的 LocationInfoSheet 與任務列表
   void _showLocationInfoWithTasks(List<Map<String, dynamic>> tasks) {
     if (tasks.isEmpty) return;
 
-    // 使用第一個任務的位置作為代表地點
-    final representativeTask = tasks.first;
+    // 篩選有效任務（排除已過期和已完成的任務）
+    final validTasks = tasks
+        .where((task) => _shouldShowTaskOnMap(task))
+        .toList();
+
+    if (validTasks.isEmpty) {
+      // 如果篩選後沒有有效任務，顯示提示
+      CustomSnackBar.showWarning(context, '此地點目前沒有有效任務');
+      return;
+    }
+
+    // 使用第一個有效任務的位置作為代表地點
+    final representativeTask = validTasks.first;
     final position = LatLng(
       representativeTask['lat'],
       representativeTask['lng'],
@@ -819,12 +907,20 @@ class _PlayerViewState extends State<PlayerView> {
 
     // 建立地點資料結構
     final locationData = {
-      'name': _getLocationNameForTasks(tasks),
+      'name': _getLocationNameForTasks(validTasks),
       'lat': representativeTask['lat'],
       'lng': representativeTask['lng'],
       'address': representativeTask['address'] ?? '地址未設定',
       'category': '任務地點',
     };
+
+    print('傳遞給LocationInfoSheet的任務數量: ${validTasks.length}');
+    print('原始任務數量: ${tasks.length}');
+
+    // 先清除任何現有的 SnackBar，避免與底部彈窗衝突
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
 
     showModalBottomSheet(
       context: context,
@@ -835,10 +931,15 @@ class _PlayerViewState extends State<PlayerView> {
         locationData: locationData,
         isParentView: false,
         currentLocation: _myLocation,
-        availableTasksAtLocation: tasks,
+        availableTasksAtLocation: validTasks, // 傳遞篩選後的任務
         onTaskSelected: (taskData) {
           // 關閉 LocationInfoSheet
           Navigator.of(context).pop();
+
+          // 先清除任何現有的 SnackBar
+          if (mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+          }
 
           // 顯示 TaskDetailSheet
           showModalBottomSheet(
@@ -1865,6 +1966,11 @@ class _PlayerViewState extends State<PlayerView> {
 
     // 移動地圖到任務位置並显示新的任务详情彈窗
     _moveMapToLocation(LatLng(post['lat'], post['lng']));
+
+    // 先清除任何現有的 SnackBar，避免與底部彈窗衝突
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
 
     showModalBottomSheet(
       context: context,

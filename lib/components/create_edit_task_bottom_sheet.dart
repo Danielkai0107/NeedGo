@@ -1243,7 +1243,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           ),
           const SizedBox(height: 8),
           Text(
-            '最多可上傳 3 張圖片，每張檔案大小限制 2 MB',
+            '最多可上傳 3 張圖片，系統會自動壓縮以節省空間',
             style: TextStyle(color: Colors.grey[600], fontSize: 14),
           ),
           const SizedBox(height: 24),
@@ -1334,7 +1334,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           borderRadius: BorderRadius.circular(8),
                           child: Image.memory(
                             _taskData.images[newImageIndex],
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                             width: double.infinity,
                             height: double.infinity,
                           ),
@@ -1668,7 +1668,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                                           _taskData.existingImageUrls.length],
                                       width: 80,
                                       height: 80,
-                                      fit: BoxFit.cover,
+                                      fit: BoxFit.contain,
                                     ),
                             ),
                           );
@@ -1815,7 +1815,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     }
   }
 
-  // 選擇圖片 - 改進版本，直接自動裁切
+  // 選擇圖片 - 改進版本，直接自動壓縮
   void _pickImage() async {
     // 開始選擇圖片時清除之前的錯誤
     if (mounted) {
@@ -1832,18 +1832,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       if (image != null) {
         final bytes = await image.readAsBytes();
 
-        // 檢查檔案大小（2MB限制）
-        if (bytes.length > 2 * 1024 * 1024) {
-          if (mounted) {
-            setState(() {
-              _imageError = '圖片檔案大小不能超過 2MB';
-            });
-          }
-          return;
-        }
-
-        // 直接自動裁切為正方形並添加到列表
-        await _autoCropAndAddImage(bytes);
+        // 直接自動壓縮圖片（保持原圖比例），無大小限制
+        await _autoCropAndCompressImage(bytes);
       }
     } catch (e) {
       if (mounted) {
@@ -1855,46 +1845,65 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     }
   }
 
-  // 自動裁切圖片為正方形
-  Future<void> _autoCropAndAddImage(Uint8List imageBytes) async {
+  // 自動壓縮圖片（保持原圖比例）
+  Future<void> _autoCropAndCompressImage(Uint8List imageBytes) async {
     try {
       // 解碼圖片
       final codec = await ui.instantiateImageCodec(imageBytes);
       final frame = await codec.getNextFrame();
       final image = frame.image;
 
-      // 計算正方形裁切區域
-      final size = math.min(image.width, image.height);
-      final offsetX = (image.width - size) / 2;
-      final offsetY = (image.height - size) / 2;
+      // 計算等比例縮放尺寸，最大邊不超過 400 像素
+      final maxSize = 400;
+      double newWidth, newHeight;
 
-      // 創建畫布並裁切
+      if (image.width > image.height) {
+        // 寬圖：以寬度為基準
+        newWidth = maxSize.toDouble();
+        newHeight = (image.height * maxSize) / image.width;
+      } else {
+        // 高圖或正方形：以高度為基準
+        newHeight = maxSize.toDouble();
+        newWidth = (image.width * maxSize) / image.height;
+      }
+
+      // 創建畫布並等比例縮放
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
 
+      // 使用整個原圖，不裁切
       final srcRect = Rect.fromLTWH(
-        offsetX.toDouble(),
-        offsetY.toDouble(),
-        size.toDouble(),
-        size.toDouble(),
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
       );
-      final destRect = const Rect.fromLTWH(0, 0, 300, 300); // 300x300 正方形
+      final destRect = Rect.fromLTWH(0, 0, newWidth, newHeight);
 
       canvas.drawImageRect(image, srcRect, destRect, Paint());
 
       final picture = recorder.endRecording();
-      final croppedImage = await picture.toImage(300, 300);
-      final byteData = await croppedImage.toByteData(
+      final compressedImage = await picture.toImage(
+        newWidth.round(),
+        newHeight.round(),
+      );
+      final byteData = await compressedImage.toByteData(
         format: ui.ImageByteFormat.png,
       );
 
       if (byteData != null && mounted) {
+        final compressedBytes = byteData.buffer.asUint8List();
+        final originalSize = imageBytes.length;
+        final compressedSize = compressedBytes.length;
+
+        print(
+          '圖片壓縮完成: ${(originalSize / 1024 / 1024).toStringAsFixed(1)}MB -> ${(compressedSize / 1024).toStringAsFixed(1)}KB (${newWidth.round()}x${newHeight.round()})',
+        );
+
         setState(() {
-          _taskData.images.add(byteData.buffer.asUint8List());
+          _taskData.images.add(compressedBytes);
           _imageError = null; // 成功時清除錯誤
         });
-
-        print('圖片已自動裁切並添加');
       }
     } catch (e) {
       if (mounted) {

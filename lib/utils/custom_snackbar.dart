@@ -6,6 +6,12 @@ class CustomSnackBar {
   // 私有構造函數，防止實例化
   CustomSnackBar._();
 
+  /// 清除當前顯示的 SnackBar
+  /// 用於在顯示底部彈窗之前避免UI衝突
+  static void clear(BuildContext context) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+  }
+
   /// 顯示自定義樣式的 SnackBar
   /// [context] - BuildContext
   /// [message] - 要顯示的訊息
@@ -19,6 +25,9 @@ class CustomSnackBar {
     IconData? icon,
     Color? backgroundColor,
   }) {
+    // 先清除現有的 SnackBar，避免重疊
+    clear(context);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -48,12 +57,9 @@ class CustomSnackBar {
         margin: EdgeInsets.only(
           left: 16,
           right: 16,
-          bottom:
-              MediaQuery.of(context).size.height -
-              MediaQuery.of(context).padding.top -
-              160, // 統一設定為從頂部 160px
+          bottom: 120, // 固定位置，避免與底部彈窗衝突
         ),
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2), // 縮短顯示時間
       ),
     );
   }

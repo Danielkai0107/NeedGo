@@ -127,8 +127,12 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
     try {
       // 使用提供的任務列表或從資料庫查詢
       if (widget.availableTasksAtLocation != null) {
+        // 篩選提供的任務列表
+        final filteredTasks = _filterValidTasks(
+          widget.availableTasksAtLocation!,
+        );
         setState(() {
-          _tasksAtLocation = widget.availableTasksAtLocation!;
+          _tasksAtLocation = filteredTasks;
           _isLoadingTasks = false;
         });
         return;
@@ -163,14 +167,84 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
         }
       }
 
+      // 篩選有效任務（未過期、未完成）
+      final filteredTasks = _filterValidTasks(tasksAtLocation);
+
       setState(() {
-        _tasksAtLocation = tasksAtLocation;
+        _tasksAtLocation = filteredTasks;
         _isLoadingTasks = false;
       });
     } catch (e) {
       print('載入地點任務失敗: $e');
       setState(() => _isLoadingTasks = false);
     }
+  }
+
+  /// 篩選有效任務（排除已過期和已完成的任務）
+  List<Map<String, dynamic>> _filterValidTasks(
+    List<Map<String, dynamic>> tasks,
+  ) {
+    final now = DateTime.now();
+
+    return tasks.where((task) {
+      // 檢查任務是否已完成
+      final isCompleted =
+          task['isCompleted'] == true ||
+          task['status'] == 'completed' ||
+          task['status'] == '已完成';
+
+      if (isCompleted) {
+        print('篩選掉已完成任務: ${task['title'] ?? task['id']}');
+        return false;
+      }
+
+      // 檢查任務是否已過期
+      bool isExpired = false;
+
+      // 檢查多種可能的過期時間字段
+      final expiryFields = ['expiryDate', 'dueDate', 'endDate', 'expireTime'];
+
+      for (String field in expiryFields) {
+        if (task[field] != null) {
+          try {
+            DateTime? expiryDate;
+
+            if (task[field] is Timestamp) {
+              // Firestore Timestamp
+              expiryDate = (task[field] as Timestamp).toDate();
+            } else if (task[field] is String) {
+              // ISO 8601 字符串
+              expiryDate = DateTime.parse(task[field] as String);
+            } else if (task[field] is int) {
+              // Unix timestamp (milliseconds)
+              expiryDate = DateTime.fromMillisecondsSinceEpoch(
+                task[field] as int,
+              );
+            }
+
+            if (expiryDate != null && now.isAfter(expiryDate)) {
+              isExpired = true;
+              print(
+                '篩選掉已過期任務: ${task['title'] ?? task['id']} (過期時間: $expiryDate)',
+              );
+              break;
+            }
+          } catch (e) {
+            print(
+              '解析任務過期時間失敗: ${task['title'] ?? task['id']}, 字段: $field, 錯誤: $e',
+            );
+          }
+        }
+      }
+
+      // 檢查是否有明確的過期標記
+      if (task['isExpired'] == true) {
+        isExpired = true;
+        print('篩選掉標記為過期的任務: ${task['title'] ?? task['id']}');
+      }
+
+      return !isExpired;
+    }).toList();
   }
 
   @override

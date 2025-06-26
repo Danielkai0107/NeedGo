@@ -1818,17 +1818,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         // 通知父組件任務已更新
         widget.onTaskUpdated?.call();
 
-        // 顯示成功訊息
-        _showSuccessMessage('任務已標記為完成');
-
         // 關閉詳情頁
         Navigator.of(context).pop();
       }
-    } catch (e) {
-      if (mounted) {
-        _showErrorMessage('操作失敗：$e');
-      }
-    }
+    } catch (e) {}
   }
 
   // 顯示任務完成確認對話框

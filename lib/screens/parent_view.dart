@@ -479,6 +479,11 @@ class _ParentViewState extends State<ParentView> {
 
   /// 顯示帶有預設地址的新建任務彈窗
   void _showCreateTaskSheetWithLocation(Map<String, dynamic> location) {
+    // 先清除任何現有的 SnackBar，避免與底部彈窗衝突
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1275,6 +1280,11 @@ class _ParentViewState extends State<ParentView> {
 
   /// 顯示新建任務彈窗（使用新的 5 步驟流程）
   void _showCreateTaskSheet() {
+    // 先清除任何現有的 SnackBar，避免與底部彈窗衝突
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1293,6 +1303,11 @@ class _ParentViewState extends State<ParentView> {
 
   /// 顯示編輯任務彈窗（使用新的 5 步驟流程）
   void _showEditTaskSheet() {
+    // 先清除任何現有的 SnackBar，避免與底部彈窗衝突
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+
     // 將現有任務資料轉換為格式
     final existingTask = _myPosts.firstWhere(
       (task) => task['id'] == _editingPostId,
@@ -1719,6 +1734,9 @@ class _ParentViewState extends State<ParentView> {
 
   /// 顯示自定義樣式的 SnackBar
   void _showCustomSnackBar(String message, {Color? iconColor, IconData? icon}) {
+    // 先清除現有的 SnackBar，避免重疊
+    ScaffoldMessenger.of(context).clearSnackBars();
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -1745,15 +1763,12 @@ class _ParentViewState extends State<ParentView> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 8,
-        margin: EdgeInsets.only(
+        margin: const EdgeInsets.only(
           left: 16,
           right: 16,
-          bottom:
-              MediaQuery.of(context).size.height -
-              MediaQuery.of(context).padding.top -
-              160, // 調整位置到個人資料按鈕下方
+          bottom: 120, // 固定位置，避免與底部彈窗衝突
         ),
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2), // 縮短顯示時間
       ),
     );
   }
