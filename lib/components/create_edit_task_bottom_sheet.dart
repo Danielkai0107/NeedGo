@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../utils/custom_snackbar.dart';
 
 // 任務數據模型
 class TaskData {
@@ -417,12 +418,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         curve: Curves.easeInOut,
       );
       _animationController.forward();
-    } else {
-      // 顯示錯誤提示
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請完成必填項目'), backgroundColor: Colors.red),
-      );
     }
+    // 不需要 SnackBar 錯誤提示，因為輸入框已經有錯誤提示
   }
 
   // 上一步
@@ -442,15 +439,15 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   // 提交表單
   void _submitForm() async {
     if (!_validateCurrentStep()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請檢查所有必填項目'), backgroundColor: Colors.red),
-      );
+      // 不需要 SnackBar 錯誤提示，因為輸入框已經有錯誤提示
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isSubmitting = true;
+      });
+    }
 
     try {
       if (_isLegacyMode) {
@@ -466,13 +463,14 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         // 不在這裡執行 pop，由外部處理
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('提交失敗: $e'), backgroundColor: Colors.red),
-      );
+      // 不使用 SnackBar，避免當機，改為 print 調試
+      print('提交失敗: $e');
     } finally {
-      setState(() {
-        _isSubmitting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
@@ -1797,14 +1795,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
         // 檢查檔案大小（2MB限制）
         if (bytes.length > 2 * 1024 * 1024) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('圖片檔案大小不能超過 2MB'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
+          // 不使用 SnackBar，可以考慮其他提示方式
+          print('圖片檔案大小超過 2MB 限制');
           return;
         }
 
@@ -1812,11 +1804,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         await _autoCropAndAddImage(bytes);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('選擇圖片失敗: $e'), backgroundColor: Colors.red),
-        );
-      }
+      // 不使用 SnackBar，避免當機
+      print('選擇圖片失敗: $e');
     }
   }
 
@@ -1858,42 +1847,41 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           _taskData.images.add(byteData.buffer.asUint8List());
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('圖片已自動裁切並添加'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // 不使用 SnackBar，圖片已添加到列表中
+        print('圖片已自動裁切並添加');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('圖片處理失敗: $e'), backgroundColor: Colors.red),
-        );
-      }
+      // 不使用 SnackBar，避免當機
+      print('圖片處理失敗: $e');
     }
   }
 
   // 移除現有圖片（URL）
   void _removeExistingImage(int index) {
-    setState(() {
-      _taskData.existingImageUrls.removeAt(index);
-    });
+    if (mounted) {
+      setState(() {
+        _taskData.existingImageUrls.removeAt(index);
+      });
+    }
   }
 
   // 移除新上傳的圖片（bytes）
   void _removeNewImage(int index) {
-    setState(() {
-      _taskData.images.removeAt(index);
-    });
+    if (mounted) {
+      setState(() {
+        _taskData.images.removeAt(index);
+      });
+    }
   }
 
   // 搜尋地點（使用 Google Places API）
   Future<void> _searchLocations(String query) async {
     if (query.isEmpty) {
-      setState(() {
-        _locationSuggestions = [];
-      });
+      if (mounted) {
+        setState(() {
+          _locationSuggestions = [];
+        });
+      }
       return;
     }
 
@@ -2001,11 +1989,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       return description.toLowerCase().contains(query.toLowerCase());
     }).toList();
 
-    setState(() {
-      _locationSuggestions = filteredLocations.isNotEmpty
-          ? filteredLocations
-          : mockLocations;
-    });
+    if (mounted) {
+      setState(() {
+        _locationSuggestions = filteredLocations.isNotEmpty
+            ? filteredLocations
+            : mockLocations;
+      });
+    }
   }
 
   // 取得地點詳細資訊（包含座標）
@@ -2041,14 +2031,16 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
   // 選擇地點
   void _selectLocation(Map<String, dynamic> place) {
-    setState(() {
-      _taskData.address = place['description'];
-      _taskData.lat = place['lat']?.toDouble();
-      _taskData.lng = place['lng']?.toDouble();
-      _addressController.text = place['description'];
-      _locationSuggestions = []; // 清空建議列表
-      if (_addressError != null) _addressError = null; // 清除錯誤
-    });
+    if (mounted) {
+      setState(() {
+        _taskData.address = place['description'];
+        _taskData.lat = place['lat']?.toDouble();
+        _taskData.lng = place['lng']?.toDouble();
+        _addressController.text = place['description'];
+        _locationSuggestions = []; // 清空建議列表
+        if (_addressError != null) _addressError = null; // 清除錯誤
+      });
+    }
 
     // 選擇地點後清除焦點，關閉鍵盤
     FocusScope.of(context).unfocus();

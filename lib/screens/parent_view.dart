@@ -16,6 +16,7 @@ import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
 import '../components/map_marker_manager.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../utils/custom_snackbar.dart';
 
 enum BottomSheetType {
   none,
@@ -221,15 +222,9 @@ class _ParentViewState extends State<ParentView> {
         // 更新地圖標記
         _updateMarkers();
 
-        // 顯示通知（可選）
+        // 顯示過期通知
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('任務「${task['title'] ?? task['name']}」已過期'),
-              backgroundColor: Colors.orange[600],
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          _showWarningMessage('任務「${task['title'] ?? task['name']}」已過期');
         }
       }
 
@@ -248,9 +243,7 @@ class _ParentViewState extends State<ParentView> {
     }
     if (perm == LocationPermission.denied ||
         perm == LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('請在系統設定允許定位權限')));
+      _showErrorMessage('請在系統設定允許定位權限');
       return;
     }
 
@@ -1486,12 +1479,7 @@ class _ParentViewState extends State<ParentView> {
         print('📷 開始上傳 ${taskData.images.length} 張圖片...');
 
         // 顯示上傳進度提示
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('正在上傳 ${taskData.images.length} 張圖片...'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        _showWarningMessage('正在上傳 ${taskData.images.length} 張圖片...');
 
         try {
           imageUrls = await _uploadImagesToStorage(taskData.images, taskId);
@@ -1527,12 +1515,7 @@ class _ParentViewState extends State<ParentView> {
             ? '任務創建成功！已上傳 ${imageUrls.length} 張圖片'
             : '任務創建成功！';
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(successMessage),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showSuccessMessage(successMessage);
 
         // 移動地圖到新任務位置
         if (taskData.lat != null && taskData.lng != null) {
@@ -1552,13 +1535,7 @@ class _ParentViewState extends State<ParentView> {
       print('❌ 堆疊追蹤: $stackTrace');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('創建任務失敗：${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        _showErrorMessage('創建任務失敗：${e.toString()}');
       }
     }
   }
@@ -1577,12 +1554,7 @@ class _ParentViewState extends State<ParentView> {
 
         // 顯示上傳進度提示
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('正在上傳 ${taskData.images.length} 張圖片...'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          _showWarningMessage('正在上傳 ${taskData.images.length} 張圖片...');
         }
 
         final newImageUrls = await _uploadImagesToStorage(
@@ -1623,14 +1595,10 @@ class _ParentViewState extends State<ParentView> {
           ? '任務更新成功！已上傳 ${taskData.images.length} 張新圖片'
           : '任務更新成功！';
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(successMessage)));
+      _showSuccessMessage(successMessage);
     } catch (e) {
       print('更新任務錯誤詳情: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('更新任務失敗：$e')));
+      _showErrorMessage('更新任務失敗：$e');
     }
   }
 
@@ -1746,6 +1714,74 @@ class _ParentViewState extends State<ParentView> {
           _showCreateTaskSheetWithLocation(locationData);
         },
       ),
+    );
+  }
+
+  /// 顯示自定義樣式的 SnackBar
+  void _showCustomSnackBar(String message, {Color? iconColor, IconData? icon}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              icon ?? Icons.check_circle_outline,
+              color: iconColor ?? Colors.green[600],
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 8,
+        margin: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom:
+              MediaQuery.of(context).size.height -
+              MediaQuery.of(context).padding.top -
+              160, // 調整位置到個人資料按鈕下方
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// 顯示成功訊息
+  void _showSuccessMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.green[600],
+      icon: Icons.check_circle_outline,
+    );
+  }
+
+  /// 顯示錯誤訊息
+  void _showErrorMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.red[600],
+      icon: Icons.error_outline,
+    );
+  }
+
+  /// 顯示警告訊息
+  void _showWarningMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.orange[600],
+      icon: Icons.warning_outlined,
     );
   }
 
@@ -1941,9 +1977,7 @@ class _ParentViewState extends State<ParentView> {
                   ),
                   onPressed: () {
                     // TODO: 實作通知功能
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('通知功能開發中...')));
+                    _showWarningMessage('通知功能開發中...');
                   },
                 ),
                 const SizedBox(width: 12),
@@ -2011,9 +2045,7 @@ class _ParentViewState extends State<ParentView> {
                     }
                     if (perm == LocationPermission.denied ||
                         perm == LocationPermission.deniedForever) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('請在系統設定允許定位權限')),
-                      );
+                      _showErrorMessage('請在系統設定允許定位權限');
                       return;
                     }
 
@@ -2169,18 +2201,14 @@ class _ParentViewState extends State<ParentView> {
                       await _firestore.doc('posts/$taskId').delete();
                       await _loadMyPosts();
 
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('任務已刪除')));
+                      _showSuccessMessage('任務已刪除');
 
                       // 如果删除后没有任务了，保持在列表页面
                       if (_myPosts.isEmpty) {
                         // 不关闭弹窗，让用户看到空状态
                       }
                     } catch (e) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('刪除失敗：$e')));
+                      _showErrorMessage('刪除失敗：$e');
                     }
                   },
                   onCreateNew: () {

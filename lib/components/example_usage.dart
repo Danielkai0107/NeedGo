@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'create_edit_task_bottom_sheet.dart';
+import '../utils/custom_snackbar.dart';
 
 class TaskCreationExample extends StatefulWidget {
   @override
@@ -212,12 +213,7 @@ class _TaskCreationExampleState extends State<TaskCreationExample> {
         setState(() {
           _tasks.add(taskData);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('任務「${taskData.title}」新增成功！'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        CustomSnackBar.showSuccess(context, '任務「${taskData.title}」新增成功！');
       },
     );
   }
@@ -231,12 +227,7 @@ class _TaskCreationExampleState extends State<TaskCreationExample> {
         setState(() {
           _tasks[index] = taskData;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('任務「${taskData.title}」更新成功！'),
-            backgroundColor: Colors.blue,
-          ),
-        );
+        CustomSnackBar.showSuccess(context, '任務「${taskData.title}」更新成功！');
       },
     );
   }
@@ -259,12 +250,7 @@ class _TaskCreationExampleState extends State<TaskCreationExample> {
                 _tasks.removeAt(index);
               });
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('任務已刪除'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
+              CustomSnackBar.showSuccess(context, '任務已刪除');
             },
             child: Text('刪除'),
             style: TextButton.styleFrom(foregroundColor: Colors.red),

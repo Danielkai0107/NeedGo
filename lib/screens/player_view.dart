@@ -9,6 +9,7 @@ import '../styles/map_styles.dart';
 import '../components/full_screen_popup.dart';
 import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
+import '../utils/custom_snackbar.dart';
 
 enum BottomSheetType {
   none,
@@ -274,14 +275,8 @@ class _PlayerViewState extends State<PlayerView> {
       // 重新載入任務以反映狀態變化
       _updateMarkers();
 
-      // 可選：顯示過期通知
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('有 ${expiredTaskIds.length} 個任務已過期'),
-          backgroundColor: Colors.orange[600],
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      // 顯示過期通知
+      CustomSnackBar.showWarning(context, '有 ${expiredTaskIds.length} 個任務已過期');
     }
   }
 

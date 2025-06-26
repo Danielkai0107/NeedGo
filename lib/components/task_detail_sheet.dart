@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/custom_snackbar.dart';
 
 /// 可重複使用的頭像組件，支援認證圖標
 class VerifiedAvatar extends StatelessWidget {
@@ -129,6 +130,74 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
   late AnimationController _countdownAnimationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
+
+  /// 顯示自定義樣式的 SnackBar
+  void _showCustomSnackBar(String message, {Color? iconColor, IconData? icon}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              icon ?? Icons.check_circle_outline,
+              color: iconColor ?? Colors.green[600],
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 8,
+        margin: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom:
+              MediaQuery.of(context).size.height -
+              MediaQuery.of(context).padding.top -
+              120, // 調整位置到頂部附近
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// 顯示成功訊息
+  void _showSuccessMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.green[600],
+      icon: Icons.check_circle_outline,
+    );
+  }
+
+  /// 顯示錯誤訊息
+  void _showErrorMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.red[600],
+      icon: Icons.error_outline,
+    );
+  }
+
+  /// 顯示警告訊息
+  void _showWarningMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.orange[600],
+      icon: Icons.warning_outlined,
+    );
+  }
 
   @override
   void initState() {
@@ -1750,21 +1819,14 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         widget.onTaskUpdated?.call();
 
         // 顯示成功訊息
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('任務已標記為完成'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showSuccessMessage('任務已標記為完成');
 
         // 關閉詳情頁
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失敗：$e'), backgroundColor: Colors.red),
-        );
+        _showErrorMessage('操作失敗：$e');
       }
     }
   }
@@ -2234,6 +2296,74 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     }
   }
 
+  /// 顯示自定義樣式的 SnackBar
+  void _showCustomSnackBar(String message, {Color? iconColor, IconData? icon}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              icon ?? Icons.check_circle_outline,
+              color: iconColor ?? Colors.green[600],
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 8,
+        margin: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom:
+              MediaQuery.of(context).size.height -
+              MediaQuery.of(context).padding.top -
+              120, // 調整位置到頂部附近
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// 顯示成功訊息
+  void _showSuccessMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.green[600],
+      icon: Icons.check_circle_outline,
+    );
+  }
+
+  /// 顯示錯誤訊息
+  void _showErrorMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.red[600],
+      icon: Icons.error_outline,
+    );
+  }
+
+  /// 顯示警告訊息
+  void _showWarningMessage(String message) {
+    _showCustomSnackBar(
+      message,
+      iconColor: Colors.orange[600],
+      icon: Icons.warning_outlined,
+    );
+  }
+
   /// 計算用戶加入App的時間
   String _calculateJoinTime(Map<String, dynamic> userData) {
     try {
@@ -2686,17 +2816,13 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
         print('撥打電話結果: $result');
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('無法撥打電話，請檢查設備是否支援通話功能')));
+          _showErrorMessage('無法撥打電話，請檢查設備是否支援通話功能');
         }
       }
     } catch (e) {
       print('撥打電話錯誤: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('撥打電話失敗: $e')));
+        _showErrorMessage('撥打電話失敗: $e');
       }
     }
   }
@@ -2715,9 +2841,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
         print('發送郵件結果: $result');
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('無法開啟郵件應用程式，請檢查設備是否已安裝郵件應用程式')),
-          );
+          _showErrorMessage('無法開啟郵件應用程式，請檢查設備是否已安裝郵件應用程式');
         }
       }
     } catch (e) {
@@ -2747,17 +2871,13 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
         print('開啟 Line 結果: $result');
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('無法開啟 Line，請檢查設備是否已安裝 Line 應用程式')),
-          );
+          _showErrorMessage('無法開啟 Line，請檢查設備是否已安裝 Line 應用程式');
         }
       }
     } catch (e) {
       print('開啟 Line 錯誤: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('開啟 Line 失敗: $e')));
+        _showErrorMessage('開啟 Line 失敗: $e');
       }
     }
   }
