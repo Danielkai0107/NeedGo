@@ -2048,35 +2048,123 @@ class _PlayerViewState extends State<PlayerView> {
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
             left: 16,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 個人資料設定按鈕
-                FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  heroTag: 'profile',
-                  mini: true,
-                  child: const Icon(Icons.person_rounded),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(34),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
-                  onPressed: _openProfileEditor,
-                ),
-                const SizedBox(width: 12),
-                // 角色切換按鈕
-                FloatingActionButton(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  heroTag: 'switch',
-                  mini: true,
-                  child: const Icon(Icons.business_rounded),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(56),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 個人資料設定按鈕 - 使用者頭貼+認證標籤
+                  GestureDetector(
+                    onTap: _openProfileEditor,
+                    child: Container(
+                      width: 68,
+                      height: 68,
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      child: Stack(
+                        children: [
+                          // 用戶頭像
+                          CircleAvatar(
+                            radius: 34,
+                            backgroundImage:
+                                (_profile['avatarUrl']?.toString().isNotEmpty ==
+                                    true)
+                                ? NetworkImage(_profile['avatarUrl'])
+                                : null,
+                            child:
+                                (_profile['avatarUrl']?.toString().isEmpty !=
+                                    false)
+                                ? const Icon(
+                                    Icons.person_rounded,
+                                    size: 38,
+                                    color: Colors.grey,
+                                  )
+                                : null,
+                          ),
+                          // 認證標籤
+                          if (_profile['isVerified'] == true)
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[700],
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.verified_user_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                  onPressed: () => _showRoleSwitchDialog(context, '發布者'),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  // 角色資訊和切換按鈕
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 當前身份
+                      Text(
+                        '陪伴者',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // 角色切換按鈕
+                      InkWell(
+                        onTap: () => _showRoleSwitchDialog(context, '發布者'),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.grey[300]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: const Text(
+                            '角色切換',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
 
