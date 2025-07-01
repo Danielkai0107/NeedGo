@@ -1865,7 +1865,7 @@ class _ParentViewState extends State<ParentView> {
           // 添加調試信息按鈕（開發時使用）
           if (true) // 設為 false 來隱藏調試按鈕
             Positioned(
-              top: 50,
+              top: 140,
               left: 16,
               child: FloatingActionButton(
                 mini: true,
