@@ -876,7 +876,16 @@ class _MyApplicationsBottomSheetState extends State<MyApplicationsBottomSheet>
   bool _isApplicationExpired(Map<String, dynamic> application) {
     // 檢查任務本身的狀態
     final taskStatus = application['status'] ?? 'open';
-    if (taskStatus == 'completed') return true;
+    if (taskStatus == 'completed' || taskStatus == 'expired') return true;
+
+    // 檢查 isActive 欄位
+    if (application['isActive'] == false) return true;
+
+    // 檢查是否已完成
+    if (application['isCompleted'] == true) return true;
+
+    // 檢查明確的過期標記
+    if (application['isExpired'] == true) return true;
 
     // 檢查是否有接受的應徵者且不是自己
     final acceptedApplicant = application['acceptedApplicant'];
@@ -886,27 +895,82 @@ class _MyApplicationsBottomSheetState extends State<MyApplicationsBottomSheet>
       return true;
     }
 
-    // 檢查任務日期是否過期
-    if (application['date'] == null) return false;
+    // 使用完整的過期時間檢查邏輯
+    return _isTaskExpiredByTime(application);
+  }
 
-    try {
-      DateTime taskDate;
-      if (application['date'] is String) {
-        taskDate = DateTime.parse(application['date']);
-      } else if (application['date'] is DateTime) {
-        taskDate = application['date'];
-      } else {
-        return false;
+  // 檢查任務是否基於時間過期（支持多種時間格式）
+  bool _isTaskExpiredByTime(Map<String, dynamic> task) {
+    final now = DateTime.now();
+
+    // 檢查多種可能的過期時間字段
+    final expiryFields = [
+      'expiryDate',
+      'dueDate',
+      'endDate',
+      'expireTime',
+      'date',
+    ];
+
+    for (String field in expiryFields) {
+      if (task[field] != null) {
+        try {
+          DateTime? expiryDate;
+
+          if (task[field] is Timestamp) {
+            // Firestore Timestamp
+            expiryDate = (task[field] as Timestamp).toDate();
+          } else if (task[field] is String) {
+            // ISO 8601 字符串
+            expiryDate = DateTime.parse(task[field] as String);
+          } else if (task[field] is int) {
+            // Unix timestamp (milliseconds)
+            expiryDate = DateTime.fromMillisecondsSinceEpoch(
+              task[field] as int,
+            );
+          } else if (task[field] is DateTime) {
+            expiryDate = task[field] as DateTime;
+          }
+
+          if (expiryDate != null) {
+            // 如果是 date 字段，結合 time 字段獲取精確時間
+            if (field == 'date' &&
+                task['time'] != null &&
+                task['time'] is Map) {
+              final time = task['time'] as Map;
+              final hour = time['hour'] ?? 23;
+              final minute = time['minute'] ?? 59;
+              expiryDate = DateTime(
+                expiryDate.year,
+                expiryDate.month,
+                expiryDate.day,
+                hour,
+                minute,
+              );
+            } else if (field == 'date') {
+              // 如果只有日期沒有時間，設定為當天結束
+              expiryDate = DateTime(
+                expiryDate.year,
+                expiryDate.month,
+                expiryDate.day,
+                23,
+                59,
+              );
+            }
+
+            if (now.isAfter(expiryDate)) {
+              return true;
+            }
+          }
+        } catch (e) {
+          print(
+            '解析任務過期時間失敗: ${task['title'] ?? task['name'] ?? task['id']}, 字段: $field, 錯誤: $e',
+          );
+        }
       }
-
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final taskDay = DateTime(taskDate.year, taskDate.month, taskDate.day);
-
-      return taskDay.isBefore(today);
-    } catch (e) {
-      return false;
     }
+
+    return false;
   }
 
   // 獲取應徵狀態（Player 視角）

@@ -203,7 +203,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
   void initState() {
     super.initState();
 
-    // 初始化動畫控制器
+    // 初始化動畫控制器（保留用於其他可能的動畫需求）
     _countdownAnimationController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -418,9 +418,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
     // 先更新一次倒數文字
     _updateCountdownText();
 
-    // 啟動初始動畫
-    _countdownAnimationController.forward();
-
     // 每秒更新一次
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -444,20 +441,75 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
     }
 
     final remainingTime = _calculateRemainingTime();
-    final newText = remainingTime != null
-        ? _formatRemainingTime(remainingTime)
-        : '進行中';
 
-    // 只有當文字改變時才觸發動畫和更新
+    // 檢查是否倒數結束，需要更新任務狀態
+    if (remainingTime == null || remainingTime.isNegative) {
+      // 倒數結束，自動更新任務狀態為過期
+      _handleTaskExpired();
+      return;
+    }
+
+    final newText = _formatRemainingTime(remainingTime);
+
+    // 只有當文字改變時才更新，不觸發動畫（避免閃爍）
     if (_countdownText != newText) {
       setState(() {
         _countdownText = newText;
       });
-
-      // 重啟動畫
-      _countdownAnimationController.reset();
-      _countdownAnimationController.forward();
     }
+  }
+
+  /// 處理任務過期邏輯（倒數結束時自動觸發）
+  Future<void> _handleTaskExpired() async {
+    print(
+      '⏰ 倒數計時結束，任務即將過期: ${widget.taskData['title'] ?? widget.taskData['name']}',
+    );
+
+    // 停止計時器
+    if (_countdownTimer != null && _countdownTimer!.isActive) {
+      _countdownTimer!.cancel();
+    }
+
+    try {
+      // 更新資料庫狀態
+      await _markTaskAsExpired(widget.taskData['id']);
+
+      // 更新本地數據
+      if (mounted) {
+        setState(() {
+          widget.taskData['status'] = 'expired';
+          widget.taskData['isActive'] = false;
+          widget.taskData['expiredAt'] = Timestamp.now();
+          _countdownText = '已過期'; // 設定最終顯示文字
+        });
+      }
+
+      // 通知父組件更新
+      widget.onTaskUpdated?.call();
+
+      print('✅ 任務狀態已自動更新為過期');
+
+      // 顯示過期通知（不阻塞）
+      if (mounted) {
+        _showTaskExpiredMessage();
+      }
+    } catch (e) {
+      print('❌ 自動更新任務過期狀態失敗: $e');
+      // 如果更新失敗，仍然停止計時器並更新本地狀態
+      if (mounted) {
+        setState(() {
+          _countdownText = '已過期';
+        });
+      }
+    }
+  }
+
+  /// 顯示任務過期通知訊息（非阻塞式）
+  void _showTaskExpiredMessage() {
+    final taskTitle =
+        widget.taskData['title'] ?? widget.taskData['name'] ?? '任務';
+
+    _showWarningMessage('「$taskTitle」已結束，任務狀態已自動更新');
   }
 
   /// 計算任務剩餘時間
@@ -1016,75 +1068,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
     final statusText = _getStatusText(status);
     final icon = _getStatusIcon(status);
 
-    // 如果是進行中狀態，應用動畫效果
-    if (status == 'open' && _countdownText.isNotEmpty) {
-      return AnimatedBuilder(
-        animation: _countdownAnimationController,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Opacity(
-              opacity: _fadeAnimation.value,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: colors,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colors[0].withOpacity(0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: 16, color: Colors.white),
-                    const SizedBox(width: 6),
-                    // 數字變化時有特殊效果
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: Text(
-                        statusText,
-                        key: ValueKey(statusText), // 重要：為每個不同的文字提供唯一key
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      transitionBuilder: (child, animation) {
-                        return SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, 0.5),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child: FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    // 其他狀態使用原來的樣式
+    // 統一使用無動畫的樣式，避免閃爍
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
