@@ -6,6 +6,7 @@ import 'screens/auth_view.dart';
 import 'screens/registration_view.dart';
 import 'screens/player_view.dart';
 import 'screens/parent_view.dart';
+import 'screens/chat_list_screen.dart';
 
 class Routes {
   static Route<dynamic> generate(RouteSettings settings) {
@@ -26,6 +27,8 @@ class Routes {
         return MaterialPageRoute(builder: (_) => const PlayerView());
       case '/parent':
         return MaterialPageRoute(builder: (_) => const ParentView());
+      case '/chat':
+        return MaterialPageRoute(builder: (_) => const ChatListScreen());
       default:
         return MaterialPageRoute(builder: (_) => const AuthView());
     }

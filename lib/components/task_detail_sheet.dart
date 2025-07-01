@@ -9,6 +9,8 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/custom_snackbar.dart';
+import '../services/chat_service.dart';
+import '../screens/chat_detail_screen.dart';
 
 /// 可重複使用的頭像組件，支援認證圖標
 class VerifiedAvatar extends StatelessWidget {
@@ -837,6 +839,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
 
         widget.onTaskUpdated?.call();
 
+        // 自動創建聊天室
+        await _createChatRoomAfterApplication();
+
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('申請成功！')));
@@ -937,6 +942,124 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         opaque: false,
       ),
     );
+  }
+
+  /// 開始與發布者聊天（僅Player視角）
+  Future<void> _startChatWithPublisher() async {
+    if (widget.isParentView) return;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      _showErrorMessage('請先登入');
+      return;
+    }
+
+    final publisherId = widget.taskData['userId'];
+    if (publisherId == null) {
+      _showErrorMessage('無法獲取發布者資訊');
+      return;
+    }
+
+    try {
+      // 創建或獲取聊天室
+      final chatId = await ChatService.createOrGetChatRoom(
+        parentId: publisherId,
+        playerId: currentUser.uid,
+        taskId: widget.taskData['id'],
+        taskTitle:
+            widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務',
+      );
+
+      // 獲取聊天室資訊
+      final chatRoom = await ChatService.getChatRoomInfo(chatId);
+      if (chatRoom == null) {
+        _showErrorMessage('無法創建聊天室');
+        return;
+      }
+
+      // 導航到聊天室
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatDetailScreen(chatRoom: chatRoom),
+          ),
+        );
+      }
+    } catch (e) {
+      print('開始聊天失敗: $e');
+      _showErrorMessage('開始聊天失敗: $e');
+    }
+  }
+
+  /// 開始與特定應徵者聊天（僅Parent視角）
+  Future<void> _startChatWithApplicant(Map<String, dynamic> applicant) async {
+    if (!widget.isParentView) return;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      _showErrorMessage('請先登入');
+      return;
+    }
+
+    final applicantId = applicant['uid'];
+    if (applicantId == null) {
+      _showErrorMessage('無法獲取應徵者資訊');
+      return;
+    }
+
+    try {
+      // 創建或獲取聊天室
+      final chatId = await ChatService.createOrGetChatRoom(
+        parentId: currentUser.uid,
+        playerId: applicantId,
+        taskId: widget.taskData['id'],
+        taskTitle:
+            widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務',
+      );
+
+      // 獲取聊天室資訊
+      final chatRoom = await ChatService.getChatRoomInfo(chatId);
+      if (chatRoom == null) {
+        _showErrorMessage('無法創建聊天室');
+        return;
+      }
+
+      // 導航到聊天室
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatDetailScreen(chatRoom: chatRoom),
+          ),
+        );
+      }
+    } catch (e) {
+      print('開始與應徵者聊天失敗: $e');
+      _showErrorMessage('開始與應徵者聊天失敗: $e');
+    }
+  }
+
+  /// 申請任務後自動創建聊天室
+  Future<void> _createChatRoomAfterApplication() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final publisherId = widget.taskData['userId'];
+
+      if (currentUser != null && publisherId != null) {
+        await ChatService.createOrGetChatRoom(
+          parentId: publisherId,
+          playerId: currentUser.uid,
+          taskId: widget.taskData['id'],
+          taskTitle:
+              widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務',
+        );
+        print('✅ 聊天室創建成功');
+      }
+    } catch (e) {
+      print('❌ 自動創建聊天室失敗: $e');
+      // 不顯示錯誤訊息，因為這是背景操作
+    }
   }
 
   @override
@@ -1626,17 +1749,13 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
               ),
             )
           else
-            SizedBox(
-              height: 300,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _applicants.length,
-                padding: EdgeInsets.zero,
-                itemBuilder: (context, index) {
-                  final applicant = _applicants[index];
-                  return _buildApplicantCard(applicant, index);
-                },
-              ),
+            // 垂直排列的申請者列表
+            Column(
+              children: _applicants.asMap().entries.map((entry) {
+                final index = entry.key;
+                final applicant = entry.value;
+                return _buildApplicantCard(applicant, index);
+              }).toList(),
             ),
         ],
       ),
@@ -1646,102 +1765,92 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
   Widget _buildApplicantCard(Map<String, dynamic> applicant, int index) {
     final applicantName = applicant['name'] ?? '未設定姓名';
     final avatarUrl = applicant['avatarUrl']?.toString() ?? '';
-    final resume = applicant['applicantResume']?.toString() ?? '';
     final joinTimeText = _calculateJoinTime(applicant);
 
-    return GestureDetector(
-      onTap: () => _showApplicantDetail(applicant),
-      child: Container(
-        width: 220,
-        margin: EdgeInsets.only(
-          right: index == _applicants.length - 1 ? 0 : 24,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.grey[100]!),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 20,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // 頭像
-              VerifiedAvatar(
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[100]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // 左側：頭像（點擊進入詳情頁）
+            GestureDetector(
+              onTap: () => _showApplicantDetail(applicant),
+              child: VerifiedAvatar(
                 avatarUrl: avatarUrl,
-                radius: 40,
+                radius: 30,
                 isVerified: applicant['isVerified'] == true,
-                badgeSize: 24,
+                badgeSize: 20,
               ),
-              const SizedBox(height: 12),
+            ),
+            const SizedBox(width: 16),
 
-              // 姓名
-              Text(
-                applicantName,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-
-              const SizedBox(height: 4),
-
-              // 加入時間
-              Text(
-                joinTimeText,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[500],
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 12),
-
-              // 簡介
-              if (resume.isNotEmpty)
-                SizedBox(
-                  height: 60,
-                  child: Text(
-                    resume,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                      height: 1.3,
+            // 中間：基本資訊
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 姓名
+                  Text(
+                    applicantName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 3,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                )
-              else
-                SizedBox(
-                  height: 60,
-                  child: Text(
-                    '尚未填寫簡介',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey[400],
-                      fontStyle: FontStyle.italic,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+                  const SizedBox(height: 4),
 
-              const SizedBox(height: 8),
-            ],
-          ),
+                  // 加入時間
+                  Text(
+                    joinTimeText,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 右側：聊天按鈕
+            ElevatedButton.icon(
+              onPressed: () => _startChatWithApplicant(applicant),
+              icon: const Icon(Icons.chat_rounded, size: 16),
+              label: const Text('聊天'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                minimumSize: const Size(80, 36),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1993,27 +2102,61 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
           child: Text(status == 'completed' ? '任務已完成' : '任務已過期'),
         );
       } else if (_hasApplied) {
-        actionButton = ElevatedButton(
-          onPressed: _isApplying ? null : _cancelApplication,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange[600],
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16),
-            textStyle: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          child: _isApplying
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        // 已申請的任務，顯示聊天和取消申請按鈕
+        return Row(
+          children: [
+            // 聊天按鈕
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _startChatWithPublisher(),
+                icon: const Icon(Icons.chat_rounded, size: 18),
+                label: const Text('聊天'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue[600],
+                  side: BorderSide(color: Colors.blue[300]!),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 16,
                   ),
-                )
-              : const Text('取消申請'),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // 取消申請按鈕
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _isApplying ? null : _cancelApplication,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange[600],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 16,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: _isApplying
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Text('取消申請'),
+              ),
+            ),
+          ],
         );
       } else {
         actionButton = ElevatedButton(
@@ -2867,30 +3010,24 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
         border: Border(top: BorderSide(color: Colors.grey[100]!)),
       ),
       child: SafeArea(
-        child: Row(
-          children: [
-            // 返回按鈕
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
-                label: const Text('關閉'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.grey[500],
-                  side: BorderSide(color: Colors.grey[400]!),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0, // 文字左右內部間距
-                    vertical: 16, // 文字上下內部間距
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 15, // 按鈕文字大小
-                    fontWeight: FontWeight.w600, // (選)字重
-                  ),
-                ),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.grey[500],
+              side: BorderSide(color: Colors.grey[400]!),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 16,
+              ),
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
               ),
             ),
-
-            // 聯絡申請者按鈕
-          ],
+            child: const Text('關閉'),
+          ),
         ),
       ),
     );

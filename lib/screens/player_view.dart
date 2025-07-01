@@ -11,6 +11,7 @@ import '../components/full_screen_popup.dart';
 import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
 import '../utils/custom_snackbar.dart';
+import '../services/chat_service.dart';
 
 enum BottomSheetType {
   none,
@@ -1708,6 +1709,58 @@ class _PlayerViewState extends State<PlayerView> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 聊天室按鈕
+                StreamBuilder<int>(
+                  stream: ChatService.getTotalUnreadCount(),
+                  builder: (context, snapshot) {
+                    final unreadCount = snapshot.data ?? 0;
+
+                    return FloatingActionButton(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      heroTag: 'chat',
+                      mini: true,
+                      child: Stack(
+                        children: [
+                          const Icon(Icons.chat_rounded),
+                          // 如果有未讀訊息，顯示紅點
+                          if (unreadCount > 0)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                                width: 16,
+                                height: 16,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    unreadCount > 9
+                                        ? '9+'
+                                        : unreadCount.toString(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(56),
+                      ),
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/chat');
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(width: 12),
                 // 通知按鈕
                 Stack(
                   children: [
