@@ -128,6 +128,12 @@ class _PlayerViewState extends State<PlayerView> {
   Timer? _taskTimer;
   static const Duration _checkInterval = Duration(minutes: 1); // 每分鐘檢查一次
 
+  // 附近任務推薦相關
+  bool _nearbyTaskNotificationEnabled = true; // 預設開啟附近任務推播
+  Set<String> _recommendedTaskIds = {}; // 已推薦過的任務ID集合
+  static const double _nearbyRadius = 8.0; // 附近任務搜尋半徑（公里）
+  static const int _maxRecommendations = 3; // 最大推薦任務數量
+
   @override
   void initState() {
     super.initState();
@@ -169,6 +175,53 @@ class _PlayerViewState extends State<PlayerView> {
     }
   }
 
+  /// 載入附近任務推播設定
+  Future<void> _loadNearbyTaskSettings() async {
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final notificationKey = 'nearby_task_notification_${u.uid}';
+      final recommendedKey = 'recommended_task_ids_${u.uid}';
+
+      final notificationEnabled = prefs.getBool(notificationKey) ?? true;
+      final recommendedIds = prefs.getStringList(recommendedKey) ?? [];
+
+      setState(() {
+        _nearbyTaskNotificationEnabled = notificationEnabled;
+        _recommendedTaskIds = recommendedIds.toSet();
+      });
+
+      print(
+        '📍 載入附近任務設定: 推播${notificationEnabled ? '開啟' : '關閉'}, 已推薦${recommendedIds.length}個任務',
+      );
+    } catch (e) {
+      print('❌ 載入附近任務設定失敗: $e');
+    }
+  }
+
+  /// 保存附近任務推播設定
+  Future<void> _saveNearbyTaskSettings() async {
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final notificationKey = 'nearby_task_notification_${u.uid}';
+      final recommendedKey = 'recommended_task_ids_${u.uid}';
+
+      await prefs.setBool(notificationKey, _nearbyTaskNotificationEnabled);
+      await prefs.setStringList(recommendedKey, _recommendedTaskIds.toList());
+
+      print(
+        '💾 保存附近任務設定: 推播${_nearbyTaskNotificationEnabled ? '開啟' : '關閉'}, 已推薦${_recommendedTaskIds.length}個任務',
+      );
+    } catch (e) {
+      print('❌ 保存附近任務設定失敗: $e');
+    }
+  }
+
   /// 保存已讀通知 ID
   Future<void> _saveReadNotificationIds() async {
     try {
@@ -206,6 +259,7 @@ class _PlayerViewState extends State<PlayerView> {
       if (mounted) await _loadSystemLocations();
       if (mounted) await _findAndRecenter();
       if (mounted) await _loadReadNotificationIds(); // 載入已讀通知 ID
+      if (mounted) await _loadNearbyTaskSettings(); // 載入附近任務設定
 
       // 延遲設置監聽器
       await Future.delayed(const Duration(milliseconds: 500));
@@ -218,8 +272,14 @@ class _PlayerViewState extends State<PlayerView> {
             if (mounted) _loadProfile(user.uid);
             if (mounted) await _loadMyProfile();
             if (mounted) await _loadReadNotificationIds(); // 用戶登入時重新載入已讀通知
+            if (mounted) await _loadNearbyTaskSettings(); // 用戶登入時重新載入附近任務設定
             if (mounted) _initializeNotificationSystem();
             if (mounted) _attachPostsListener();
+
+            // 延遲推薦附近任務，確保位置和任務資料都已載入
+            Timer(const Duration(seconds: 3), () {
+              if (mounted) _recommendNearbyTasks();
+            });
           } else {
             _cleanup();
           }
@@ -426,6 +486,106 @@ class _PlayerViewState extends State<PlayerView> {
           _unreadCount = _newPosts.length;
         });
       }
+    }
+  }
+
+  /// 推薦附近任務
+  Future<void> _recommendNearbyTasks() async {
+    if (!_nearbyTaskNotificationEnabled) {
+      print('📍 附近任務推播已關閉，跳過推薦');
+      return;
+    }
+
+    if (_myLocation == null) {
+      print('📍 尚未獲取位置，無法推薦附近任務');
+      return;
+    }
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    print('📍 開始推薦附近任務...');
+
+    try {
+      // 找到8km範圍內的有效任務
+      final nearbyTasks = _allPosts.where((task) {
+        // 基本過濾條件
+        if (task['userId'] == currentUser.uid || // 排除自己發布的
+            !_shouldShowTaskOnMap(task) || // 排除已過期和已完成的
+            _recommendedTaskIds.contains(task['id'])) {
+          // 排除已推薦過的
+          return false;
+        }
+
+        // 計算距離
+        final distance = _calculateDistance(
+          _myLocation!.latitude,
+          _myLocation!.longitude,
+          task['lat'].toDouble(),
+          task['lng'].toDouble(),
+        );
+
+        return distance <= _nearbyRadius;
+      }).toList();
+
+      print('📍 找到 ${nearbyTasks.length} 個附近可推薦任務');
+
+      if (nearbyTasks.isEmpty) {
+        print('📍 附近沒有可推薦的任務');
+        return;
+      }
+
+      // 隨機選擇最多3個任務
+      nearbyTasks.shuffle();
+      final tasksToRecommend = nearbyTasks.take(_maxRecommendations).toList();
+
+      print('📍 準備推薦 ${tasksToRecommend.length} 個任務');
+
+      for (var task in tasksToRecommend) {
+        final distance = _calculateDistance(
+          _myLocation!.latitude,
+          _myLocation!.longitude,
+          task['lat'].toDouble(),
+          task['lng'].toDouble(),
+        );
+
+        // 記錄為已推薦
+        _recommendedTaskIds.add(task['id']);
+
+        // 顯示推薦通知（使用彈窗形式）
+        _showNearbyTaskRecommendation(task, distance);
+
+        print(
+          '📍 推薦任務：${task['title'] ?? task['name']} (距離: ${distance.toStringAsFixed(1)}km)',
+        );
+      }
+
+      // 保存已推薦任務ID
+      await _saveNearbyTaskSettings();
+    } catch (e) {
+      print('❌ 推薦附近任務失敗: $e');
+    }
+  }
+
+  /// 顯示附近任務推薦通知
+  void _showNearbyTaskRecommendation(
+    Map<String, dynamic> task,
+    double distance,
+  ) {
+    if (!mounted) return;
+
+    // 如果當前沒有彈窗，顯示推薦通知
+    if (_currentBottomSheet == BottomSheetType.none) {
+      setState(() {
+        _newPostToShow = task;
+        _currentBottomSheet = BottomSheetType.randomNearbyNotification;
+      });
+    } else {
+      // 如果有彈窗，將任務加入通知列表
+      setState(() {
+        _newPosts.insert(0, task);
+        _unreadCount = _newPosts.length;
+      });
     }
   }
 
@@ -1268,100 +1428,283 @@ class _PlayerViewState extends State<PlayerView> {
       enableDrag: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.7,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // 標題欄
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.notifications_active, color: Colors.orange[600]),
-                    const SizedBox(width: 8),
-                    Text(
-                      '最新案件通知 (${_newPosts.length})',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.7,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  // 標題欄
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(20),
                       ),
                     ),
-                    const Spacer(),
-                    if (_newPosts.isNotEmpty)
-                      TextButton(
-                        onPressed: () async {
-                          // 標記所有通知為已讀
-                          for (final post in _newPosts) {
-                            await _markNotificationAsRead(post['id']);
-                          }
-
-                          setState(() {
-                            _newPosts.clear();
-                            _unreadCount = 0;
-                          });
-                          Navigator.pop(context);
-                          CustomSnackBar.showSuccess(context, '所有通知已清除');
-                        },
-                        child: const Text('全部清除'),
-                      ),
-                  ],
-                ),
-              ),
-              // 通知列表
-              Expanded(
-                child: _newPosts.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    child: Column(
+                      children: [
+                        // 標題列
+                        Row(
                           children: [
                             Icon(
-                              Icons.inbox_outlined,
-                              size: 64,
-                              color: Colors.grey[400],
+                              Icons.notifications_active,
+                              color: Colors.orange[600],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(width: 8),
                             Text(
-                              '目前沒有新案件',
-                              style: TextStyle(
+                              '最新案件通知 (${_newPosts.length})',
+                              style: const TextStyle(
                                 fontSize: 18,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '我們會即時通知您最新的工作機會',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[500],
+                            const Spacer(),
+                            if (_newPosts.isNotEmpty)
+                              TextButton(
+                                onPressed: () async {
+                                  // 標記所有通知為已讀
+                                  for (final post in _newPosts) {
+                                    await _markNotificationAsRead(post['id']);
+                                  }
+
+                                  setState(() {
+                                    _newPosts.clear();
+                                    _unreadCount = 0;
+                                  });
+                                  setModalState(() {
+                                    _newPosts.clear();
+                                    _unreadCount = 0;
+                                  });
+                                  Navigator.pop(context);
+                                  CustomSnackBar.showSuccess(
+                                    context,
+                                    '所有通知已清除',
+                                  );
+                                },
+                                child: const Text('全部清除'),
                               ),
-                              textAlign: TextAlign.center,
-                            ),
                           ],
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _newPosts.length,
-                        itemBuilder: (context, index) {
-                          final post =
-                              _newPosts[_newPosts.length - 1 - index]; // 反向顯示
-                          return _buildNotificationItem(post);
-                        },
-                      ),
+                        const SizedBox(height: 12),
+                        // 附近任務推播設定
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[200]!),
+                          ),
+                          child: Column(
+                            children: [
+                              // 主要設定行
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_rounded,
+                                    color: Colors.orange[600],
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '附近任務推播',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey[800],
+                                          ),
+                                        ),
+                                        Text(
+                                          '登入時推薦8km內的任務',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: _nearbyTaskNotificationEnabled,
+                                    onChanged: (value) async {
+                                      // 使用setModalState同時更新modal和外層狀態
+                                      setState(() {
+                                        _nearbyTaskNotificationEnabled = value;
+                                      });
+                                      setModalState(() {
+                                        _nearbyTaskNotificationEnabled = value;
+                                      });
+                                      await _saveNearbyTaskSettings();
+
+                                      final message = value
+                                          ? '附近任務推播已開啟'
+                                          : '附近任務推播已關閉';
+                                      CustomSnackBar.showSuccess(
+                                        context,
+                                        message,
+                                      );
+                                    },
+                                    activeColor: Colors.orange[600],
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ],
+                              ),
+                              // 功能按鈕區域
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const SizedBox(width: 28), // 對齊圖標位置
+                                  // 立即推薦按鈕
+                                  Expanded(
+                                    child: TextButton.icon(
+                                      onPressed: _nearbyTaskNotificationEnabled
+                                          ? () async {
+                                              Navigator.pop(context); // 關閉通知面板
+                                              CustomSnackBar.showInfo(
+                                                context,
+                                                '正在搜尋附近任務...',
+                                              );
+                                              await _recommendNearbyTasks();
+                                            }
+                                          : null,
+                                      icon: Icon(
+                                        Icons.location_searching_rounded,
+                                        size: 16,
+                                        color: _nearbyTaskNotificationEnabled
+                                            ? Colors.orange[600]
+                                            : Colors.grey[400],
+                                      ),
+                                      label: Text(
+                                        '立即推薦',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: _nearbyTaskNotificationEnabled
+                                              ? Colors.orange[600]
+                                              : Colors.grey[400],
+                                        ),
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    ),
+                                  ),
+                                  // 重置推薦紀錄按鈕
+                                  if (_recommendedTaskIds.isNotEmpty)
+                                    Expanded(
+                                      child: TextButton.icon(
+                                        onPressed: () async {
+                                          setState(() {
+                                            _recommendedTaskIds.clear();
+                                          });
+                                          setModalState(() {
+                                            _recommendedTaskIds.clear();
+                                          });
+                                          await _saveNearbyTaskSettings();
+                                          CustomSnackBar.showSuccess(
+                                            context,
+                                            '推薦紀錄已重置',
+                                          );
+                                        },
+                                        icon: Icon(
+                                          Icons.refresh_rounded,
+                                          size: 16,
+                                          color: Colors.grey[600],
+                                        ),
+                                        label: Text(
+                                          '重置 (${_recommendedTaskIds.length})',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 通知列表
+                  Expanded(
+                    child: _newPosts.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.inbox_outlined,
+                                  size: 64,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  '目前沒有新案件',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '我們會即時通知您最新的工作機會',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[500],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _newPosts.length,
+                            itemBuilder: (context, index) {
+                              final post =
+                                  _newPosts[_newPosts.length -
+                                      1 -
+                                      index]; // 反向顯示
+                              return _buildNotificationItem(post);
+                            },
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -1976,7 +2319,7 @@ class _PlayerViewState extends State<PlayerView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '🎯 發現附近案件！',
+                                  '📍 為您推薦附近任務',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
