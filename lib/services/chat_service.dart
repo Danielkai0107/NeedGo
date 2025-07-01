@@ -143,6 +143,58 @@ class ChatService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  /// 更新用戶在線狀態
+  static Future<void> updateOnlineStatus(bool isOnline) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      await _firestore.collection('user').doc(currentUser.uid).update({
+        'isOnline': isOnline,
+        'lastSeen': Timestamp.now(),
+      });
+      print('✅ 在線狀態已更新: ${isOnline ? "在線" : "離線"}');
+    } catch (e) {
+      print('❌ 更新在線狀態失敗: $e');
+    }
+  }
+
+  /// 監聽用戶在線狀態
+  static Stream<bool> getUserOnlineStatus(String userId) {
+    return _firestore.collection('user').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) return false;
+      final data = doc.data();
+      final isOnline = data?['isOnline'] ?? false;
+      final lastSeen = data?['lastSeen'] as Timestamp?;
+
+      // 如果顯示為在線，但最後活動時間超過5分鐘，認為離線
+      if (isOnline && lastSeen != null) {
+        final lastSeenTime = lastSeen.toDate();
+        final now = DateTime.now();
+        final difference = now.difference(lastSeenTime);
+        return difference.inMinutes < 5;
+      }
+
+      return isOnline;
+    });
+  }
+
+  /// 獲取用戶資訊（包含在線狀態）
+  static Future<Map<String, dynamic>?> getUserInfo(String userId) async {
+    try {
+      final doc = await _firestore.collection('user').doc(userId).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        data['uid'] = userId;
+        return data;
+      }
+      return null;
+    } catch (e) {
+      print('獲取用戶資訊失敗: $e');
+      return null;
+    }
+  }
+
   /// 創建或獲取聊天室
   static Future<String> createOrGetChatRoom({
     required String parentId,
@@ -297,21 +349,26 @@ class ChatService {
     if (currentUser == null) return Stream.value([]);
 
     try {
+      // 暫時使用單一條件查詢，避免索引問題
       return _firestore
           .collection('chats')
           .where('participants', arrayContains: currentUser.uid)
-          .where('isActive', isEqualTo: true)
-          .orderBy('updatedAt', descending: true)
           .snapshots()
           .map((snapshot) {
             final chatRooms = <ChatRoom>[];
             for (var doc in snapshot.docs) {
               try {
-                chatRooms.add(ChatRoom.fromFirestore(doc));
+                final chatRoom = ChatRoom.fromFirestore(doc);
+                // 在應用層過濾活躍的聊天室
+                if (chatRoom.isActive) {
+                  chatRooms.add(chatRoom);
+                }
               } catch (e) {
                 print('跳過無效的聊天室數據: ${doc.id}, 錯誤: $e');
               }
             }
+            // 在應用層排序
+            chatRooms.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
             return chatRooms;
           });
     } catch (e) {

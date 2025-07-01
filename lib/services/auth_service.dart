@@ -1,5 +1,6 @@
 // lib/services/auth_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
+import 'chat_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -32,6 +33,8 @@ class AuthService {
 
   // 登出
   Future<void> signOut() async {
+    // 登出前設置為離線狀態
+    await ChatService.updateOnlineStatus(false);
     await _auth.signOut();
   }
 

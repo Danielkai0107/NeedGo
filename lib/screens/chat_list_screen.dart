@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/chat_service.dart';
+import '../components/online_avatar.dart';
 import 'chat_detail_screen.dart';
 
 /// 聊天室列表頁面
@@ -222,16 +223,25 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  /// 建立聊天室頭像
+  /// 建立聊天室頭像（帶在線狀態）
   Widget _buildChatRoomAvatar(String otherUserId) {
-    return Container(
-      width: 50,
-      height: 50,
-      decoration: BoxDecoration(
-        color: Colors.blue[100],
-        shape: BoxShape.circle,
-      ),
-      child: Icon(Icons.person, color: Colors.blue[700], size: 28),
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: ChatService.getUserInfo(otherUserId),
+      builder: (context, snapshot) {
+        String? avatarUrl;
+
+        if (snapshot.hasData && snapshot.data != null) {
+          avatarUrl = snapshot.data!['avatarUrl']?.toString();
+        }
+
+        return OnlineAvatar(
+          userId: otherUserId,
+          avatarUrl: avatarUrl,
+          radius: 25,
+          showOnlineStatus: true,
+          onlineIndicatorSize: 12,
+        );
+      },
     );
   }
 

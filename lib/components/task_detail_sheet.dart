@@ -91,6 +91,7 @@ class TaskDetailSheet extends StatefulWidget {
   final VoidCallback? onDeleteTask; // 刪除任務回調（僅Parent）
   final bool showBackButton; // 是否顯示返回按鈕
   final VoidCallback? onBack; // 返回按鈕回調
+  final bool hideBottomActions; // 是否隱藏底部操作按鈕
 
   const TaskDetailSheet({
     Key? key,
@@ -102,6 +103,7 @@ class TaskDetailSheet extends StatefulWidget {
     this.onDeleteTask,
     this.showBackButton = false,
     this.onBack,
+    this.hideBottomActions = false,
   }) : super(key: key);
 
   @override
@@ -1136,7 +1138,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
               ),
 
               // 底部操作按鈕
-              _buildActionButtons(),
+              if (!widget.hideBottomActions) _buildActionButtons(),
             ],
           ),
         );
