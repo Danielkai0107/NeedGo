@@ -327,6 +327,9 @@ class _PlayerViewState extends State<PlayerView> {
       await _markTaskAsExpired(taskId);
     }
 
+    // 清理已過期任務的通知
+    _cleanupExpiredNotifications();
+
     if (expiredTaskIds.isNotEmpty && mounted) {
       // 重新載入任務以反映狀態變化
       _updateMarkers();
@@ -400,6 +403,29 @@ class _PlayerViewState extends State<PlayerView> {
       print('✅ 任務狀態已更新為過期');
     } catch (e) {
       print('❌ 更新任務過期狀態失敗: $e');
+    }
+  }
+
+  /// 清理已過期任務的通知
+  void _cleanupExpiredNotifications() {
+    if (_newPosts.isEmpty) return;
+
+    final beforeCount = _newPosts.length;
+
+    // 移除已過期或已完成的任務通知
+    _newPosts.removeWhere((post) => !_shouldShowTaskOnMap(post));
+
+    final afterCount = _newPosts.length;
+    final removedCount = beforeCount - afterCount;
+
+    if (removedCount > 0) {
+      print('🗑️ 清理了 $removedCount 個已過期任務的通知');
+
+      if (mounted) {
+        setState(() {
+          _unreadCount = _newPosts.length;
+        });
+      }
     }
   }
 
@@ -480,7 +506,8 @@ class _PlayerViewState extends State<PlayerView> {
             .where(
               (post) =>
                   post['userId'] != currentUser.uid && // 排除自己發布的
-                  !_isNotificationRead(post['id']), // 排除已讀的通知
+                  !_isNotificationRead(post['id']) && // 排除已讀的通知
+                  _shouldShowTaskOnMap(post), // 排除已過期和已完成的任務
             )
             .toList();
 
@@ -557,6 +584,14 @@ class _PlayerViewState extends State<PlayerView> {
 
           // 排除自己發布的案件
           if (newPost['userId'] == currentUser.uid) continue;
+
+          // 排除已過期和已完成的任務
+          if (!_shouldShowTaskOnMap(newPost)) {
+            print(
+              '🚫 跳過無效任務通知: ${newPost['title'] ?? newPost['name']} (狀態: ${newPost['status']})',
+            );
+            continue;
+          }
 
           // 檢查通知是否已讀
           final notificationId = newPost['id'];
