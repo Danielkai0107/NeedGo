@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../styles/map_styles.dart';
 import '../components/full_screen_popup.dart';
 import '../components/task_detail_sheet.dart';
@@ -120,6 +121,7 @@ class _PlayerViewState extends State<PlayerView> {
   int _unreadCount = 0;
   Timer? _notificationTimer;
   DateTime? _lastCheckTime;
+  Set<String> _readNotificationIds = {}; // 已讀通知 ID 集合
 
   // 任務計時器相關
   Timer? _taskTimer;
@@ -146,6 +148,55 @@ class _PlayerViewState extends State<PlayerView> {
     super.dispose();
   }
 
+  /// 載入已讀通知 ID
+  Future<void> _loadReadNotificationIds() async {
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'read_notifications_${u.uid}'; // 為每個用戶分別保存
+      final readIds = prefs.getStringList(key) ?? [];
+
+      setState(() {
+        _readNotificationIds = readIds.toSet();
+      });
+
+      print('📚 載入已讀通知 ID: ${_readNotificationIds.length} 個');
+    } catch (e) {
+      print('❌ 載入已讀通知 ID 失敗: $e');
+    }
+  }
+
+  /// 保存已讀通知 ID
+  Future<void> _saveReadNotificationIds() async {
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'read_notifications_${u.uid}'; // 為每個用戶分別保存
+      await prefs.setStringList(key, _readNotificationIds.toList());
+
+      print('💾 保存已讀通知 ID: ${_readNotificationIds.length} 個');
+    } catch (e) {
+      print('❌ 保存已讀通知 ID 失敗: $e');
+    }
+  }
+
+  /// 標記通知為已讀
+  Future<void> _markNotificationAsRead(String notificationId) async {
+    if (_readNotificationIds.add(notificationId)) {
+      await _saveReadNotificationIds();
+      print('📖 標記通知為已讀: $notificationId');
+    }
+  }
+
+  /// 檢查通知是否已讀
+  bool _isNotificationRead(String notificationId) {
+    return _readNotificationIds.contains(notificationId);
+  }
+
   // 改善初始化順序
   Future<void> _initializePlayerData() async {
     if (!mounted) return;
@@ -153,6 +204,7 @@ class _PlayerViewState extends State<PlayerView> {
     try {
       if (mounted) await _loadSystemLocations();
       if (mounted) await _findAndRecenter();
+      if (mounted) await _loadReadNotificationIds(); // 載入已讀通知 ID
 
       // 延遲設置監聽器
       await Future.delayed(const Duration(milliseconds: 500));
@@ -164,6 +216,7 @@ class _PlayerViewState extends State<PlayerView> {
           if (user != null) {
             if (mounted) _loadProfile(user.uid);
             if (mounted) await _loadMyProfile();
+            if (mounted) await _loadReadNotificationIds(); // 用戶登入時重新載入已讀通知
             if (mounted) _initializeNotificationSystem();
             if (mounted) _attachPostsListener();
           } else {
@@ -423,7 +476,11 @@ class _PlayerViewState extends State<PlayerView> {
               data['id'] = doc.id;
               return data;
             })
-            .where((post) => post['userId'] != currentUser.uid) // 排除自己發布的
+            .where(
+              (post) =>
+                  post['userId'] != currentUser.uid && // 排除自己發布的
+                  !_isNotificationRead(post['id']), // 排除已讀的通知
+            )
             .toList();
 
         if (mounted) {
@@ -499,6 +556,13 @@ class _PlayerViewState extends State<PlayerView> {
 
           // 排除自己發布的案件
           if (newPost['userId'] == currentUser.uid) continue;
+
+          // 檢查通知是否已讀
+          final notificationId = newPost['id'];
+          if (_isNotificationRead(notificationId)) {
+            print('📖 跳過已讀通知: $notificationId');
+            continue;
+          }
 
           // 添加到通知列表
           if (mounted) {
@@ -1158,226 +1222,301 @@ class _PlayerViewState extends State<PlayerView> {
     );
   }
 
-  /// 构建通知面板
-  Widget _buildNotificationPanel() {
-    return Positioned.fill(
-      child: GestureDetector(
-        onTap: _closeNotificationPanel,
-        child: Container(
-          color: Colors.black38,
-          child: Center(
-            child: Card(
-              margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Container(
-                width: double.infinity,
-                height: MediaQuery.of(context).size.height * 0.7,
+  /// 顯示通知列表
+  void _showNotificationsList() {
+    print('🔔 打開通知列表，當前通知數量: ${_newPosts.length}');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // 標題欄
+              Container(
                 padding: const EdgeInsets.all(16),
-                child: Column(
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    // 标题栏
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.notifications_active,
-                          color: Colors.orange[600],
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          '最新案件通知',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_newPosts.isNotEmpty)
-                          TextButton(
-                            onPressed: _clearAllNotifications,
-                            child: Text(
-                              '清除全部',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                      ],
+                    Icon(Icons.notifications_active, color: Colors.orange[600]),
+                    const SizedBox(width: 8),
+                    Text(
+                      '最新案件通知 (${_newPosts.length})',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    const Divider(),
+                    const Spacer(),
+                    if (_newPosts.isNotEmpty)
+                      TextButton(
+                        onPressed: () async {
+                          // 標記所有通知為已讀
+                          for (final post in _newPosts) {
+                            await _markNotificationAsRead(post['id']);
+                          }
 
-                    // 案件列表
-                    Expanded(
-                      child: _newPosts.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.inbox_outlined,
-                                    size: 64,
-                                    color: Colors.grey[400],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    '目前沒有新案件',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '我們會即時通知您最新的工作機會',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[500],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: _newPosts.length,
-                              itemBuilder: (context, index) {
-                                final post = _newPosts[index];
-                                final createdAt =
-                                    (post['createdAt'] as Timestamp?)?.toDate();
-                                final timeAgo = createdAt != null
-                                    ? _getTimeAgo(createdAt)
-                                    : '剛剛';
-
-                                return Card(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  elevation: 2,
-                                  child: ListTile(
-                                    leading: Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.orange[300]!,
-                                            Colors.orange[500]!,
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Icon(
-                                        Icons.work,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ),
-                                    title: Text(
-                                      post['name'] ?? '未命名案件',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    subtitle: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (post['content']
-                                                ?.toString()
-                                                .isNotEmpty ==
-                                            true)
-                                          Text(
-                                            post['content'],
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: Colors.grey[600],
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.schedule,
-                                              size: 12,
-                                              color: Colors.orange[600],
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              timeAgo,
-                                              style: TextStyle(
-                                                color: Colors.orange[600],
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    trailing: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green[100],
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        'NEW',
-                                        style: TextStyle(
-                                          color: Colors.green[700],
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    onTap: () => _viewPostDetails(post),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 底部按钮
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton.icon(
-                            onPressed: _closeNotificationPanel,
-                            icon: const Icon(Icons.close),
-                            label: const Text('關閉'),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              _closeNotificationPanel();
-                              // 可以跳转到所有案件列表页面
-                            },
-                            icon: const Icon(Icons.list),
-                            label: const Text('查看全部'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange[600],
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                          setState(() {
+                            _newPosts.clear();
+                            _unreadCount = 0;
+                          });
+                          Navigator.pop(context);
+                          CustomSnackBar.showSuccess(context, '所有通知已清除');
+                        },
+                        child: const Text('全部清除'),
+                      ),
                   ],
                 ),
               ),
-            ),
+              // 通知列表
+              Expanded(
+                child: _newPosts.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.inbox_outlined,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '目前沒有新案件',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '我們會即時通知您最新的工作機會',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _newPosts.length,
+                        itemBuilder: (context, index) {
+                          final post =
+                              _newPosts[_newPosts.length - 1 - index]; // 反向顯示
+                          return _buildNotificationItem(post);
+                        },
+                      ),
+              ),
+            ],
           ),
+        );
+      },
+    );
+  }
+
+  /// 查看通知中的案件詳情
+  void _viewNotificationPostDetails(Map<String, dynamic> post) async {
+    // 標記通知為已讀
+    await _markNotificationAsRead(post['id']);
+
+    // 關閉通知列表
+    Navigator.of(context).pop();
+
+    // 移動地圖到任務位置並显示任务详情彈窗
+    _moveMapToLocation(LatLng(post['lat'], post['lng']));
+
+    // 先清除任何現有的 SnackBar，避免與底部彈窗衝突
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TaskDetailSheet(
+        taskData: post,
+        isParentView: false,
+        currentLocation: _myLocation,
+        onTaskUpdated: () {
+          // 重新載入任務列表和更新標記
+          if (mounted) {
+            setState(() {
+              // 可能需要重新載入 _allPosts
+            });
+            _updateMarkers();
+          }
+        },
+      ),
+    );
+
+    // 从新案件列表中移除已查看的案件
+    setState(() {
+      _newPosts.removeWhere((p) => p['id'] == post['id']);
+      _unreadCount = _newPosts.length;
+    });
+  }
+
+  /// 建立通知項目
+  Widget _buildNotificationItem(Map<String, dynamic> post) {
+    final createdAt = (post['createdAt'] as Timestamp?)?.toDate();
+    final timeAgo = createdAt != null ? _getTimeAgo(createdAt) : '剛剛';
+
+    return GestureDetector(
+      onTap: () => _viewNotificationPostDetails(post),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange[200]!, width: 1),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 圖標
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange[600],
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.work_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // 內容
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        '新的工作機會',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'NEW',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.green[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: Colors.grey[400],
+                        size: 12,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    post['name'] ?? '未命名案件',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (post['content']?.toString().isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      post['content'],
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 12,
+                        color: Colors.orange[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        timeAgo,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        '點擊查看詳情',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // 操作按鈕
+            IconButton(
+              onPressed: () async {
+                // 標記通知為已讀
+                await _markNotificationAsRead(post['id']);
+
+                setState(() {
+                  _newPosts.removeWhere((p) => p['id'] == post['id']);
+                  _unreadCount = _newPosts.length;
+                });
+                CustomSnackBar.showSuccess(context, '通知已移除');
+              },
+              icon: Icon(
+                Icons.close_rounded,
+                color: Colors.grey[400],
+                size: 18,
+              ),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
         ),
       ),
     );
@@ -1589,8 +1728,8 @@ class _PlayerViewState extends State<PlayerView> {
                     ),
                     if (_unreadCount > 0)
                       Positioned(
-                        right: 0,
-                        top: 0,
+                        right: -2, // 往右2px（相對於parent的位置）
+                        top: -2, // 往上2px（相對於parent的位置）
                         child: Container(
                           padding: const EdgeInsets.all(2),
                           decoration: const BoxDecoration(
@@ -1910,20 +2049,6 @@ class _PlayerViewState extends State<PlayerView> {
               ),
             ),
 
-          // 通知面板
-          if (_currentBottomSheet == BottomSheetType.notificationPanel)
-            Positioned.fill(
-              child: FullScreenPopup(
-                title: '最新案件通知',
-                onClose: _closeNotificationPanel,
-                child: NotificationPanelBottomSheet(
-                  newPosts: _newPosts,
-                  onViewPost: _viewPostDetails,
-                  onClearAll: _clearAllNotifications,
-                ),
-              ),
-            ),
-
           // 編輯個人資料底部彈窗
           if (_currentBottomSheet == BottomSheetType.profileEditor)
             Positioned.fill(
@@ -1946,9 +2071,9 @@ class _PlayerViewState extends State<PlayerView> {
   /// 打开通知面板
   void _openNotificationPanel() {
     setState(() {
-      _currentBottomSheet = BottomSheetType.notificationPanel;
       _unreadCount = 0; // 清除红点
     });
+    _showNotificationsList();
   }
 
   /// 关闭通知面板
@@ -1959,7 +2084,10 @@ class _PlayerViewState extends State<PlayerView> {
   }
 
   /// 查看案件详情
-  void _viewPostDetails(Map<String, dynamic> post) {
+  void _viewPostDetails(Map<String, dynamic> post) async {
+    // 標記通知為已讀
+    await _markNotificationAsRead(post['id']);
+
     setState(() {
       _currentBottomSheet = BottomSheetType.none;
     });
@@ -1998,7 +2126,12 @@ class _PlayerViewState extends State<PlayerView> {
   }
 
   /// 清除所有通知
-  void _clearAllNotifications() {
+  void _clearAllNotifications() async {
+    // 標記所有通知為已讀
+    for (final post in _newPosts) {
+      await _markNotificationAsRead(post['id']);
+    }
+
     setState(() {
       _newPosts.clear();
       _unreadCount = 0;

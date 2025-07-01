@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../styles/map_styles.dart';
 import '../components/full_screen_popup.dart';
@@ -139,6 +140,11 @@ class _ParentViewState extends State<ParentView> {
         await _loadMyPosts();
       }
 
+      if (mounted) {
+        print('📚 載入已讀應徵者 ID...');
+        await _loadReadApplicantIds();
+      }
+
       // 延遲再次載入以確保資料完整
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
@@ -156,6 +162,14 @@ class _ParentViewState extends State<ParentView> {
 
         // 啟動即時監聽
         _startListeningForApplicants();
+
+        // 監聽用戶狀態變更，確保切換用戶時重新載入已讀狀態
+        FirebaseAuth.instance.authStateChanges().listen((user) async {
+          if (user != null && mounted) {
+            print('👤 用戶狀態變更，重新載入已讀應徵者 ID');
+            await _loadReadApplicantIds();
+          }
+        });
       }
     } catch (e) {
       print('❌ 初始化失敗: $e');
@@ -337,16 +351,25 @@ class _ParentViewState extends State<ParentView> {
                           .toList();
 
                       if (newApplicantIds.isNotEmpty) {
-                        print(
-                          '🔔 ✅ 確認發現新應徵者：任務「$taskName」有 ${newApplicantIds.length} 位新應徵者',
-                        );
-                        print('🔔 新應徵者 ID: $newApplicantIds');
-                        print('🔔 準備觸發通知...');
+                        // 過濾掉已讀的應徵者
+                        final unreadNewApplicants = newApplicantIds
+                            .where((id) => !_isApplicantRead(id))
+                            .toList();
 
-                        _showApplicantNotification(
-                          taskName,
-                          newApplicantIds.length,
-                        );
+                        if (unreadNewApplicants.isNotEmpty) {
+                          print(
+                            '🔔 ✅ 確認發現新未讀應徵者：任務「$taskName」有 ${unreadNewApplicants.length} 位新未讀應徵者',
+                          );
+                          print('🔔 新未讀應徵者 ID: $unreadNewApplicants');
+                          print('🔔 準備觸發通知...');
+
+                          _showApplicantNotification(
+                            taskName,
+                            unreadNewApplicants.length,
+                          );
+                        } else {
+                          print('🔔 📖 所有新應徵者都已讀過，跳過通知');
+                        }
                       } else {
                         print('🔔 ⚠️ 應徵者數量增加但找不到新的 ID');
                       }
@@ -807,7 +830,7 @@ class _ParentViewState extends State<ParentView> {
     Map<String, dynamic> notification, {
     bool markAsRead = false,
     bool removeFromList = false,
-  }) {
+  }) async {
     final taskId = notification['taskId'];
     final task = _myPosts.firstWhere(
       (t) => t['id'] == taskId,
@@ -821,7 +844,7 @@ class _ParentViewState extends State<ParentView> {
 
     // 標記應徵者為已讀
     if (markAsRead && notification['applicantId'] != null) {
-      _markApplicantAsRead(notification['applicantId']);
+      await _markApplicantAsRead(notification['applicantId']);
     }
 
     // 從通知列表中移除（已讀後消失）
@@ -996,7 +1019,7 @@ class _ParentViewState extends State<ParentView> {
 
       // 過濾掉已讀的應徵者
       final unreadApplicants = applicants
-          .where((id) => !_readApplicantIds.contains(id))
+          .where((id) => !_isApplicantRead(id))
           .toList();
 
       if (unreadApplicants.isEmpty) {
@@ -1053,23 +1076,51 @@ class _ParentViewState extends State<ParentView> {
 
   /// 載入已讀應徵者 ID（從本地存儲）
   Future<void> _loadReadApplicantIds() async {
-    // TODO: 這裡可以從 SharedPreferences 或 Firebase 用戶資料中載入
-    // 暫時使用空集合，表示所有應徵者都未讀
-    print('📚 載入已讀應徵者 ID... (暫時為空)');
-    _readApplicantIds = {};
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'read_applicants_${u.uid}'; // 為每個用戶分別保存
+      final readIds = prefs.getStringList(key) ?? [];
+
+      setState(() {
+        _readApplicantIds = readIds.toSet();
+      });
+
+      print('📚 載入已讀應徵者 ID: ${_readApplicantIds.length} 個');
+    } catch (e) {
+      print('❌ 載入已讀應徵者 ID 失敗: $e');
+    }
   }
 
   /// 保存已讀應徵者 ID（到本地存儲）
   Future<void> _saveReadApplicantIds() async {
-    // TODO: 這裡可以保存到 SharedPreferences 或 Firebase 用戶資料中
-    print('📚 保存已讀應徵者 ID: ${_readApplicantIds.length} 個');
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'read_applicants_${u.uid}'; // 為每個用戶分別保存
+      await prefs.setStringList(key, _readApplicantIds.toList());
+
+      print('💾 保存已讀應徵者 ID: ${_readApplicantIds.length} 個');
+    } catch (e) {
+      print('❌ 保存已讀應徵者 ID 失敗: $e');
+    }
   }
 
   /// 標記應徵者為已讀
-  void _markApplicantAsRead(String applicantId) {
-    _readApplicantIds.add(applicantId);
-    _saveReadApplicantIds();
-    print('📚 標記應徵者 $applicantId 為已讀');
+  Future<void> _markApplicantAsRead(String applicantId) async {
+    if (_readApplicantIds.add(applicantId)) {
+      await _saveReadApplicantIds();
+      print('📚 標記應徵者 $applicantId 為已讀');
+    }
+  }
+
+  /// 檢查應徵者是否已讀
+  bool _isApplicantRead(String applicantId) {
+    return _readApplicantIds.contains(applicantId);
   }
 
   /// 获取当前定位
@@ -1669,7 +1720,7 @@ class _ParentViewState extends State<ParentView> {
 
     // 將所有應徵者標記為已讀
     for (String applicantId in List<String>.from(applicants)) {
-      _markApplicantAsRead(applicantId);
+      await _markApplicantAsRead(applicantId);
     }
 
     // 更新通知狀態
