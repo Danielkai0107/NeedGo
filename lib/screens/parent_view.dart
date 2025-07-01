@@ -55,6 +55,14 @@ class _ParentViewState extends State<ParentView> {
   bool _isLoadingTravel = false;
   Map<String, String>? _travelInfo;
 
+  // 新增通知相關變數
+  StreamSubscription<QuerySnapshot>? _postsSubscription;
+  List<Map<String, dynamic>> _notifications = [];
+  bool _showNotificationPopup = false;
+  String? _latestNotificationMessage;
+  bool _isInitialLoad = true; // 標記是否為初始載入
+  Set<String> _readApplicantIds = {}; // 已讀的應徵者 ID
+
   // 新的地圖標記管理
   Set<Marker> _markers = {};
   MarkerData? _selectedMarker;
@@ -97,6 +105,9 @@ class _ParentViewState extends State<ParentView> {
     // 停止任務計時器
     _taskTimer?.cancel();
 
+    // 新增：取消訂閱
+    _postsSubscription?.cancel();
+
     super.dispose();
   }
 
@@ -105,21 +116,49 @@ class _ParentViewState extends State<ParentView> {
     if (!mounted) return;
 
     try {
-      // 依序初始化，每步都檢查 mounted
-      if (mounted) await _loadSystemLocations();
-      if (mounted) await _findAndRecenter();
-      if (mounted) await _loadMyProfile();
-      if (mounted) await _loadMyPosts();
+      print('🚀 開始初始化應用程式...');
 
-      // 延遲再次載入
+      // 依序初始化，每步都檢查 mounted
+      if (mounted) {
+        print('📍 載入系統地點...');
+        await _loadSystemLocations();
+      }
+
+      if (mounted) {
+        print('🌍 取得當前定位...');
+        await _findAndRecenter();
+      }
+
+      if (mounted) {
+        print('👤 載入個人資料...');
+        await _loadMyProfile();
+      }
+
+      if (mounted) {
+        print('📋 載入我的任務...');
+        await _loadMyPosts();
+      }
+
+      // 延遲再次載入以確保資料完整
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
+        print('🔄 重新載入任務資料...');
         await _loadMyPosts();
         // 確保初始化完成後更新標記
         _updateMarkers();
+        print('✅ 應用程式初始化完成');
+
+        // 在所有資料載入完成後才開始監聽通知
+        print('🔔 開始啟動應徵者監聽...');
+
+        // 載入歷史應徵者通知
+        await _loadHistoricalApplicantNotifications();
+
+        // 啟動即時監聽
+        _startListeningForApplicants();
       }
     } catch (e) {
-      print('初始化失敗: $e');
+      print('❌ 初始化失敗: $e');
       // 不要在這裡顯示 SnackBar，可能導致問題
     }
   }
@@ -232,6 +271,805 @@ class _ParentViewState extends State<ParentView> {
     } catch (e) {
       print('❌ 更新任務過期狀態失敗: $e');
     }
+  }
+
+  /// 開始監聽任務的應徵者變化
+  void _startListeningForApplicants() {
+    final u = FirebaseAuth.instance.currentUser;
+    if (u == null) {
+      print('❌ 用戶未登入，無法啟動監聽');
+      return;
+    }
+
+    print('🔔 開始監聽用戶 ${u.uid} 的任務應徵者變化...');
+
+    _postsSubscription = _firestore
+        .collection('posts')
+        .where('userId', isEqualTo: u.uid)
+        .snapshots(includeMetadataChanges: false) // 只監聽伺服器變化，避免本地變化觸發
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+
+            print('🔔 收到 Firebase 快照更新，文檔數量: ${snapshot.docs.length}');
+            print('🔔 變化數量: ${snapshot.docChanges.length}');
+
+            // 如果不是初始載入，才檢查應徵者變化
+            if (!_isInitialLoad) {
+              print('🔔 處理非初始載入的變化...');
+
+              // 檢查是否有新的應徵者
+              for (var change in snapshot.docChanges) {
+                print('🔔 文檔變化類型: ${change.type}, ID: ${change.doc.id}');
+
+                if (change.type == DocumentChangeType.modified) {
+                  final newData = change.doc.data() as Map<String, dynamic>;
+                  final taskId = change.doc.id;
+                  final taskName =
+                      newData['title'] ?? newData['name'] ?? '未命名任務';
+
+                  print('🔔 檢查任務「$taskName」的應徵者變化...');
+
+                  // 找到對應的本地任務
+                  final existingTaskIndex = _myPosts.indexWhere(
+                    (task) => task['id'] == taskId,
+                  );
+
+                  if (existingTaskIndex != -1) {
+                    final existingTask = _myPosts[existingTaskIndex];
+                    final oldApplicants = List<String>.from(
+                      existingTask['applicants'] ?? [],
+                    );
+                    final newApplicants = List<String>.from(
+                      newData['applicants'] ?? [],
+                    );
+
+                    print('🔔 任務「$taskName」詳細比較:');
+                    print('  - 舊應徵者數量: ${oldApplicants.length}');
+                    print('  - 新應徵者數量: ${newApplicants.length}');
+                    print('  - 舊應徵者 ID: $oldApplicants');
+                    print('  - 新應徵者 ID: $newApplicants');
+
+                    // 檢查是否有新的應徵者
+                    if (newApplicants.length > oldApplicants.length) {
+                      final newApplicantIds = newApplicants
+                          .where((id) => !oldApplicants.contains(id))
+                          .toList();
+
+                      if (newApplicantIds.isNotEmpty) {
+                        print(
+                          '🔔 ✅ 確認發現新應徵者：任務「$taskName」有 ${newApplicantIds.length} 位新應徵者',
+                        );
+                        print('🔔 新應徵者 ID: $newApplicantIds');
+                        print('🔔 準備觸發通知...');
+
+                        _showApplicantNotification(
+                          taskName,
+                          newApplicantIds.length,
+                        );
+                      } else {
+                        print('🔔 ⚠️ 應徵者數量增加但找不到新的 ID');
+                      }
+                    } else if (newApplicants.length < oldApplicants.length) {
+                      print('🔔 應徵者數量減少（可能被移除）');
+                    } else {
+                      print('🔔 應徵者數量無變化，可能是其他欄位更新');
+                    }
+                  } else {
+                    print('🔔 ⚠️ 在本地任務列表中找不到任務 ID: $taskId');
+                    print(
+                      '🔔 本地任務 ID 列表: ${_myPosts.map((t) => t['id']).toList()}',
+                    );
+
+                    // 嘗試重新載入本地任務
+                    print('🔔 嘗試重新載入本地任務...');
+                    _loadMyPosts();
+                  }
+                } else if (change.type == DocumentChangeType.added) {
+                  print('🔔 新增任務: ${change.doc.id}');
+                } else if (change.type == DocumentChangeType.removed) {
+                  print('🔔 刪除任務: ${change.doc.id}');
+                }
+              }
+            } else {
+              print('🔔 跳過初始載入的變化檢查');
+            }
+
+            // 更新本地任務資料
+            _updateLocalTasksFromSnapshot(snapshot);
+
+            // 首次載入後，將標誌設為 false
+            if (_isInitialLoad) {
+              _isInitialLoad = false;
+              print('🔔 ✅ 初始載入完成，現在開始監聽應徵者變化');
+            }
+          },
+          onError: (error) {
+            print('❌ 監聽應徵者變化失敗: $error');
+            // 嘗試重新啟動監聽
+            Future.delayed(const Duration(seconds: 5), () {
+              if (mounted) {
+                print('🔔 嘗試重新啟動監聽...');
+                _startListeningForApplicants();
+              }
+            });
+          },
+        );
+
+    print('🔔 ✅ Firebase 監聽已啟動');
+  }
+
+  /// 從 Firestore 快照更新本地任務資料
+  void _updateLocalTasksFromSnapshot(QuerySnapshot snapshot) {
+    final updatedTasks = snapshot.docs.map((doc) {
+      final data = Map<String, dynamic>.from(
+        doc.data() as Map<String, dynamic>,
+      );
+      data['id'] = doc.id;
+
+      // 確保座標是正確的數字類型
+      if (data['lat'] != null) {
+        data['lat'] = data['lat'] is String
+            ? double.parse(data['lat'])
+            : data['lat'].toDouble();
+      }
+      if (data['lng'] != null) {
+        data['lng'] = data['lng'] is String
+            ? double.parse(data['lng'])
+            : data['lng'].toDouble();
+      }
+
+      return data;
+    }).toList();
+
+    // 手動按創建時間排序
+    updatedTasks.sort((a, b) {
+      final aTime = a['createdAt'] as Timestamp?;
+      final bTime = b['createdAt'] as Timestamp?;
+
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+
+      return bTime.compareTo(aTime);
+    });
+
+    if (mounted) {
+      setState(() {
+        _myPosts = updatedTasks;
+      });
+      _updateMarkers();
+    }
+  }
+
+  /// 顯示應徵者通知
+  void _showApplicantNotification(String taskName, int applicantCount) {
+    print('🔔 [通知函數開始] 準備為任務「$taskName」顯示 $applicantCount 位應徵者的通知');
+
+    if (!mounted) {
+      print('🔔 ❌ Widget 未掛載，取消通知');
+      return;
+    }
+
+    final message = '「$taskName」有 $applicantCount 位新應徵者！';
+    final timestamp = DateTime.now();
+
+    print('🔔 通知訊息: $message');
+    print('🔔 當前時間: $timestamp');
+
+    // 檢查是否已有相同任務的近期通知（2分鐘內，縮短時間便於測試）
+    final recentNotifications = _notifications
+        .where(
+          (n) =>
+              n['taskName'] == taskName &&
+              n['type'] == 'new_applicant' &&
+              timestamp.difference(n['timestamp']).inMinutes < 2,
+        )
+        .toList();
+
+    if (recentNotifications.isNotEmpty) {
+      print('🔔 ⚠️ 任務「$taskName」在2分鐘內已有通知，跳過重複通知');
+      print('🔔 近期通知數量: ${recentNotifications.length}');
+      return;
+    }
+
+    print('🔔 ✅ 通過重複檢查，開始創建通知');
+
+    // 新增通知到列表中（用於紅點提示）
+    final notification = {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'type': 'new_applicant',
+      'taskName': taskName,
+      'applicantCount': applicantCount,
+      'message': message,
+      'timestamp': timestamp,
+      'isRead': false,
+    };
+
+    print('🔔 新增通知到列表，通知 ID: ${notification['id']}');
+    print('🔔 呼叫 setState 更新 UI...');
+
+    try {
+      setState(() {
+        _notifications.add(notification);
+        _latestNotificationMessage = message;
+        _showNotificationPopup = true;
+
+        // 限制通知數量，保留最新的20個
+        if (_notifications.length > 20) {
+          _notifications.removeRange(0, _notifications.length - 20);
+          print('🔔 通知列表已達上限，保留最新20個通知');
+        }
+      });
+
+      print('🔔 ✅ setState 完成！');
+      print('🔔 當前通知總數: ${_notifications.length}');
+      print('🔔 彈窗狀態: $_showNotificationPopup');
+      print('🔔 最新通知訊息: $_latestNotificationMessage');
+    } catch (e) {
+      print('🔔 ❌ setState 失敗: $e');
+    }
+
+    // 3秒後自動隱藏通知彈窗（但保留在通知列表中）
+    Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _showNotificationPopup = false;
+        });
+        print('🔔 通知彈窗已自動隱藏');
+      }
+    });
+
+    // 也顯示 SnackBar 作為備用通知
+    print('🔔 顯示 SnackBar 備用通知...');
+    try {
+      _showCustomSnackBar(
+        message,
+        iconColor: Colors.blue[600],
+        icon: Icons.person_add_rounded,
+      );
+      print('🔔 ✅ SnackBar 通知已顯示');
+    } catch (e) {
+      print('🔔 ❌ SnackBar 顯示失敗: $e');
+    }
+
+    print('🔔 [通知函數結束] 通知處理完成');
+  }
+
+  /// 顯示通知列表
+  void _showNotificationsList() {
+    print('🔔 打開通知列表，當前通知數量: ${_notifications.length}');
+
+    // 過濾出未讀通知
+    final unreadNotifications = _notifications
+        .where((n) => n['isRead'] != true)
+        .toList();
+
+    print('🔔 未讀通知數量: ${unreadNotifications.length}');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        // 在 builder 內部重新獲取未讀通知
+        final currentUnreadNotifications = _notifications
+            .where((n) => n['isRead'] != true)
+            .toList();
+
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // 標題欄
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.notifications_rounded, color: Colors.blue[600]),
+                    const SizedBox(width: 8),
+                    Text(
+                      '通知中心 (${currentUnreadNotifications.length})',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          // 清除所有未讀通知
+                          _notifications.removeWhere(
+                            (n) => n['isRead'] != true,
+                          );
+                        });
+                        Navigator.pop(context);
+                        _showSuccessMessage('所有通知已清除');
+                        print('🔔 所有未讀通知已清除');
+                      },
+                      child: const Text('全部清除'),
+                    ),
+                  ],
+                ),
+              ),
+              // 通知列表
+              Expanded(
+                child: currentUnreadNotifications.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.notifications_none_rounded,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '目前沒有通知',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '有新的應徵者時會在這裡顯示通知',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: currentUnreadNotifications.length,
+                        itemBuilder: (context, index) {
+                          final notification =
+                              currentUnreadNotifications[currentUnreadNotifications
+                                      .length -
+                                  1 -
+                                  index]; // 反向顯示
+                          return _buildNotificationItem(notification);
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 建立通知項目
+  Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    final isHistorical = notification['type'] == 'historical_applicant';
+    final isRead = notification['isRead'] == true;
+
+    return GestureDetector(
+      onTap: () {
+        // 點擊整個通知區域進入任務詳情
+        if (isHistorical && notification['taskId'] != null) {
+          _showTaskFromNotification(
+            notification,
+            markAsRead: true,
+            removeFromList: true,
+          );
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isRead
+              ? Colors.grey[50]
+              : (isHistorical ? Colors.orange[50] : Colors.blue[50]),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isRead
+                ? Colors.grey[200]!
+                : (isHistorical ? Colors.orange[200]! : Colors.blue[200]!),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 圖標
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isHistorical ? Colors.orange[600] : Colors.blue[600],
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                isHistorical ? Icons.history_rounded : Icons.person_add_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // 內容
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        isHistorical ? '歷史應徵者' : '新的應徵者',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      if (isHistorical) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '歷史',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.orange[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
+                      // 點擊提示箭頭
+                      if (isHistorical && notification['taskId'] != null)
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: Colors.grey[400],
+                          size: 12,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notification['message'],
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        _formatNotificationTime(notification['timestamp']),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      ),
+                      if (isHistorical && notification['taskId'] != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '點擊查看詳情',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.orange[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // 操作按鈕（只保留刪除按鈕）
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _notifications.removeWhere(
+                    (n) => n['id'] == notification['id'],
+                  );
+                });
+                _showSuccessMessage('通知已刪除');
+              },
+              icon: Icon(
+                Icons.close_rounded,
+                color: Colors.grey[400],
+                size: 18,
+              ),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 從通知中顯示任務詳情
+  void _showTaskFromNotification(
+    Map<String, dynamic> notification, {
+    bool markAsRead = false,
+    bool removeFromList = false,
+  }) {
+    final taskId = notification['taskId'];
+    final task = _myPosts.firstWhere(
+      (t) => t['id'] == taskId,
+      orElse: () => {},
+    );
+
+    if (task.isEmpty) {
+      _showErrorMessage('找不到對應的任務');
+      return;
+    }
+
+    // 標記應徵者為已讀
+    if (markAsRead && notification['applicantId'] != null) {
+      _markApplicantAsRead(notification['applicantId']);
+    }
+
+    // 從通知列表中移除（已讀後消失）
+    if (removeFromList) {
+      setState(() {
+        _notifications.removeWhere((n) => n['id'] == notification['id']);
+      });
+    }
+
+    // 關閉通知列表
+    Navigator.of(context).pop();
+
+    // 顯示任務詳情
+    _showTaskDetailSheetDirect(task);
+  }
+
+  /// 格式化通知時間
+  String _formatNotificationTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inMinutes < 1) {
+      return '剛剛';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} 分鐘前';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} 小時前';
+    } else {
+      return '${timestamp.month}/${timestamp.day} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    }
+  }
+
+  /// 顯示調試信息
+  void _showDebugInfo() async {
+    final u = FirebaseAuth.instance.currentUser;
+    final allPosts = await _firestore.collection('posts').get();
+    final myPosts = await _firestore
+        .collection('posts')
+        .where('userId', isEqualTo: u?.uid)
+        .get();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('系統調試信息'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('👤 當前用戶 UID: ${u?.uid}'),
+              Text('📊 Firebase 總任務數量: ${allPosts.docs.length}'),
+              Text('📋 我的 Firebase 任務數量: ${myPosts.docs.length}'),
+              Text('💾 本地任務數量: ${_myPosts.length}'),
+              Text('📍 地圖標記數量: ${_markers.length}'),
+              Text('🔔 通知數量: ${_notifications.length}'),
+              Text('📚 已讀應徵者: ${_readApplicantIds.length} 位'),
+              Text(
+                '📡 監聽狀態: ${_postsSubscription != null ? '✅ 已啟動' : '❌ 未啟動'}',
+              ),
+              Text('🔄 初始載入: ${_isInitialLoad ? '進行中' : '已完成'}'),
+              const SizedBox(height: 10),
+              const Text(
+                '📋 我的任務詳情:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              if (_myPosts.isEmpty)
+                const Text('  無任務')
+              else
+                for (var post in _myPosts.take(3))
+                  Text(
+                    '  • ${post['title'] ?? post['name']}: ${(post['applicants'] as List?)?.length ?? 0} 位應徵者',
+                  ),
+              const SizedBox(height: 10),
+              const Text(
+                '🔔 通知分析:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              if (_notifications.isEmpty)
+                const Text('  無通知')
+              else ...[
+                Text('  • 總通知數: ${_notifications.length}'),
+                Text(
+                  '  • 歷史通知: ${_notifications.where((n) => n['type'] == 'historical_applicant').length}',
+                ),
+                Text(
+                  '  • 即時通知: ${_notifications.where((n) => n['type'] == 'new_applicant').length}',
+                ),
+                Text(
+                  '  • 未讀通知: ${_notifications.where((n) => n['isRead'] == false).length}',
+                ),
+                const Text('最近通知:'),
+                for (var notification in _notifications.take(2))
+                  Text(
+                    '  • ${notification['message']} (${notification['type'] == 'historical_applicant' ? '歷史' : '即時'})',
+                  ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('關閉'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadMyPosts();
+            },
+            child: const Text('重新載入'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 測試通知功能
+  void _testNotification() {
+    if (_myPosts.isEmpty) {
+      _showWarningMessage('請先創建任務才能測試通知');
+      return;
+    }
+
+    final testTask = _myPosts.first;
+    final taskName = testTask['title'] ?? testTask['name'] ?? '測試任務';
+
+    print('🧪 手動觸發測試通知');
+    _showApplicantNotification(taskName, 1);
+
+    _showSuccessMessage('測試通知已觸發！');
+  }
+
+  /// 載入歷史應徵者通知
+  Future<void> _loadHistoricalApplicantNotifications() async {
+    print('📚 開始載入歷史應徵者通知...');
+
+    if (_myPosts.isEmpty) {
+      print('📚 沒有任務，跳過歷史通知載入');
+      return;
+    }
+
+    // 載入已讀應徵者 ID（從本地存儲或用戶偏好設定）
+    await _loadReadApplicantIds();
+
+    int totalNotifications = 0;
+    int filteredNotifications = 0;
+
+    for (var task in _myPosts) {
+      // 檢查任務是否過期（使用精確時間判斷）
+      if (_isTaskExpiredNow(task)) {
+        print('📚 跳過過期任務：${task['title'] ?? task['name']}');
+        continue;
+      }
+
+      // 檢查任務狀態是否為過期或已完成
+      if (task['status'] == 'expired' || task['status'] == 'completed') {
+        print(
+          '📚 跳過狀態為過期/已完成的任務：${task['title'] ?? task['name']} (狀態: ${task['status']})',
+        );
+        continue;
+      }
+
+      final taskName = task['title'] ?? task['name'] ?? '未命名任務';
+      final applicants = List<String>.from(task['applicants'] ?? []);
+
+      if (applicants.isEmpty) {
+        continue;
+      }
+
+      print('📚 檢查任務「$taskName」，應徵者數量：${applicants.length}');
+
+      // 過濾掉已讀的應徵者
+      final unreadApplicants = applicants
+          .where((id) => !_readApplicantIds.contains(id))
+          .toList();
+
+      if (unreadApplicants.isEmpty) {
+        print('📚 任務「$taskName」的所有應徵者都已讀過');
+        continue;
+      }
+
+      print('📚 任務「$taskName」有 ${unreadApplicants.length} 位未讀應徵者');
+
+      // 為每個未讀應徵者創建通知
+      for (String applicantId in unreadApplicants) {
+        final notification = {
+          'id': 'historical_${task['id']}_$applicantId',
+          'type': 'historical_applicant',
+          'taskId': task['id'],
+          'taskName': taskName,
+          'applicantId': applicantId,
+          'applicantCount': 1,
+          'message': '「$taskName」有新的應徵者',
+          'timestamp': task['createdAt']?.toDate() ?? DateTime.now(),
+          'isRead': false,
+        };
+
+        _notifications.add(notification);
+        totalNotifications++;
+      }
+
+      filteredNotifications += unreadApplicants.length;
+    }
+
+    // 按時間排序（最新的在前）
+    _notifications.sort((a, b) {
+      final aTime = a['timestamp'] as DateTime;
+      final bTime = b['timestamp'] as DateTime;
+      return bTime.compareTo(aTime);
+    });
+
+    print('📚 ✅ 歷史通知載入完成');
+    print('📚 總應徵者數量：$totalNotifications');
+    print('📚 未讀通知數量：$filteredNotifications');
+    print('📚 已載入通知總數：${_notifications.length}');
+
+    if (filteredNotifications > 0) {
+      // 如果有未讀通知，更新 UI
+      if (mounted) {
+        setState(() {
+          // 觸發 UI 更新以顯示紅點
+        });
+      }
+
+      _showSuccessMessage('載入了 $filteredNotifications 個未讀應徵者通知');
+    }
+  }
+
+  /// 載入已讀應徵者 ID（從本地存儲）
+  Future<void> _loadReadApplicantIds() async {
+    // TODO: 這裡可以從 SharedPreferences 或 Firebase 用戶資料中載入
+    // 暫時使用空集合，表示所有應徵者都未讀
+    print('📚 載入已讀應徵者 ID... (暫時為空)');
+    _readApplicantIds = {};
+  }
+
+  /// 保存已讀應徵者 ID（到本地存儲）
+  Future<void> _saveReadApplicantIds() async {
+    // TODO: 這裡可以保存到 SharedPreferences 或 Firebase 用戶資料中
+    print('📚 保存已讀應徵者 ID: ${_readApplicantIds.length} 個');
+  }
+
+  /// 標記應徵者為已讀
+  void _markApplicantAsRead(String applicantId) {
+    _readApplicantIds.add(applicantId);
+    _saveReadApplicantIds();
+    print('📚 標記應徵者 $applicantId 為已讀');
   }
 
   /// 获取当前定位
@@ -829,6 +1667,21 @@ class _ParentViewState extends State<ParentView> {
       return;
     }
 
+    // 將所有應徵者標記為已讀
+    for (String applicantId in List<String>.from(applicants)) {
+      _markApplicantAsRead(applicantId);
+    }
+
+    // 更新通知狀態
+    setState(() {
+      // 移除該任務的歷史通知（因為已查看）
+      _notifications.removeWhere(
+        (notification) =>
+            notification['type'] == 'historical_applicant' &&
+            notification['taskId'] == _selectedLocation!['id'],
+      );
+    });
+
     await _loadApplicantDetails(List<String>.from(applicants));
     setState(() {
       _currentBottomSheet = BottomSheetType.applicantsList;
@@ -1028,10 +1881,10 @@ class _ParentViewState extends State<ParentView> {
 
     // 檢查任務狀態
     final status = task['status'] ?? 'open';
-    if (status == 'completed') return false;
+    if (status == 'completed' || status == 'expired') return false;
 
-    // 檢查是否過期
-    if (_isTaskExpired(task)) return false;
+    // 檢查是否過期（使用精確時間判斷）
+    if (_isTaskExpiredNow(task)) return false;
 
     return true;
   }
@@ -1862,68 +2715,46 @@ class _ParentViewState extends State<ParentView> {
             zoomGesturesEnabled: true,
           ),
 
-          // 添加調試信息按鈕（開發時使用）
+          // 調試和測試按鈕
           if (true) // 設為 false 來隱藏調試按鈕
             Positioned(
               top: 140,
               left: 16,
-              child: FloatingActionButton(
-                mini: true,
-                backgroundColor: Colors.red[100],
-                child: const Icon(Icons.info, color: Colors.red),
-                onPressed: () async {
-                  final u = FirebaseAuth.instance.currentUser;
-                  final allPosts = await _firestore.collection('posts').get();
-                  final myPosts = await _firestore
-                      .collection('posts')
-                      .where('userId', isEqualTo: u?.uid)
-                      .get();
-
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('調試信息'),
-                      content: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('當前用戶 UID: ${u?.uid}'),
-                            Text('總任務數量: ${allPosts.docs.length}'),
-                            Text('我的任務數量: ${myPosts.docs.length}'),
-                            Text('本地任務數量: ${_myPosts.length}'),
-                            Text('標記數量: ${_markers.length}'),
-                            const SizedBox(height: 10),
-                            const Text('所有任務:'),
-                            for (var doc in allPosts.docs)
-                              Text(
-                                '- ${doc.data()['name']}: ${doc.data()['userId']}',
-                              ),
-                            const SizedBox(height: 10),
-                            const Text('我的任務:'),
-                            for (var post in _myPosts)
-                              Text(
-                                '- ${post['name']}: (${post['lat']}, ${post['lng']})',
-                              ),
-                          ],
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('關閉'),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _loadMyPosts();
-                          },
-                          child: const Text('重新載入'),
-                        ),
-                      ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Firebase 監聽狀態按鈕
+                  FloatingActionButton(
+                    mini: true,
+                    backgroundColor: _postsSubscription != null
+                        ? Colors.green[100]
+                        : Colors.red[100],
+                    child: Icon(
+                      _postsSubscription != null ? Icons.wifi : Icons.wifi_off,
+                      color: _postsSubscription != null
+                          ? Colors.green
+                          : Colors.red,
                     ),
-                  );
-                },
+                    heroTag: 'firebase_status',
+                    onPressed: () {
+                      _showDebugInfo();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  // 測試通知按鈕
+                  FloatingActionButton(
+                    mini: true,
+                    backgroundColor: Colors.orange[100],
+                    child: const Icon(
+                      Icons.notifications_active,
+                      color: Colors.orange,
+                    ),
+                    heroTag: 'test_notification',
+                    onPressed: () {
+                      _testNotification();
+                    },
+                  ),
+                ],
               ),
             ),
 
@@ -1986,13 +2817,32 @@ class _ParentViewState extends State<ParentView> {
                   foregroundColor: Colors.black,
                   heroTag: 'notifications',
                   mini: true,
-                  child: const Icon(Icons.notifications_rounded),
+                  child: Stack(
+                    children: [
+                      const Icon(Icons.notifications_rounded),
+                      // 如果有未讀通知，顯示紅點
+                      if (_notifications
+                          .where((n) => n['isRead'] == false)
+                          .isNotEmpty)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(56),
                   ),
                   onPressed: () {
-                    // TODO: 實作通知功能
-                    _showWarningMessage('通知功能開發中...');
+                    _showNotificationsList();
                   },
                 ),
                 const SizedBox(width: 12),
@@ -2255,6 +3105,97 @@ class _ParentViewState extends State<ParentView> {
                   onSave: _saveProfile,
                   onCancel: () => setState(
                     () => _currentBottomSheet = BottomSheetType.none,
+                  ),
+                ),
+              ),
+            ),
+
+          // 應徵者通知彈窗
+          if (_showNotificationPopup && _latestNotificationMessage != null)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                transform: Matrix4.translationValues(
+                  0,
+                  _showNotificationPopup ? 0 : 200,
+                  0,
+                ),
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue[600]!, Colors.blue[700]!],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.person_add_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              '新的應徵者',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _latestNotificationMessage!,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _showNotificationPopup = false;
+                          });
+                        },
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
                   ),
                 ),
               ),
