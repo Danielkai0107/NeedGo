@@ -2865,7 +2865,7 @@ class _ParentViewState extends State<ParentView> {
               children: [
                 // 聊天室按鈕
                 StreamBuilder<int>(
-                  stream: ChatService.getTotalUnreadCount(),
+                  stream: ChatService.getParentUnreadCount(),
                   builder: (context, snapshot) {
                     final unreadCount = snapshot.data ?? 0;
 

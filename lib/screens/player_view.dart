@@ -1711,7 +1711,7 @@ class _PlayerViewState extends State<PlayerView> {
               children: [
                 // 聊天室按鈕
                 StreamBuilder<int>(
-                  stream: ChatService.getTotalUnreadCount(),
+                  stream: ChatService.getPlayerUnreadCount(),
                   builder: (context, snapshot) {
                     final unreadCount = snapshot.data ?? 0;
 

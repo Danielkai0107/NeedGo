@@ -12,8 +12,22 @@ class ChatListScreen extends StatefulWidget {
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends State<ChatListScreen>
+    with SingleTickerProviderStateMixin {
   final currentUser = FirebaseAuth.instance.currentUser;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,92 +40,218 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.grey[200]),
+        bottom: TabBar(
+          controller: _tabController,
+          indicator: UnderlineTabIndicator(
+            borderSide: BorderSide(width: 2.0, color: Colors.blue[600]!),
+            insets: const EdgeInsets.symmetric(horizontal: 48.0),
+          ),
+          labelColor: Colors.blue[600],
+          unselectedLabelColor: Colors.grey[600],
+          labelStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+          ),
+          tabs: [
+            // Parent 角色 Tab（我是發布者）
+            StreamBuilder<List<ChatRoom>>(
+              stream: ChatService.getUserChatRooms(),
+              builder: (context, snapshot) {
+                final parentUnreadCount = _getUnreadCountForRole(
+                  snapshot.data,
+                  true,
+                );
+                return Tab(
+                  child: _buildTabContent(
+                    icon: Icons.business_rounded,
+                    text: '我是發布者',
+                    unreadCount: parentUnreadCount,
+                  ),
+                );
+              },
+            ),
+            // Player 角色 Tab（我是陪伴者）
+            StreamBuilder<List<ChatRoom>>(
+              stream: ChatService.getUserChatRooms(),
+              builder: (context, snapshot) {
+                final playerUnreadCount = _getUnreadCountForRole(
+                  snapshot.data,
+                  false,
+                );
+                return Tab(
+                  child: _buildTabContent(
+                    icon: Icons.person_rounded,
+                    text: '我是陪伴者',
+                    unreadCount: playerUnreadCount,
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
       backgroundColor: Colors.grey[50],
-      body: StreamBuilder<List<ChatRoom>>(
-        stream: ChatService.getUserChatRooms(),
-        builder: (context, snapshot) {
-          print('聊天室列表狀態: ${snapshot.connectionState}');
-          print('是否有錯誤: ${snapshot.hasError}');
-          print('錯誤信息: ${snapshot.error}');
-          print('數據: ${snapshot.data?.length ?? 0} 個聊天室');
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            print('聊天室載入錯誤詳情: ${snapshot.error}');
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    '載入聊天室時發生錯誤',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${snapshot.error}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () => setState(() {}),
-                    child: const Text('重新載入'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final chatRooms = snapshot.data ?? [];
-
-          if (chatRooms.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.chat_bubble_outline,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '還沒有聊天室',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '申請任務後就可以開始聊天了',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: chatRooms.length,
-            itemBuilder: (context, index) {
-              final chatRoom = chatRooms[index];
-              return _buildChatRoomItem(chatRoom);
-            },
-          );
-        },
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // Parent 角色的聊天室（我是發布者）
+          _buildChatRoomList(isParentView: true),
+          // Player 角色的聊天室（我是陪伴者）
+          _buildChatRoomList(isParentView: false),
+        ],
       ),
+    );
+  }
+
+  /// 計算指定角色的未讀消息數量
+  int _getUnreadCountForRole(List<ChatRoom>? chatRooms, bool isParentRole) {
+    if (chatRooms == null) return 0;
+
+    int totalUnread = 0;
+    for (final chatRoom in chatRooms) {
+      final isCurrentUserParent = currentUser?.uid == chatRoom.parentId;
+
+      // 如果是當前需要計算的角色，累加未讀數量
+      if (isParentRole == isCurrentUserParent) {
+        totalUnread += chatRoom.unreadCount[currentUser?.uid] ?? 0;
+      }
+    }
+
+    return totalUnread;
+  }
+
+  /// 建立 Tab 內容（包含圖標、文字和未讀角標）
+  Widget _buildTabContent({
+    required IconData icon,
+    required String text,
+    required int unreadCount,
+  }) {
+    return Stack(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18),
+            const SizedBox(width: 6),
+            Text(text),
+          ],
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// 建立聊天室列表
+  Widget _buildChatRoomList({required bool isParentView}) {
+    return StreamBuilder<List<ChatRoom>>(
+      stream: ChatService.getUserChatRooms(),
+      builder: (context, snapshot) {
+        print('聊天室列表狀態: ${snapshot.connectionState}');
+        print('是否有錯誤: ${snapshot.hasError}');
+        print('錯誤信息: ${snapshot.error}');
+        print('數據: ${snapshot.data?.length ?? 0} 個聊天室');
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          print('聊天室載入錯誤詳情: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  '載入聊天室時發生錯誤',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${snapshot.error}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => setState(() {}),
+                  child: const Text('重新載入'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final allChatRooms = snapshot.data ?? [];
+
+        // 根據當前用戶的角色篩選聊天室
+        final filteredChatRooms = allChatRooms.where((chatRoom) {
+          final isCurrentUserParent = currentUser?.uid == chatRoom.parentId;
+          return isParentView ? isCurrentUserParent : !isCurrentUserParent;
+        }).toList();
+
+        if (filteredChatRooms.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isParentView ? '還沒有發布者聊天室' : '還沒有陪伴者聊天室',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isParentView ? '發布任務後等待陪伴者申請就會有聊天室了' : '申請任務後就可以開始聊天了',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: filteredChatRooms.length,
+          itemBuilder: (context, index) {
+            final chatRoom = filteredChatRooms[index];
+            return _buildChatRoomItem(chatRoom);
+          },
+        );
+      },
     );
   }
 
@@ -139,42 +279,22 @@ class _ChatListScreenState extends State<ChatListScreen> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: _buildChatRoomAvatar(otherUserId),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    chatRoom.taskTitle,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+            Expanded(
+              child: Text(
+                chatRoom.taskTitle,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
-                Text(
-                  _formatTime(chatRoom.updatedAt),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                ),
-              ],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Icon(
-                  isCurrentUserParent ? Icons.business : Icons.person,
-                  size: 14,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  isCurrentUserParent ? '陪伴者' : '發布者',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
+            Text(
+              _formatTime(chatRoom.updatedAt),
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
           ],
         ),

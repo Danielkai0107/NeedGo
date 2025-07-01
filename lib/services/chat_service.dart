@@ -413,7 +413,6 @@ class ChatService {
       return _firestore
           .collection('chats')
           .where('participants', arrayContains: currentUser.uid)
-          .where('isActive', isEqualTo: true)
           .snapshots()
           .map((snapshot) {
             try {
@@ -421,6 +420,9 @@ class ChatService {
               for (var doc in snapshot.docs) {
                 try {
                   final data = doc.data();
+                  final isActive = data['isActive'] ?? true;
+                  if (!isActive) continue; // 只計算活躍的聊天室
+
                   final unreadCount = Map<String, int>.from(
                     data['unreadCount'] ?? {},
                   );
@@ -437,6 +439,92 @@ class ChatService {
           });
     } catch (e) {
       print('獲取未讀數量失敗: $e');
+      return Stream.value(0);
+    }
+  }
+
+  /// 獲取 Parent 角色的未讀訊息數（我作為發布者）
+  static Stream<int> getParentUnreadCount() {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return Stream.value(0);
+
+    try {
+      return _firestore
+          .collection('chats')
+          .where('participants', arrayContains: currentUser.uid)
+          .snapshots()
+          .map((snapshot) {
+            try {
+              int totalUnread = 0;
+              for (var doc in snapshot.docs) {
+                try {
+                  final data = doc.data();
+                  final isActive = data['isActive'] ?? true;
+                  if (!isActive) continue;
+
+                  final parentId = data['parentId']?.toString() ?? '';
+                  // 只計算我是 Parent 的聊天室
+                  if (parentId == currentUser.uid) {
+                    final unreadCount = Map<String, int>.from(
+                      data['unreadCount'] ?? {},
+                    );
+                    totalUnread += unreadCount[currentUser.uid] ?? 0;
+                  }
+                } catch (e) {
+                  print('處理 Parent 未讀數量失敗: ${doc.id}, 錯誤: $e');
+                }
+              }
+              return totalUnread;
+            } catch (e) {
+              print('計算 Parent 總未讀數量失敗: $e');
+              return 0;
+            }
+          });
+    } catch (e) {
+      print('獲取 Parent 未讀數量失敗: $e');
+      return Stream.value(0);
+    }
+  }
+
+  /// 獲取 Player 角色的未讀訊息數（我作為陪伴者）
+  static Stream<int> getPlayerUnreadCount() {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return Stream.value(0);
+
+    try {
+      return _firestore
+          .collection('chats')
+          .where('participants', arrayContains: currentUser.uid)
+          .snapshots()
+          .map((snapshot) {
+            try {
+              int totalUnread = 0;
+              for (var doc in snapshot.docs) {
+                try {
+                  final data = doc.data();
+                  final isActive = data['isActive'] ?? true;
+                  if (!isActive) continue;
+
+                  final playerId = data['playerId']?.toString() ?? '';
+                  // 只計算我是 Player 的聊天室
+                  if (playerId == currentUser.uid) {
+                    final unreadCount = Map<String, int>.from(
+                      data['unreadCount'] ?? {},
+                    );
+                    totalUnread += unreadCount[currentUser.uid] ?? 0;
+                  }
+                } catch (e) {
+                  print('處理 Player 未讀數量失敗: ${doc.id}, 錯誤: $e');
+                }
+              }
+              return totalUnread;
+            } catch (e) {
+              print('計算 Player 總未讀數量失敗: $e');
+              return 0;
+            }
+          });
+    } catch (e) {
+      print('獲取 Player 未讀數量失敗: $e');
       return Stream.value(0);
     }
   }
