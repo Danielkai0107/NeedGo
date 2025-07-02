@@ -622,16 +622,9 @@ class _ParentViewState extends State<ParentView> {
                     ),
                     const Spacer(),
                     TextButton(
-                      onPressed: () {
-                        setState(() {
-                          // 清除所有未讀通知
-                          _notifications.removeWhere(
-                            (n) => n['isRead'] != true,
-                          );
-                        });
+                      onPressed: () async {
+                        await _markAllNotificationsAsRead();
                         Navigator.pop(context);
-                        _showSuccessMessage('所有通知已清除');
-                        print('🔔 所有未讀通知已清除');
                       },
                       child: const Text('全部清除'),
                     ),
@@ -815,13 +808,8 @@ class _ParentViewState extends State<ParentView> {
             ),
             // 操作按鈕（只保留刪除按鈕）
             IconButton(
-              onPressed: () {
-                setState(() {
-                  _notifications.removeWhere(
-                    (n) => n['id'] == notification['id'],
-                  );
-                });
-                _showSuccessMessage('通知已刪除');
+              onPressed: () async {
+                await _markSingleNotificationAsRead(notification);
               },
               icon: Icon(
                 Icons.close_rounded,
@@ -1224,6 +1212,81 @@ class _ParentViewState extends State<ParentView> {
   /// 檢查應徵者是否已讀
   bool _isApplicantRead(String applicantId) {
     return _readApplicantIds.contains(applicantId);
+  }
+
+  /// 將所有通知標記為已讀
+  Future<void> _markAllNotificationsAsRead() async {
+    print('📖 [標記全部已讀] 開始將所有通知標記為已讀...');
+
+    try {
+      // 取得所有未讀通知
+      final unreadNotifications = _notifications
+          .where((n) => n['isRead'] != true)
+          .toList();
+
+      if (unreadNotifications.isEmpty) {
+        _showSuccessMessage('沒有未讀通知');
+        return;
+      }
+
+      print('📖 找到 ${unreadNotifications.length} 個未讀通知');
+
+      // 收集所有需要標記為已讀的應徵者 ID
+      final applicantIdsToMark = <String>{};
+
+      for (var notification in unreadNotifications) {
+        if (notification['type'] == 'historical_applicant' &&
+            notification['applicantId'] != null) {
+          applicantIdsToMark.add(notification['applicantId']);
+        }
+      }
+
+      print('📖 需要標記為已讀的應徵者數量: ${applicantIdsToMark.length}');
+
+      // 將所有應徵者標記為已讀
+      for (String applicantId in applicantIdsToMark) {
+        await _markApplicantAsRead(applicantId);
+        print('📖 已標記應徵者 $applicantId 為已讀');
+      }
+
+      // 從通知列表中移除所有未讀通知
+      setState(() {
+        _notifications.removeWhere((n) => n['isRead'] != true);
+      });
+
+      _showSuccessMessage('所有通知已標記為已讀！');
+      print('📖 ✅ 已將 ${unreadNotifications.length} 個通知標記為已讀');
+    } catch (e) {
+      print('📖 ❌ 標記通知為已讀失敗: $e');
+      _showErrorMessage('標記通知為已讀失敗：$e');
+    }
+  }
+
+  /// 將單個通知標記為已讀
+  Future<void> _markSingleNotificationAsRead(
+    Map<String, dynamic> notification,
+  ) async {
+    print('📖 [標記單個已讀] 標記通知為已讀: ${notification['id']}');
+
+    try {
+      // 如果是歷史應徵者通知，標記對應的應徵者為已讀
+      if (notification['type'] == 'historical_applicant' &&
+          notification['applicantId'] != null) {
+        await _markApplicantAsRead(notification['applicantId']);
+        print('📖 已標記應徵者 ${notification['applicantId']} 為已讀');
+      }
+
+      // 從通知列表中移除該通知
+      setState(() {
+        _notifications.removeWhere((n) => n['id'] == notification['id']);
+      });
+
+      _showSuccessMessage('通知已標記為已讀');
+      print('📖 ✅ 通知已標記為已讀並移除');
+    } catch (e) {
+      print('📖 ❌ 標記單個通知為已讀失敗: $e');
+      _showErrorMessage('標記通知為已讀失敗：$e');
+    }
   }
 
   /// 清除所有已讀狀態（測試用）
