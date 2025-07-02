@@ -260,6 +260,7 @@ class EditProfileBottomSheet extends StatefulWidget {
   final VoidCallback onSave;
   final VoidCallback onCancel;
   final bool isParentView;
+  final String? userId; // 添加用戶ID參數
 
   const EditProfileBottomSheet({
     Key? key,
@@ -267,7 +268,7 @@ class EditProfileBottomSheet extends StatefulWidget {
     required this.onSave,
     required this.onCancel,
     this.isParentView = true,
-    // 加入這個參數來獲取當前用戶 ID
+    this.userId, // 添加用戶ID參數
   }) : super(key: key);
 
   @override
@@ -386,9 +387,7 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
     setState(() => _isUploadingAvatar = true);
 
     try {
-      // 假設需要當前用戶的 uid，這裡需要從外部傳入或獲取
-      // 您可能需要在 EditProfileBottomSheet 構造函數中加入 userId 參數
-      final userId = widget.profileForm['userId'] ?? 'temp_id';
+      final userId = widget.userId ?? 'temp_id';
 
       final storageRef = FirebaseStorage.instance.ref().child(
         'avatars/$userId.jpg',
@@ -2622,5 +2621,1165 @@ class NotificationPanelBottomSheet extends StatelessWidget {
     } else {
       return '${dateTime.month}/${dateTime.day}';
     }
+  }
+}
+
+// 5. 個人資料檢視彈窗
+class ProfileViewBottomSheet extends StatelessWidget {
+  final Map<String, dynamic> profile;
+  final Function(String section) onEditSection;
+  final VoidCallback onEditAvatar;
+  final bool isParentView;
+
+  const ProfileViewBottomSheet({
+    Key? key,
+    required this.profile,
+    required this.onEditSection,
+    required this.onEditAvatar,
+    this.isParentView = true,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 標題區域
+          _buildTitleSection(),
+
+          // 第一部分：頭像 + 用戶資訊
+          _buildAvatarSection(),
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
+            thickness: 1.0, // 線條粗細
+            height: 50, // 線條本身佔據的高度（含上下間距）
+          ),
+
+          // 第二部分：基本資料
+          _buildBasicInfoSection(),
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
+            thickness: 1.0, // 線條粗細
+            height: 50, // 線條本身佔據的高度（含上下間距）
+          ),
+
+          // 第三部分：聯絡資訊
+          _buildContactSection(),
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220), // 線條顏色
+            thickness: 1.0, // 線條粗細
+            height: 50, // 線條本身佔據的高度（含上下間距）
+          ),
+
+          // 第四部分：個人簡介/履歷
+          _buildResumeSection(),
+
+          const SizedBox(height: 100), // 為按鈕留出空間
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTitleSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatarSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          // 頭像 (可直接編輯)
+          GestureDetector(
+            onTap: onEditAvatar,
+            child: Stack(
+              children: [
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey[300]!, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 2,
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 58,
+                    backgroundColor: Colors.grey[100],
+                    backgroundImage:
+                        profile['avatarUrl']?.toString().isNotEmpty == true
+                        ? NetworkImage(profile['avatarUrl'])
+                        : null,
+                    child: profile['avatarUrl']?.toString().isNotEmpty != true
+                        ? Icon(Icons.person, size: 60, color: Colors.grey[400])
+                        : null,
+                  ),
+                ),
+                // 編輯圖標
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 35,
+                    height: 35,
+                    decoration: BoxDecoration(
+                      color: Colors.blue[600],
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          spreadRadius: 1,
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.edit,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+          Text(
+            profile['name']?.toString().isNotEmpty == true
+                ? profile['name']
+                : '未設定名稱',
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // 用戶加入時間
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+              const SizedBox(width: 6),
+              Text(
+                '加入時間：${_formatJoinDate()}',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // 身份認證狀態
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                profile['isVerified'] == true
+                    ? Icons.verified_user
+                    : Icons.pending,
+                size: 16,
+                color: profile['isVerified'] == true
+                    ? Colors.green[600]
+                    : Colors.orange[600],
+              ),
+              const SizedBox(width: 6),
+              Text(
+                profile['isVerified'] == true ? '已認證' : '待認證',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: profile['isVerified'] == true
+                      ? Colors.green[700]
+                      : Colors.orange[700],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBasicInfoSection() {
+    return Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 區塊標題和編輯按鈕
+          Row(
+            children: [
+              const Text(
+                '基本資料',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => onEditSection('basic'),
+                icon: Icon(Icons.edit, size: 20, color: Colors.black),
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(36, 36),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 姓名
+          _buildInfoRow('姓名', profile['name'], Icons.person),
+
+          // 生日
+          _buildInfoRow('生日', _formatBirthday(), Icons.cake),
+
+          // 性別
+          _buildInfoRow('性別', _formatGender(), Icons.wc),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactSection() {
+    return Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 區塊標題和編輯按鈕
+          Row(
+            children: [
+              const Text(
+                '聯絡資訊',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => onEditSection('contact'),
+                icon: Icon(Icons.edit, size: 20, color: Colors.black),
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(36, 36),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Email
+          _buildInfoRow('Email', profile['email'] ?? '未設定', Icons.email),
+
+          // Line ID
+          _buildInfoRow('Line ID', profile['lineId'] ?? '未設定', Icons.chat),
+
+          // 社群連結
+          _buildInfoRow('社群連結', _formatSocialLinks(), Icons.link),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResumeSection() {
+    final resumeField = isParentView ? 'publisherResume' : 'applicantResume';
+    final resumeContent = profile[resumeField]?.toString();
+
+    return Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 區塊標題和編輯按鈕
+          Row(
+            children: [
+              Text(
+                isParentView ? '發布者簡介' : '應徵者履歷',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => onEditSection('resume'),
+                icon: Icon(Icons.edit, size: 20, color: Colors.black),
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(36, 36),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              resumeContent?.isNotEmpty == true
+                  ? resumeContent!
+                  : '尚未填寫${isParentView ? "簡介" : "履歷"}',
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: resumeContent?.isNotEmpty == true
+                    ? Colors.black87
+                    : Colors.grey[500],
+                fontStyle: resumeContent?.isNotEmpty == true
+                    ? FontStyle.normal
+                    : FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String title, dynamic content, IconData icon) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.grey[600], size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              children: [
+                Text(
+                  '$title：',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    content?.toString() ?? '未設定',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color:
+                          content?.toString().isNotEmpty == true &&
+                              content != '未設定'
+                          ? Colors.black87
+                          : Colors.grey[500],
+                      fontStyle:
+                          content?.toString().isNotEmpty == true &&
+                              content != '未設定'
+                          ? FontStyle.normal
+                          : FontStyle.italic,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 輔助方法
+  String _formatJoinDate() {
+    final createdAt = profile['createdAt'];
+    if (createdAt == null) return '未知';
+
+    try {
+      DateTime date;
+      if (createdAt is Timestamp) {
+        date = createdAt.toDate();
+      } else if (createdAt is String) {
+        date = DateTime.parse(createdAt);
+      } else {
+        return '未知';
+      }
+
+      return '${date.year}年${date.month}月${date.day}日';
+    } catch (e) {
+      return '未知';
+    }
+  }
+
+  String _formatBirthday() {
+    final birthday = profile['birthday'];
+    if (birthday == null) return '未設定';
+
+    try {
+      DateTime date;
+      if (birthday is Timestamp) {
+        date = birthday.toDate();
+      } else if (birthday is String) {
+        date = DateTime.parse(birthday);
+      } else {
+        return '未設定';
+      }
+
+      return '${date.year}年${date.month}月${date.day}日';
+    } catch (e) {
+      return '未設定';
+    }
+  }
+
+  String _formatGender() {
+    final gender = profile['gender']?.toString();
+    if (gender == null || gender.isEmpty) return '未設定';
+
+    switch (gender.toLowerCase()) {
+      case 'male':
+        return '男';
+      case 'female':
+        return '女';
+      case 'other':
+        return '其他';
+      case '男':
+      case '女':
+      case '其他':
+        return gender; // 如果已經是中文，直接返回
+      default:
+        return gender; // 其他未知值保持原樣
+    }
+  }
+
+  String _formatSocialLinks() {
+    final socialLinks = profile['socialLinks'] as Map<String, dynamic>? ?? {};
+    final otherLink = socialLinks['other']?.toString();
+
+    if (otherLink?.isNotEmpty == true) {
+      return otherLink!;
+    }
+
+    return '未設定';
+  }
+}
+
+// 6. 編輯個人資料彈窗
+
+// 7. 基本資料編輯彈窗
+class BasicInfoEditBottomSheet extends StatefulWidget {
+  final Map<String, dynamic> profileForm;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+
+  const BasicInfoEditBottomSheet({
+    Key? key,
+    required this.profileForm,
+    required this.onSave,
+    required this.onCancel,
+  }) : super(key: key);
+
+  @override
+  State<BasicInfoEditBottomSheet> createState() =>
+      _BasicInfoEditBottomSheetState();
+}
+
+class _BasicInfoEditBottomSheetState extends State<BasicInfoEditBottomSheet> {
+  late TextEditingController _nameCtrl;
+  DateTime? _selectedBirthday;
+  String? _selectedGender;
+
+  final FocusNode _nameFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.profileForm['name'] ?? '');
+
+    // 初始化生日
+    final birthday = widget.profileForm['birthday'];
+    if (birthday != null) {
+      try {
+        if (birthday is Timestamp) {
+          _selectedBirthday = birthday.toDate();
+        } else if (birthday is String) {
+          _selectedBirthday = DateTime.parse(birthday);
+        }
+      } catch (e) {
+        _selectedBirthday = null;
+      }
+    }
+
+    // 初始化性別 - 轉換英文到中文
+    final genderValue = widget.profileForm['gender']?.toString();
+    _selectedGender = _convertGenderToDisplayValue(genderValue);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _nameFocus.dispose();
+    super.dispose();
+  }
+
+  void _updateProfileForm() {
+    widget.profileForm['name'] = _nameCtrl.text.trim();
+    widget.profileForm['birthday'] = _selectedBirthday;
+    widget.profileForm['gender'] = _convertGenderToStorageValue(
+      _selectedGender,
+    );
+  }
+
+  // 將儲存的性別值轉換為顯示值（英文轉中文）
+  String? _convertGenderToDisplayValue(String? genderValue) {
+    if (genderValue == null || genderValue.isEmpty) return null;
+
+    switch (genderValue.toLowerCase()) {
+      case 'male':
+      case '男':
+        return '男';
+      case 'female':
+      case '女':
+        return '女';
+      case 'other':
+      case '其他':
+        return '其他';
+      default:
+        return null; // 如果是未知值，返回 null 讓 DropdownButton 顯示 hint
+    }
+  }
+
+  // 將顯示值轉換為儲存值（中文轉英文，保持資料一致性）
+  String? _convertGenderToStorageValue(String? displayValue) {
+    if (displayValue == null || displayValue.isEmpty) return null;
+
+    switch (displayValue) {
+      case '男':
+        return 'male';
+      case '女':
+        return 'female';
+      case '其他':
+        return 'other';
+      default:
+        return displayValue; // 如果是未知值，保持原值
+    }
+  }
+
+  Future<void> _selectBirthday() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedBirthday ?? DateTime(1990),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && picked != _selectedBirthday) {
+      setState(() {
+        _selectedBirthday = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 姓名
+          _buildInputSection(
+            title: '姓名',
+            icon: Icons.person,
+            child: TextField(
+              controller: _nameCtrl,
+              focusNode: _nameFocus,
+              decoration: InputDecoration(
+                hintText: '請輸入您的姓名',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              textInputAction: TextInputAction.done,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 生日
+          _buildInputSection(
+            title: '生日',
+            icon: Icons.cake,
+            child: InkWell(
+              onTap: _selectBirthday,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _selectedBirthday != null
+                            ? '${_selectedBirthday!.year}年${_selectedBirthday!.month}月${_selectedBirthday!.day}日'
+                            : '請選擇生日',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: _selectedBirthday != null
+                              ? Colors.black87
+                              : Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.calendar_today, color: Colors.grey[600]),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 性別
+          _buildInputSection(
+            title: '性別',
+            icon: Icons.wc,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedGender,
+                  hint: Text(
+                    '請選擇性別',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(value: '男', child: Text('男')),
+                    DropdownMenuItem(value: '女', child: Text('女')),
+                    DropdownMenuItem(value: '其他', child: Text('其他')),
+                  ],
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedGender = newValue;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // 按鈕
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: widget.onCancel,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: () {
+                    _updateProfileForm();
+                    widget.onSave();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    '儲存',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputSection({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: Colors.grey[600]),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        child,
+      ],
+    );
+  }
+}
+
+// 8. 聯絡資訊編輯彈窗
+class ContactInfoEditBottomSheet extends StatefulWidget {
+  final Map<String, dynamic> profileForm;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+
+  const ContactInfoEditBottomSheet({
+    Key? key,
+    required this.profileForm,
+    required this.onSave,
+    required this.onCancel,
+  }) : super(key: key);
+
+  @override
+  State<ContactInfoEditBottomSheet> createState() =>
+      _ContactInfoEditBottomSheetState();
+}
+
+class _ContactInfoEditBottomSheetState
+    extends State<ContactInfoEditBottomSheet> {
+  late TextEditingController _emailCtrl;
+  late TextEditingController _lineCtrl;
+  late TextEditingController _socialLinksCtrl;
+
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _lineFocus = FocusNode();
+  final FocusNode _socialFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl = TextEditingController(text: widget.profileForm['email'] ?? '');
+    _lineCtrl = TextEditingController(text: widget.profileForm['lineId'] ?? '');
+
+    // 處理 socialLinks
+    final socialLinks =
+        widget.profileForm['socialLinks'] as Map<String, dynamic>? ?? {};
+    _socialLinksCtrl = TextEditingController(
+      text: socialLinks['other']?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _lineCtrl.dispose();
+    _socialLinksCtrl.dispose();
+    _emailFocus.dispose();
+    _lineFocus.dispose();
+    _socialFocus.dispose();
+    super.dispose();
+  }
+
+  void _updateProfileForm() {
+    widget.profileForm['email'] = _emailCtrl.text.trim();
+    widget.profileForm['lineId'] = _lineCtrl.text.trim();
+
+    // 更新 socialLinks
+    final socialLinks = <String, String>{};
+    if (_socialLinksCtrl.text.trim().isNotEmpty) {
+      socialLinks['other'] = _socialLinksCtrl.text.trim();
+    }
+    widget.profileForm['socialLinks'] = socialLinks;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Email
+          _buildInputSection(
+            title: 'Email',
+            icon: Icons.email,
+            child: TextField(
+              controller: _emailCtrl,
+              focusNode: _emailFocus,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                hintText: '請輸入 Email',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _lineFocus.requestFocus(),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Line ID
+          _buildInputSection(
+            title: 'Line ID',
+            icon: Icons.chat,
+            child: TextField(
+              controller: _lineCtrl,
+              focusNode: _lineFocus,
+              decoration: InputDecoration(
+                hintText: '請輸入 Line ID（選填）',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _socialFocus.requestFocus(),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 社群連結
+          _buildInputSection(
+            title: '社群連結',
+            icon: Icons.link,
+            child: TextField(
+              controller: _socialLinksCtrl,
+              focusNode: _socialFocus,
+              decoration: InputDecoration(
+                hintText: 'Instagram、Facebook 等連結（選填）',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              textInputAction: TextInputAction.done,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // 按鈕
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: widget.onCancel,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: () {
+                    _updateProfileForm();
+                    widget.onSave();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    '儲存',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputSection({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: Colors.grey[600]),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        child,
+      ],
+    );
+  }
+}
+
+// 9. 簡介編輯彈窗
+class ResumeEditBottomSheet extends StatefulWidget {
+  final Map<String, dynamic> profileForm;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+  final bool isParentView;
+
+  const ResumeEditBottomSheet({
+    Key? key,
+    required this.profileForm,
+    required this.onSave,
+    required this.onCancel,
+    this.isParentView = true,
+  }) : super(key: key);
+
+  @override
+  State<ResumeEditBottomSheet> createState() => _ResumeEditBottomSheetState();
+}
+
+class _ResumeEditBottomSheetState extends State<ResumeEditBottomSheet> {
+  late TextEditingController _resumeCtrl;
+  final FocusNode _resumeFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 根據視角決定使用哪個履歷欄位
+    final resumeField = widget.isParentView
+        ? 'publisherResume'
+        : 'applicantResume';
+    _resumeCtrl = TextEditingController(
+      text: widget.profileForm[resumeField]?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _resumeCtrl.dispose();
+    _resumeFocus.dispose();
+    super.dispose();
+  }
+
+  void _updateProfileForm() {
+    // 根據視角更新對應的履歷欄位
+    final resumeField = widget.isParentView
+        ? 'publisherResume'
+        : 'applicantResume';
+    widget.profileForm[resumeField] = _resumeCtrl.text.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 簡介/履歷
+          _buildInputSection(
+            title: widget.isParentView ? '發布者簡介' : '應徵者履歷',
+            icon: Icons.description,
+            child: TextField(
+              controller: _resumeCtrl,
+              focusNode: _resumeFocus,
+              maxLines: 8,
+              decoration: InputDecoration(
+                hintText: widget.isParentView
+                    ? '簡單介紹一下自己，讓應徵者更了解你...'
+                    : '描述您的技能、經驗和專長...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
+                ),
+                contentPadding: const EdgeInsets.all(16),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // 按鈕
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: widget.onCancel,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: () {
+                    _updateProfileForm();
+                    widget.onSave();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    '儲存',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputSection({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: Colors.grey[600]),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        child,
+      ],
+    );
   }
 }

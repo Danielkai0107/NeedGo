@@ -2,7 +2,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -27,7 +30,11 @@ enum BottomSheetType {
   applicantProfile,
   myPostsList,
   createEditPost,
+  profileView,
   profileEditing,
+  basicInfoEdit,
+  contactInfoEdit,
+  resumeEdit,
 }
 
 class ParentView extends StatefulWidget {
@@ -1732,7 +1739,21 @@ class _ParentViewState extends State<ParentView> {
     final ref = _firestore.doc('user/${u.uid}'); // ✅ 改用 user 集合
     try {
       await ref.set(_profileForm, SetOptions(merge: true));
-      setState(() => _currentBottomSheet = BottomSheetType.none);
+
+      // 重新載入個人資料資料
+      await _loadMyProfile();
+
+      // 根據當前彈窗類型決定返回邏輯
+      if (_currentBottomSheet == BottomSheetType.basicInfoEdit ||
+          _currentBottomSheet == BottomSheetType.contactInfoEdit ||
+          _currentBottomSheet == BottomSheetType.resumeEdit) {
+        // 從分區塊編輯返回檢視頁面
+        setState(() => _currentBottomSheet = BottomSheetType.profileView);
+      } else {
+        // 從完整編輯頁面直接關閉
+        setState(() => _currentBottomSheet = BottomSheetType.none);
+      }
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('個人資料更新成功')));
@@ -1740,6 +1761,108 @@ class _ParentViewState extends State<ParentView> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('儲存失敗：$e')));
+    }
+  }
+
+  // 直接選擇並上傳頭像
+  Future<void> _pickAndUploadAvatar() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+
+      // 進行自動裁切
+      final croppedImage = await _performAutoCrop(bytes);
+
+      if (croppedImage != null) {
+        // 上傳頭像
+        await _uploadAvatarToFirebase(croppedImage);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+    }
+  }
+
+  // 自動裁切方法
+  Future<Uint8List?> _performAutoCrop(Uint8List imageBytes) async {
+    try {
+      // 使用 dart:ui 套件計算正方形裁切
+      final codec = await ui.instantiateImageCodec(imageBytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+
+      final width = image.width;
+      final height = image.height;
+      final size = math.min(width, height);
+      final offsetX = (width - size) / 2;
+      final offsetY = (height - size) / 2;
+
+      // 創建畫布進行裁切
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final srcRect = Rect.fromLTWH(
+        offsetX,
+        offsetY,
+        size.toDouble(),
+        size.toDouble(),
+      );
+      final destRect = Rect.fromLTWH(0, 0, 300, 300); // 固定輸出尺寸為 300x300
+
+      canvas.drawImageRect(image, srcRect, destRect, Paint());
+
+      final picture = recorder.endRecording();
+      final croppedImage = await picture.toImage(300, 300);
+      final byteData = await croppedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      if (byteData != null) {
+        return byteData.buffer.asUint8List();
+      } else {
+        throw '無法處理圖片';
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('自動裁切失敗：$e')));
+      return null;
+    }
+  }
+
+  // 上傳頭像到 Firebase Storage
+  Future<void> _uploadAvatarToFirebase(Uint8List imageBytes) async {
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+
+      final storageRef = FirebaseStorage.instance.ref().child(
+        'avatars/${u.uid}.jpg',
+      );
+
+      await storageRef.putData(
+        imageBytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+
+      final avatarUrl = await storageRef.getDownloadURL();
+
+      // 更新 Firestore 中的頭像 URL
+      await _firestore.doc('user/${u.uid}').update({'avatarUrl': avatarUrl});
+
+      // 重新載入個人資料
+      await _loadMyProfile();
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('頭像更新成功！')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('頭像上傳失敗：$e')));
     }
   }
 
@@ -3052,8 +3175,7 @@ class _ParentViewState extends State<ParentView> {
                   // 個人資料設定按鈕 - 使用者頭貼+認證標籤
                   GestureDetector(
                     onTap: () => setState(
-                      () =>
-                          _currentBottomSheet = BottomSheetType.profileEditing,
+                      () => _currentBottomSheet = BottomSheetType.profileView,
                     ),
                     child: Container(
                       width: 68,
@@ -3496,6 +3618,48 @@ class _ParentViewState extends State<ParentView> {
 
           // 創建/編輯任務底部彈窗已移至 showModalBottomSheet 方式
 
+          // 個人資料檢視底部彈窗
+          if (_currentBottomSheet == BottomSheetType.profileView)
+            Positioned.fill(
+              child: FullScreenPopup(
+                title: '個人資料',
+                onClose: () =>
+                    setState(() => _currentBottomSheet = BottomSheetType.none),
+                child: ProfileViewBottomSheet(
+                  profile: _profile,
+                  isParentView: true,
+                  onEditSection: (section) {
+                    // 根據區塊顯示對應的編輯頁面
+                    _profileForm = Map<String, dynamic>.from(_profile);
+                    switch (section) {
+                      case 'basic':
+                        setState(
+                          () => _currentBottomSheet =
+                              BottomSheetType.basicInfoEdit,
+                        );
+                        break;
+                      case 'contact':
+                        setState(
+                          () => _currentBottomSheet =
+                              BottomSheetType.contactInfoEdit,
+                        );
+                        break;
+                      case 'resume':
+                        setState(
+                          () =>
+                              _currentBottomSheet = BottomSheetType.resumeEdit,
+                        );
+                        break;
+                    }
+                  },
+                  onEditAvatar: () {
+                    // 直接上傳頭像
+                    _pickAndUploadAvatar();
+                  },
+                ),
+              ),
+            ),
+
           // 編輯個人資料底部彈窗
           if (_currentBottomSheet == BottomSheetType.profileEditing)
             Positioned.fill(
@@ -3506,9 +3670,65 @@ class _ParentViewState extends State<ParentView> {
                 child: EditProfileBottomSheet(
                   profileForm: _profileForm,
                   isParentView: true,
+                  userId: FirebaseAuth.instance.currentUser?.uid,
                   onSave: _saveProfile,
                   onCancel: () => setState(
                     () => _currentBottomSheet = BottomSheetType.none,
+                  ),
+                ),
+              ),
+            ),
+
+          // 基本資料編輯底部彈窗
+          if (_currentBottomSheet == BottomSheetType.basicInfoEdit)
+            Positioned.fill(
+              child: FullScreenPopup(
+                title: '編輯基本資料',
+                onClose: () => setState(
+                  () => _currentBottomSheet = BottomSheetType.profileView,
+                ),
+                child: BasicInfoEditBottomSheet(
+                  profileForm: _profileForm,
+                  onSave: _saveProfile,
+                  onCancel: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.profileView,
+                  ),
+                ),
+              ),
+            ),
+
+          // 聯絡資訊編輯底部彈窗
+          if (_currentBottomSheet == BottomSheetType.contactInfoEdit)
+            Positioned.fill(
+              child: FullScreenPopup(
+                title: '編輯聯絡資訊',
+                onClose: () => setState(
+                  () => _currentBottomSheet = BottomSheetType.profileView,
+                ),
+                child: ContactInfoEditBottomSheet(
+                  profileForm: _profileForm,
+                  onSave: _saveProfile,
+                  onCancel: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.profileView,
+                  ),
+                ),
+              ),
+            ),
+
+          // 簡介編輯底部彈窗
+          if (_currentBottomSheet == BottomSheetType.resumeEdit)
+            Positioned.fill(
+              child: FullScreenPopup(
+                title: '編輯簡介',
+                onClose: () => setState(
+                  () => _currentBottomSheet = BottomSheetType.profileView,
+                ),
+                child: ResumeEditBottomSheet(
+                  profileForm: _profileForm,
+                  isParentView: true,
+                  onSave: _saveProfile,
+                  onCancel: () => setState(
+                    () => _currentBottomSheet = BottomSheetType.profileView,
                   ),
                 ),
               ),
