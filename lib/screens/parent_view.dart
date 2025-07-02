@@ -107,8 +107,11 @@ class _ParentViewState extends State<ParentView> {
     // 停止任務計時器
     _taskTimer?.cancel();
 
-    // 新增：取消訂閱
+    // 取消訂閱
     _postsSubscription?.cancel();
+
+    // 保存已讀狀態
+    _saveReadApplicantIds();
 
     super.dispose();
   }
@@ -167,8 +170,8 @@ class _ParentViewState extends State<ParentView> {
         // 監聽用戶狀態變更，確保切換用戶時重新載入已讀狀態
         FirebaseAuth.instance.authStateChanges().listen((user) async {
           if (user != null && mounted) {
-            print('👤 用戶狀態變更，重新載入已讀應徵者 ID');
-            await _loadReadApplicantIds();
+            print('👤 用戶狀態變更，重置通知系統');
+            await _resetNotificationSystem();
           }
         });
       }
@@ -298,6 +301,9 @@ class _ParentViewState extends State<ParentView> {
 
     print('🔔 開始監聽用戶 ${u.uid} 的任務應徵者變化...');
 
+    // 取消現有的監聽器，避免重複監聽
+    _postsSubscription?.cancel();
+
     _postsSubscription = _firestore
         .collection('posts')
         .where('userId', isEqualTo: u.uid)
@@ -309,98 +315,90 @@ class _ParentViewState extends State<ParentView> {
             print('🔔 收到 Firebase 快照更新，文檔數量: ${snapshot.docs.length}');
             print('🔔 變化數量: ${snapshot.docChanges.length}');
 
-            // 如果不是初始載入，才檢查應徵者變化
-            if (!_isInitialLoad) {
-              print('🔔 處理非初始載入的變化...');
-
-              // 檢查是否有新的應徵者
-              for (var change in snapshot.docChanges) {
-                print('🔔 文檔變化類型: ${change.type}, ID: ${change.doc.id}');
-
-                if (change.type == DocumentChangeType.modified) {
-                  final newData = change.doc.data() as Map<String, dynamic>;
-                  final taskId = change.doc.id;
-                  final taskName =
-                      newData['title'] ?? newData['name'] ?? '未命名任務';
-
-                  print('🔔 檢查任務「$taskName」的應徵者變化...');
-
-                  // 找到對應的本地任務
-                  final existingTaskIndex = _myPosts.indexWhere(
-                    (task) => task['id'] == taskId,
-                  );
-
-                  if (existingTaskIndex != -1) {
-                    final existingTask = _myPosts[existingTaskIndex];
-                    final oldApplicants = List<String>.from(
-                      existingTask['applicants'] ?? [],
-                    );
-                    final newApplicants = List<String>.from(
-                      newData['applicants'] ?? [],
-                    );
-
-                    print('🔔 任務「$taskName」詳細比較:');
-                    print('  - 舊應徵者數量: ${oldApplicants.length}');
-                    print('  - 新應徵者數量: ${newApplicants.length}');
-                    print('  - 舊應徵者 ID: $oldApplicants');
-                    print('  - 新應徵者 ID: $newApplicants');
-
-                    // 檢查是否有新的應徵者
-                    if (newApplicants.length > oldApplicants.length) {
-                      final newApplicantIds = newApplicants
-                          .where((id) => !oldApplicants.contains(id))
-                          .toList();
-
-                      if (newApplicantIds.isNotEmpty) {
-                        // 過濾掉已讀的應徵者
-                        final unreadNewApplicants = newApplicantIds
-                            .where((id) => !_isApplicantRead(id))
-                            .toList();
-
-                        if (unreadNewApplicants.isNotEmpty) {
-                          print(
-                            '🔔 ✅ 確認發現新未讀應徵者：任務「$taskName」有 ${unreadNewApplicants.length} 位新未讀應徵者',
-                          );
-                          print('🔔 新未讀應徵者 ID: $unreadNewApplicants');
-                          print('🔔 準備觸發通知...');
-
-                          _showApplicantNotification(
-                            taskName,
-                            unreadNewApplicants.length,
-                          );
-                        } else {
-                          print('🔔 📖 所有新應徵者都已讀過，跳過通知');
-                        }
-                      } else {
-                        print('🔔 ⚠️ 應徵者數量增加但找不到新的 ID');
-                      }
-                    } else if (newApplicants.length < oldApplicants.length) {
-                      print('🔔 應徵者數量減少（可能被移除）');
-                    } else {
-                      print('🔔 應徵者數量無變化，可能是其他欄位更新');
-                    }
-                  } else {
-                    print('🔔 ⚠️ 在本地任務列表中找不到任務 ID: $taskId');
-                    print(
-                      '🔔 本地任務 ID 列表: ${_myPosts.map((t) => t['id']).toList()}',
-                    );
-
-                    // 嘗試重新載入本地任務
-                    print('🔔 嘗試重新載入本地任務...');
-                    _loadMyPosts();
-                  }
-                } else if (change.type == DocumentChangeType.added) {
-                  print('🔔 新增任務: ${change.doc.id}');
-                } else if (change.type == DocumentChangeType.removed) {
-                  print('🔔 刪除任務: ${change.doc.id}');
-                }
-              }
-            } else {
-              print('🔔 跳過初始載入的變化檢查');
+            // 保存舊的任務資料
+            final oldTasksMap = <String, Map<String, dynamic>>{};
+            for (var task in _myPosts) {
+              oldTasksMap[task['id']] = task;
             }
 
-            // 更新本地任務資料
+            // 先更新本地任務資料
             _updateLocalTasksFromSnapshot(snapshot);
+
+            // 檢查應徵者變化（無論是否為初始載入）
+            for (var change in snapshot.docChanges) {
+              print('🔔 文檔變化類型: ${change.type}, ID: ${change.doc.id}');
+
+              if (change.type == DocumentChangeType.modified) {
+                final newData = change.doc.data() as Map<String, dynamic>;
+                final taskId = change.doc.id;
+                final taskName = newData['title'] ?? newData['name'] ?? '未命名任務';
+
+                print('🔔 檢查任務「$taskName」的應徵者變化...');
+
+                // 檢查是否有舊的任務資料
+                final oldTask = oldTasksMap[taskId];
+                if (oldTask != null) {
+                  final oldApplicants = List<String>.from(
+                    oldTask['applicants'] ?? [],
+                  );
+                  final newApplicants = List<String>.from(
+                    newData['applicants'] ?? [],
+                  );
+
+                  print('🔔 任務「$taskName」詳細比較:');
+                  print('  - 舊應徵者數量: ${oldApplicants.length}');
+                  print('  - 新應徵者數量: ${newApplicants.length}');
+                  print('  - 舊應徵者 ID: $oldApplicants');
+                  print('  - 新應徵者 ID: $newApplicants');
+
+                  // 檢查是否有新的應徵者
+                  if (newApplicants.length > oldApplicants.length) {
+                    final newApplicantIds = newApplicants
+                        .where((id) => !oldApplicants.contains(id))
+                        .toList();
+
+                    if (newApplicantIds.isNotEmpty) {
+                      // 過濾掉已讀的應徵者
+                      final unreadNewApplicants = newApplicantIds
+                          .where((id) => !_isApplicantRead(id))
+                          .toList();
+
+                      if (unreadNewApplicants.isNotEmpty) {
+                        print(
+                          '🔔 ✅ 確認發現新未讀應徵者：任務「$taskName」有 ${unreadNewApplicants.length} 位新未讀應徵者',
+                        );
+                        print('🔔 新未讀應徵者 ID: $unreadNewApplicants');
+                        print('🔔 準備觸發通知...');
+
+                        // 延遲觸發通知，確保 UI 已更新
+                        Future.delayed(const Duration(milliseconds: 500), () {
+                          if (mounted) {
+                            _showApplicantNotification(
+                              taskName,
+                              unreadNewApplicants.length,
+                            );
+                          }
+                        });
+                      } else {
+                        print('🔔 📖 所有新應徵者都已讀過，跳過通知');
+                      }
+                    } else {
+                      print('🔔 ⚠️ 應徵者數量增加但找不到新的 ID');
+                    }
+                  } else if (newApplicants.length < oldApplicants.length) {
+                    print('🔔 應徵者數量減少（可能被移除）');
+                  } else {
+                    print('🔔 應徵者數量無變化，可能是其他欄位更新');
+                  }
+                } else {
+                  print('🔔 ⚠️ 找不到對應的舊任務資料，可能是新增的任務');
+                }
+              } else if (change.type == DocumentChangeType.added) {
+                print('🔔 新增任務: ${change.doc.id}');
+              } else if (change.type == DocumentChangeType.removed) {
+                print('🔔 刪除任務: ${change.doc.id}');
+              }
+            }
 
             // 首次載入後，將標誌設為 false
             if (_isInitialLoad) {
@@ -469,6 +467,8 @@ class _ParentViewState extends State<ParentView> {
   /// 顯示應徵者通知
   void _showApplicantNotification(String taskName, int applicantCount) {
     print('🔔 [通知函數開始] 準備為任務「$taskName」顯示 $applicantCount 位應徵者的通知');
+    print('🔔 當前 Widget 掛載狀態: $mounted');
+    print('🔔 當前通知列表數量: ${_notifications.length}');
 
     if (!mounted) {
       print('🔔 ❌ Widget 未掛載，取消通知');
@@ -481,18 +481,18 @@ class _ParentViewState extends State<ParentView> {
     print('🔔 通知訊息: $message');
     print('🔔 當前時間: $timestamp');
 
-    // 檢查是否已有相同任務的近期通知（2分鐘內，縮短時間便於測試）
+    // 檢查是否已有相同任務的近期通知（縮短為1分鐘，避免重複通知）
     final recentNotifications = _notifications
         .where(
           (n) =>
               n['taskName'] == taskName &&
               n['type'] == 'new_applicant' &&
-              timestamp.difference(n['timestamp']).inMinutes < 2,
+              timestamp.difference(n['timestamp'] as DateTime).inMinutes < 1,
         )
         .toList();
 
     if (recentNotifications.isNotEmpty) {
-      print('🔔 ⚠️ 任務「$taskName」在2分鐘內已有通知，跳過重複通知');
+      print('🔔 ⚠️ 任務「$taskName」在1分鐘內已有通知，跳過重複通知');
       print('🔔 近期通知數量: ${recentNotifications.length}');
       return;
     }
@@ -532,27 +532,37 @@ class _ParentViewState extends State<ParentView> {
       print('🔔 最新通知訊息: $_latestNotificationMessage');
     } catch (e) {
       print('🔔 ❌ setState 失敗: $e');
+      return; // 如果 setState 失敗，停止後續處理
     }
 
     // 3秒後自動隱藏通知彈窗（但保留在通知列表中）
     Timer(const Duration(seconds: 3), () {
       if (mounted) {
-        setState(() {
-          _showNotificationPopup = false;
-        });
-        print('🔔 通知彈窗已自動隱藏');
+        try {
+          setState(() {
+            _showNotificationPopup = false;
+          });
+          print('🔔 通知彈窗已自動隱藏');
+        } catch (e) {
+          print('🔔 ⚠️ 隱藏通知彈窗失敗: $e');
+        }
       }
     });
 
-    // 也顯示 SnackBar 作為備用通知
-    print('🔔 顯示 SnackBar 備用通知...');
+    // 顯示 SnackBar 作為主要通知方式
+    print('🔔 顯示 SnackBar 通知...');
     try {
-      _showCustomSnackBar(
-        message,
-        iconColor: Colors.blue[600],
-        icon: Icons.person_add_rounded,
-      );
-      print('🔔 ✅ SnackBar 通知已顯示');
+      // 使用 post frame callback 確保在下一幀顯示，避免與 setState 衝突
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showCustomSnackBar(
+            message,
+            iconColor: Colors.blue[600],
+            icon: Icons.person_add_rounded,
+          );
+          print('🔔 ✅ SnackBar 通知已顯示');
+        }
+      });
     } catch (e) {
       print('🔔 ❌ SnackBar 顯示失敗: $e');
     }
@@ -954,6 +964,20 @@ class _ParentViewState extends State<ParentView> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
+              _clearAllReadStatus();
+            },
+            child: const Text('清除已讀'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _restartApplicantListener();
+            },
+            child: const Text('重啟監聽器'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
               _loadMyPosts();
             },
             child: const Text('重新載入'),
@@ -965,6 +989,11 @@ class _ParentViewState extends State<ParentView> {
 
   /// 測試通知功能
   void _testNotification() {
+    print('🧪 [測試通知] 開始測試通知功能');
+    print('🧪 當前任務數量: ${_myPosts.length}');
+    print('🧪 Widget 掛載狀態: $mounted');
+    print('🧪 監聽器狀態: ${_postsSubscription != null ? '已啟動' : '未啟動'}');
+
     if (_myPosts.isEmpty) {
       _showWarningMessage('請先創建任務才能測試通知');
       return;
@@ -973,10 +1002,69 @@ class _ParentViewState extends State<ParentView> {
     final testTask = _myPosts.first;
     final taskName = testTask['title'] ?? testTask['name'] ?? '測試任務';
 
+    print('🧪 測試任務: $taskName');
     print('🧪 手動觸發測試通知');
     _showApplicantNotification(taskName, 1);
 
-    _showSuccessMessage('測試通知已觸發！');
+    _showSuccessMessage('測試通知已觸發！檢查控制台日誌');
+  }
+
+  /// 重啟應徵者監聽器
+  void _restartApplicantListener() {
+    print('🔄 [重啟監聽器] 手動重啟應徵者監聽器');
+    print('🔄 取消現有監聽器...');
+
+    _postsSubscription?.cancel();
+    _postsSubscription = null;
+
+    print('🔄 重新啟動監聽器...');
+    _startListeningForApplicants();
+
+    _showSuccessMessage('監聽器已重啟！');
+  }
+
+  /// 重置通知系統（用於用戶切換）
+  Future<void> _resetNotificationSystem() async {
+    print('🔄 [重置通知系統] 開始重置通知系統...');
+
+    try {
+      // 1. 取消現有監聽器
+      _postsSubscription?.cancel();
+      _postsSubscription = null;
+      print('🔄 已取消現有監聽器');
+
+      // 2. 清空通知相關狀態
+      if (mounted) {
+        setState(() {
+          _notifications.clear();
+          _readApplicantIds.clear();
+          _showNotificationPopup = false;
+          _latestNotificationMessage = null;
+          _isInitialLoad = true; // 重置為初始載入狀態
+        });
+        print('🔄 已清空通知狀態');
+      }
+
+      // 3. 重新載入已讀應徵者 ID
+      await _loadReadApplicantIds();
+      print('🔄 已重新載入已讀 ID');
+
+      // 4. 重新載入任務資料
+      await _loadMyPosts();
+      print('🔄 已重新載入任務資料');
+
+      // 5. 重新載入歷史通知
+      await _loadHistoricalApplicantNotifications();
+      print('🔄 已重新載入歷史通知');
+
+      // 6. 重新啟動監聽器
+      _startListeningForApplicants();
+      print('🔄 已重新啟動監聽器');
+
+      print('✅ 通知系統重置完成');
+    } catch (e) {
+      print('❌ 重置通知系統失敗: $e');
+    }
   }
 
   /// 載入歷史應徵者通知
@@ -990,6 +1078,11 @@ class _ParentViewState extends State<ParentView> {
 
     // 載入已讀應徵者 ID（從本地存儲或用戶偏好設定）
     await _loadReadApplicantIds();
+
+    // 記錄現有通知 ID，避免重複添加
+    final existingNotificationIds = _notifications
+        .map((n) => n['id'] as String)
+        .toSet();
 
     int totalNotifications = 0;
     int filteredNotifications = 0;
@@ -1032,8 +1125,16 @@ class _ParentViewState extends State<ParentView> {
 
       // 為每個未讀應徵者創建通知
       for (String applicantId in unreadApplicants) {
+        final notificationId = 'historical_${task['id']}_$applicantId';
+
+        // 檢查是否已存在相同的通知
+        if (existingNotificationIds.contains(notificationId)) {
+          print('📚 跳過重複的通知: $notificationId');
+          continue;
+        }
+
         final notification = {
-          'id': 'historical_${task['id']}_$applicantId',
+          'id': notificationId,
           'type': 'historical_applicant',
           'taskId': task['id'],
           'taskName': taskName,
@@ -1045,6 +1146,7 @@ class _ParentViewState extends State<ParentView> {
         };
 
         _notifications.add(notification);
+        existingNotificationIds.add(notificationId);
         totalNotifications++;
       }
 
@@ -1122,6 +1224,41 @@ class _ParentViewState extends State<ParentView> {
   /// 檢查應徵者是否已讀
   bool _isApplicantRead(String applicantId) {
     return _readApplicantIds.contains(applicantId);
+  }
+
+  /// 清除所有已讀狀態（測試用）
+  Future<void> _clearAllReadStatus() async {
+    print('🗑️ [清除已讀狀態] 開始清除所有已讀狀態...');
+
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) {
+        _showErrorMessage('用戶未登入');
+        return;
+      }
+
+      // 清除本地已讀狀態
+      setState(() {
+        _readApplicantIds.clear();
+        _notifications.clear();
+      });
+
+      // 清除 SharedPreferences 中的已讀狀態
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'read_applicants_${u.uid}';
+      await prefs.remove(key);
+
+      print('🗑️ 已清除本地和持久化的已讀狀態');
+
+      // 重新載入歷史通知
+      await _loadHistoricalApplicantNotifications();
+
+      _showSuccessMessage('已清除所有已讀狀態！');
+      print('🗑️ ✅ 清除已讀狀態完成');
+    } catch (e) {
+      print('🗑️ ❌ 清除已讀狀態失敗: $e');
+      _showErrorMessage('清除已讀狀態失敗：$e');
+    }
   }
 
   /// 获取当前定位
@@ -2804,6 +2941,17 @@ class _ParentViewState extends State<ParentView> {
                     heroTag: 'test_notification',
                     onPressed: () {
                       _testNotification();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  // 重啟監聽器按鈕
+                  FloatingActionButton(
+                    mini: true,
+                    backgroundColor: Colors.purple[100],
+                    child: const Icon(Icons.refresh, color: Colors.purple),
+                    heroTag: 'restart_listener',
+                    onPressed: () {
+                      _restartApplicantListener();
                     },
                   ),
                 ],
