@@ -72,6 +72,9 @@ class _ParentViewState extends State<ParentView> {
   bool _isInitialLoad = true; // 標記是否為初始載入
   Set<String> _readApplicantIds = {}; // 已讀的應徵者 ID
 
+  // 頭像上傳狀態
+  bool _isUploadingAvatar = false;
+
   // 新的地圖標記管理
   Set<Marker> _markers = {};
   MarkerData? _selectedMarker;
@@ -1766,10 +1769,17 @@ class _ParentViewState extends State<ParentView> {
 
   // 直接選擇並上傳頭像
   Future<void> _pickAndUploadAvatar() async {
+    if (_isUploadingAvatar) return; // 防止重複操作
+
     try {
+      setState(() => _isUploadingAvatar = true);
+
       final ImagePicker picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked == null) return;
+      if (picked == null) {
+        setState(() => _isUploadingAvatar = false);
+        return;
+      }
 
       final bytes = await picked.readAsBytes();
 
@@ -1784,6 +1794,10 @@ class _ParentViewState extends State<ParentView> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+      }
     }
   }
 
@@ -3201,8 +3215,27 @@ class _ParentViewState extends State<ParentView> {
                                   )
                                 : null,
                           ),
+                          // 頭像上傳loading遮罩
+                          if (_isUploadingAvatar)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
                           // 認證標籤
-                          if (_profile['isVerified'] == true)
+                          if (_profile['isVerified'] == true &&
+                              !_isUploadingAvatar)
                             Positioned(
                               bottom: 0,
                               right: 0,
@@ -3628,6 +3661,7 @@ class _ParentViewState extends State<ParentView> {
                 child: ProfileViewBottomSheet(
                   profile: _profile,
                   isParentView: true,
+                  isUploadingAvatar: _isUploadingAvatar, // 傳遞loading狀態
                   onEditSection: (section) {
                     // 根據區塊顯示對應的編輯頁面
                     _profileForm = Map<String, dynamic>.from(_profile);

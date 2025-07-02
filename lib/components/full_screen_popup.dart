@@ -8,6 +8,7 @@ import 'package:crop_your_image/crop_your_image.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
+import 'dart:async';
 
 class FullScreenPopup extends StatelessWidget {
   final Widget child;
@@ -533,18 +534,19 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
                               : null,
                         ),
                       ),
-                      if (_isUploadingAvatar)
+                      if (_isUploadingAvatar || _isPickingImage)
                         Positioned.fill(
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.black26,
+                              color: Colors.black54,
                               shape: BoxShape.circle,
                             ),
-                            child: const Center(
+                            child: Center(
                               child: CircularProgressIndicator(
                                 valueColor: AlwaysStoppedAnimation<Color>(
                                   Colors.white,
                                 ),
+                                strokeWidth: 3,
                               ),
                             ),
                           ),
@@ -557,7 +559,9 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
                           width: 35,
                           height: 35,
                           decoration: BoxDecoration(
-                            color: Colors.blue[600],
+                            color: (_isUploadingAvatar || _isPickingImage)
+                                ? Colors.grey[500]
+                                : Colors.blue[600],
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 3),
                             boxShadow: [
@@ -570,7 +574,7 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
                             ],
                           ),
                           child: Icon(
-                            _isPickingImage
+                            (_isUploadingAvatar || _isPickingImage)
                                 ? Icons.hourglass_empty
                                 : Icons.edit,
                             size: 18,
@@ -1044,7 +1048,7 @@ class _MyApplicationsBottomSheetState extends State<MyApplicationsBottomSheet>
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Colors.black,
                       ),
                     ),
                     Text(
@@ -1135,7 +1139,7 @@ class _MyApplicationsBottomSheetState extends State<MyApplicationsBottomSheet>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: Colors.black,
               ),
             ),
             const SizedBox(height: 12),
@@ -1287,7 +1291,7 @@ class _MyApplicationsBottomSheetState extends State<MyApplicationsBottomSheet>
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
+                                  color: Colors.black,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1768,7 +1772,7 @@ class _MyTasksListBottomSheetState extends State<MyTasksListBottomSheet>
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Colors.black,
                       ),
                     ),
                     Text(
@@ -1879,7 +1883,7 @@ class _MyTasksListBottomSheetState extends State<MyTasksListBottomSheet>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: Colors.black,
               ),
             ),
             const SizedBox(height: 12),
@@ -2057,7 +2061,7 @@ class _MyTasksListBottomSheetState extends State<MyTasksListBottomSheet>
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
+                                  color: Colors.black,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -2630,6 +2634,7 @@ class ProfileViewBottomSheet extends StatelessWidget {
   final Function(String section) onEditSection;
   final VoidCallback onEditAvatar;
   final bool isParentView;
+  final bool isUploadingAvatar; // 新增頭像上傳狀態
 
   const ProfileViewBottomSheet({
     Key? key,
@@ -2637,7 +2642,55 @@ class ProfileViewBottomSheet extends StatelessWidget {
     required this.onEditSection,
     required this.onEditAvatar,
     this.isParentView = true,
+    this.isUploadingAvatar = false, // 預設為false
   }) : super(key: key);
+
+  /// 計算用戶加入App的時間
+  String _calculateJoinTime(Map<String, dynamic> userData) {
+    try {
+      // 嘗試從不同可能的欄位獲取註冊時間
+      dynamic createdAtField =
+          userData['createdAt'] ??
+          userData['registrationDate'] ??
+          userData['joinDate'] ??
+          userData['created_at'];
+
+      if (createdAtField == null) {
+        return '新用戶';
+      }
+
+      DateTime createdAt;
+      if (createdAtField is Timestamp) {
+        // Firestore Timestamp
+        createdAt = createdAtField.toDate();
+      } else if (createdAtField is String) {
+        // 字串格式的日期
+        createdAt = DateTime.parse(createdAtField);
+      } else {
+        return '新用戶';
+      }
+
+      final now = DateTime.now();
+      final difference = now.difference(createdAt);
+      final months = (difference.inDays / 30).floor();
+
+      if (months < 1) {
+        return '新用戶';
+      } else if (months < 12) {
+        return '加入 ${months} 個月';
+      } else {
+        final years = (months / 12).floor();
+        final remainingMonths = months % 12;
+        if (remainingMonths == 0) {
+          return '加入 ${years} 年';
+        } else {
+          return '加入 ${years} 年 ${remainingMonths} 個月';
+        }
+      }
+    } catch (e) {
+      return '新用戶';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2699,7 +2752,7 @@ class ProfileViewBottomSheet extends StatelessWidget {
         children: [
           // 頭像 (可直接編輯)
           GestureDetector(
-            onTap: onEditAvatar,
+            onTap: isUploadingAvatar ? null : onEditAvatar, // 上傳時禁用點擊
             child: Stack(
               children: [
                 Container(
@@ -2729,38 +2782,69 @@ class ProfileViewBottomSheet extends StatelessWidget {
                         : null,
                   ),
                 ),
-                // 編輯圖標
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 35,
-                    height: 35,
-                    decoration: BoxDecoration(
-                      color: Colors.blue[600],
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          spreadRadius: 1,
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
+                // 頭像上傳loading遮罩
+                if (isUploadingAvatar)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                          strokeWidth: 3,
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.edit,
-                      size: 18,
-                      color: Colors.white,
+                      ),
                     ),
                   ),
-                ),
+                // 編輯圖標
+                if (!isUploadingAvatar) // 上傳時隱藏編輯圖標
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 35,
+                      height: 35,
+                      decoration: BoxDecoration(
+                        color: Colors.blue[600],
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            spreadRadius: 1,
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.edit,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
 
           const SizedBox(height: 20),
+          // 用戶加入時間
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${_calculateJoinTime(profile)}',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 6),
           Text(
             profile['name']?.toString().isNotEmpty == true
                 ? profile['name']
@@ -2768,24 +2852,10 @@ class ProfileViewBottomSheet extends StatelessWidget {
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Colors.black,
             ),
           ),
-          const SizedBox(height: 6),
-          // 用戶加入時間
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-              const SizedBox(width: 6),
-              Text(
-                '加入時間：${_formatJoinDate()}',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
           // 身份認證狀態
           Row(
@@ -2938,7 +3008,7 @@ class ProfileViewBottomSheet extends StatelessWidget {
                 fontSize: 15,
                 height: 1.6,
                 color: resumeContent?.isNotEmpty == true
-                    ? Colors.black87
+                    ? Colors.black
                     : Colors.grey[500],
                 fontStyle: resumeContent?.isNotEmpty == true
                     ? FontStyle.normal
@@ -2956,7 +3026,7 @@ class ProfileViewBottomSheet extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(icon, color: Colors.grey[600], size: 20),
+          Icon(icon, color: Colors.black, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Row(
@@ -2966,7 +3036,7 @@ class ProfileViewBottomSheet extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
-                    color: Colors.grey[700],
+                    color: Colors.black,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -2978,7 +3048,7 @@ class ProfileViewBottomSheet extends StatelessWidget {
                       color:
                           content?.toString().isNotEmpty == true &&
                               content != '未設定'
-                          ? Colors.black87
+                          ? Colors.black
                           : Colors.grey[500],
                       fontStyle:
                           content?.toString().isNotEmpty == true &&
@@ -3251,7 +3321,7 @@ class _BasicInfoEditBottomSheetState extends State<BasicInfoEditBottomSheet> {
                         style: TextStyle(
                           fontSize: 16,
                           color: _selectedBirthday != null
-                              ? Colors.black87
+                              ? Colors.black
                               : Colors.grey[500],
                         ),
                       ),

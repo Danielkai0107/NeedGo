@@ -136,6 +136,9 @@ class _PlayerViewState extends State<PlayerView> {
   Timer? _taskTimer;
   static const Duration _checkInterval = Duration(minutes: 1); // 每分鐘檢查一次
 
+  // 頭像上傳狀態
+  bool _isUploadingAvatar = false;
+
   @override
   void initState() {
     super.initState();
@@ -791,10 +794,17 @@ class _PlayerViewState extends State<PlayerView> {
 
   // 直接選擇並上傳頭像
   Future<void> _pickAndUploadAvatar() async {
+    if (_isUploadingAvatar) return; // 防止重複操作
+
     try {
+      setState(() => _isUploadingAvatar = true);
+
       final ImagePicker picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked == null) return;
+      if (picked == null) {
+        setState(() => _isUploadingAvatar = false);
+        return;
+      }
 
       final bytes = await picked.readAsBytes();
 
@@ -810,6 +820,10 @@ class _PlayerViewState extends State<PlayerView> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
       }
     }
   }
@@ -1891,8 +1905,28 @@ class _PlayerViewState extends State<PlayerView> {
                                   )
                                 : null,
                           ),
+                          // 頭像上傳loading遮罩
+                          if (_isUploadingAvatar)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    valueColor:
+                                        AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
                           // 認證標籤
-                          if (_profile['isVerified'] == true)
+                          if (_profile['isVerified'] == true &&
+                              !_isUploadingAvatar)
                             Positioned(
                               bottom: 0,
                               right: 0,
@@ -2213,6 +2247,7 @@ class _PlayerViewState extends State<PlayerView> {
                 child: ProfileViewBottomSheet(
                   profile: _profile,
                   isParentView: false,
+                  isUploadingAvatar: _isUploadingAvatar, // 傳遞loading狀態
                   onEditSection: (section) {
                     // 根據區塊顯示對應的編輯頁面
                     _profileForm = Map<String, dynamic>.from(_profile);
