@@ -592,12 +592,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       ),
 
                       const Spacer(),
-
-                      // 查看詳情提示
-                      Text(
-                        '點擊查看詳情',
-                        style: TextStyle(fontSize: 11, color: Colors.blue[600]),
-                      ),
                     ],
                   ),
 
@@ -696,6 +690,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             taskData: taskData,
             isParentView: isParentView,
             hideBottomActions: true, // 從聊天室查看時隱藏底部按鈕
+            hideApplicantsList: true, // 從聊天室查看時隱藏申請者清單
             onTaskUpdated: () {
               // 任務更新後可以選擇重新載入聊天室數據或其他處理
               print('任務已更新');

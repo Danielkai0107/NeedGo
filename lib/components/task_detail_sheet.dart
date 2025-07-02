@@ -92,6 +92,7 @@ class TaskDetailSheet extends StatefulWidget {
   final bool showBackButton; // 是否顯示返回按鈕
   final VoidCallback? onBack; // 返回按鈕回調
   final bool hideBottomActions; // 是否隱藏底部操作按鈕
+  final bool hideApplicantsList; // 是否隱藏申請者清單
 
   const TaskDetailSheet({
     Key? key,
@@ -104,6 +105,7 @@ class TaskDetailSheet extends StatefulWidget {
     this.showBackButton = false,
     this.onBack,
     this.hideBottomActions = false,
+    this.hideApplicantsList = false,
   }) : super(key: key);
 
   @override
@@ -1128,8 +1130,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                           (widget.taskData['images'] as List).isNotEmpty)
                         _buildImagesSection(),
 
-                      // 申請者列表（僅Parent視角）
-                      if (widget.isParentView) _buildApplicantsSection(),
+                      // 申請者列表（僅Parent視角且未隱藏）
+                      if (widget.isParentView && !widget.hideApplicantsList)
+                        _buildApplicantsSection(),
 
                       const SizedBox(height: 100), // 為按鈕留出空間
                     ],
