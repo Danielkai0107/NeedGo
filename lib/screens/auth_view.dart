@@ -15,6 +15,7 @@ class _AuthViewState extends State<AuthView>
     with SingleTickerProviderStateMixin {
   final _phoneCtrl = TextEditingController();
   final _otpCtrl = TextEditingController();
+  final _otpFocusNode = FocusNode(); // 新增：OTP輸入框的FocusNode
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -44,6 +45,7 @@ class _AuthViewState extends State<AuthView>
     _animationController.dispose();
     _phoneCtrl.dispose();
     _otpCtrl.dispose();
+    _otpFocusNode.dispose(); // 新增：清理FocusNode
     super.dispose();
   }
 
@@ -156,6 +158,10 @@ class _AuthViewState extends State<AuthView>
               _isLoading = false;
             });
             _startResendTimer();
+            // 新增：自動focus到驗證碼輸入框
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _otpFocusNode.requestFocus();
+            });
           }
         },
         codeAutoRetrievalTimeout: (String verificationId) {
@@ -303,6 +309,134 @@ class _AuthViewState extends State<AuthView>
     });
   }
 
+  // 快速填入測試帳號的方法
+  void _fillTestAccount(String phoneNumber) {
+    setState(() {
+      _phoneCtrl.text = phoneNumber;
+      _error = null;
+    });
+  }
+
+  // 新增：獲取測試帳號對應的驗證碼
+  String _getTestVerificationCode(String phoneNumber) {
+    final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+    switch (cleanPhone) {
+      case '0912345678':
+        return '111111';
+      case '0912341234':
+        return '123456';
+      case '0911111111':
+        return '112233';
+      default:
+        return '123456'; // 預設驗證碼
+    }
+  }
+
+  // 新增：快速登入測試帳號的方法
+  void _quickLoginTestAccount(String phoneNumber) async {
+    setState(() {
+      _error = null;
+      _isLoading = true;
+    });
+
+    try {
+      final formattedPhone = _formatPhoneNumber(phoneNumber);
+      final testCode = _getTestVerificationCode(phoneNumber);
+
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: formattedPhone,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          try {
+            final userCredential = await FirebaseAuth.instance
+                .signInWithCredential(credential);
+            if (userCredential.user != null && mounted) {
+              _navigateToRegistration(userCredential.user!, formattedPhone);
+            }
+          } catch (e) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _error = '自動驗證失敗：${e.toString()}';
+              });
+            }
+          }
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _error = '快速登入失敗：${e.message}';
+            });
+          }
+        },
+        codeSent: (String verificationId, int? resendToken) async {
+          // 對於測試帳號，使用對應的測試驗證碼
+          try {
+            final credential = PhoneAuthProvider.credential(
+              verificationId: verificationId,
+              smsCode: testCode,
+            );
+
+            final userCredential = await FirebaseAuth.instance
+                .signInWithCredential(credential);
+
+            if (userCredential.user != null && mounted) {
+              _navigateToRegistration(userCredential.user!, formattedPhone);
+            }
+          } catch (e) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _error = '快速登入失敗：${e.toString()}';
+              });
+            }
+          }
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          // 如果自動檢索失敗，也嘗試使用對應的測試驗證碼
+          _verifyTestCode(verificationId, formattedPhone, testCode);
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = '快速登入失敗，請檢查網路連接：${e.toString()}';
+        });
+      }
+    }
+  }
+
+  // 新增：使用測試驗證碼進行驗證
+  void _verifyTestCode(
+    String verificationId,
+    String phoneNumber,
+    String testCode,
+  ) async {
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: testCode,
+      );
+
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+
+      if (userCredential.user != null && mounted) {
+        _navigateToRegistration(userCredential.user!, phoneNumber);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = '快速登入失敗：${e.toString()}';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -401,6 +535,7 @@ class _AuthViewState extends State<AuthView>
                         // OTP 輸入
                         TextField(
                           controller: _otpCtrl,
+                          focusNode: _otpFocusNode, // 新增：綁定FocusNode
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           textAlign: TextAlign.center,
@@ -550,11 +685,81 @@ class _AuthViewState extends State<AuthView>
                     ),
                   ),
 
+                // 新增：測試帳號快速登入按鈕（只在手機號碼輸入階段顯示）
+                if (!_isOtpSent) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '測試帳號快速登入',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '點擊直接登入，無需輸入驗證碼',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _buildTestAccountButton('0912341234'),
+                            _buildTestAccountButton('0912345678'),
+                            _buildTestAccountButton('0911111111'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 40),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // 新增：建立測試帳號按鈕的方法
+  Widget _buildTestAccountButton(String phoneNumber) {
+    return ElevatedButton(
+      onPressed: _isLoading ? null : () => _quickLoginTestAccount(phoneNumber),
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        backgroundColor: Colors.green[50],
+        foregroundColor: Colors.green[700],
+        elevation: 0,
+        side: BorderSide(color: Colors.green[200]!),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.flash_on, size: 16, color: Colors.green[600]),
+          const SizedBox(width: 4),
+          Text(
+            phoneNumber,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }
