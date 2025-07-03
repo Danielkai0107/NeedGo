@@ -533,10 +533,10 @@ class _AuthViewState extends State<AuthView>
                           ),
                         ),
                       ] else ...[
-                        // OTP 輸入
+                        // OTP 輸入 - 保持 TextField 以支援特殊樣式（居中對齊、大字體、字母間距）
                         TextField(
                           controller: _otpCtrl,
-                          focusNode: _otpFocusNode, // 新增：綁定FocusNode
+                          focusNode: _otpFocusNode,
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           textAlign: TextAlign.center,
@@ -547,20 +547,26 @@ class _AuthViewState extends State<AuthView>
                           ),
                           decoration: InputDecoration(
                             labelText: '驗證碼',
-                            prefixIcon: const Icon(Icons.sms_outlined),
                             hintText: '',
                             counterText: '',
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                               borderSide: BorderSide(color: Colors.grey[300]!),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                               borderSide: BorderSide(color: Colors.grey[300]!),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.blue[400]!),
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: Colors.blue[600]!,
+                                width: 2,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
                             ),
                           ),
                         ),
