@@ -1,47 +1,50 @@
 import 'package:flutter/material.dart';
 
-class CustomDateTimeField extends StatefulWidget {
+class CustomDropdownField<T> extends StatefulWidget {
   final String label;
   final String? errorText;
-  final DateTime? selectedDate;
-  final TimeOfDay? selectedTime;
-  final VoidCallback? onDateTap;
-  final VoidCallback? onTimeTap;
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+  final String? hintText;
   final bool isRequired;
   final IconData icon;
+  final ValueChanged<T?>? onChanged;
 
-  const CustomDateTimeField({
+  const CustomDropdownField({
     super.key,
     required this.label,
     this.errorText,
-    this.selectedDate,
-    this.selectedTime,
-    this.onDateTap,
-    this.onTimeTap,
+    this.value,
+    required this.items,
+    this.hintText,
     this.isRequired = false,
-    required this.icon,
+    this.icon = Icons.arrow_drop_down,
+    this.onChanged,
   });
 
   @override
-  State<CustomDateTimeField> createState() => _CustomDateTimeFieldState();
+  State<CustomDropdownField<T>> createState() => _CustomDropdownFieldState<T>();
 }
 
-class _CustomDateTimeFieldState extends State<CustomDateTimeField> {
+class _CustomDropdownFieldState<T> extends State<CustomDropdownField<T>> {
   bool _isFocused = false;
 
-  bool get _hasContent =>
-      widget.selectedDate != null || widget.selectedTime != null;
+  bool get _hasContent => widget.value != null;
   bool get shouldFloatLabel => _isFocused || _hasContent;
 
   String get _displayText {
-    if (widget.selectedDate != null && widget.selectedTime != null) {
-      return '${widget.selectedDate!.year}/${widget.selectedDate!.month}/${widget.selectedDate!.day} ${widget.selectedTime!.format(context)}';
-    } else if (widget.selectedDate != null) {
-      return '${widget.selectedDate!.year}/${widget.selectedDate!.month}/${widget.selectedDate!.day}';
-    } else if (widget.selectedTime != null) {
-      return widget.selectedTime!.format(context);
+    if (widget.value != null) {
+      // 找到對應的 item 並返回其文字
+      final item = widget.items.firstWhere(
+        (item) => item.value == widget.value,
+        orElse: () => widget.items.first,
+      );
+      return item.child
+          .toString()
+          .replaceAll('Text("', '')
+          .replaceAll('")', '');
     }
-    return '';
+    return widget.hintText ?? '';
   }
 
   @override
@@ -54,22 +57,7 @@ class _CustomDateTimeFieldState extends State<CustomDateTimeField> {
             setState(() {
               _isFocused = true;
             });
-
-            // 優先調用 onDateTap，如果沒有則調用 onTimeTap
-            if (widget.onDateTap != null) {
-              widget.onDateTap!.call();
-            } else if (widget.onTimeTap != null) {
-              widget.onTimeTap!.call();
-            }
-
-            // 延遲恢復焦點狀態
-            Future.delayed(const Duration(milliseconds: 200), () {
-              if (mounted) {
-                setState(() {
-                  _isFocused = false;
-                });
-              }
-            });
+            _showDropdown();
           },
           child: Container(
             decoration: BoxDecoration(
@@ -141,7 +129,9 @@ class _CustomDateTimeFieldState extends State<CustomDateTimeField> {
                     _displayText,
                     style: TextStyle(
                       fontSize: 16,
-                      color: _hasContent ? Colors.black87 : Colors.transparent,
+                      color: _hasContent
+                          ? Colors.black87
+                          : Colors.grey.withValues(alpha: 0.5),
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -181,5 +171,72 @@ class _CustomDateTimeFieldState extends State<CustomDateTimeField> {
           ),
       ],
     );
+  }
+
+  void _showDropdown() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 頂部把手
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // 標題
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  widget.label,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+
+              // 選項列表
+              ...widget.items.map((item) {
+                final isSelected = item.value == widget.value;
+                return ListTile(
+                  title: item.child,
+                  trailing: isSelected
+                      ? Icon(Icons.check, color: Colors.blue)
+                      : null,
+                  onTap: () {
+                    widget.onChanged?.call(item.value);
+                    Navigator.pop(context);
+                    setState(() {
+                      _isFocused = false;
+                    });
+                  },
+                );
+              }).toList(),
+
+              SizedBox(height: MediaQuery.of(context).padding.bottom),
+            ],
+          ),
+        );
+      },
+    ).then((_) {
+      setState(() {
+        _isFocused = false;
+      });
+    });
   }
 }

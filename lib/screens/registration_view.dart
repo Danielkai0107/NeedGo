@@ -7,6 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:crop_your_image/crop_your_image.dart';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
+import '../widgets/custom_text_field.dart';
+import '../widgets/custom_dropdown_field.dart';
+import '../widgets/custom_date_time_field.dart';
 
 class RegistrationView extends StatefulWidget {
   final String uid;
@@ -30,6 +33,9 @@ class _RegistrationViewState extends State<RegistrationView> {
   final TextEditingController _nameCtrl = TextEditingController();
   String? _gender;
   DateTime? _birthDate;
+  String? _nameError;
+  String? _genderError;
+  String? _birthDateError;
 
   // Step 2: 大頭貼裁切
   Uint8List? _croppedImage;
@@ -43,6 +49,7 @@ class _RegistrationViewState extends State<RegistrationView> {
   final TextEditingController _emailCtrl = TextEditingController();
   final TextEditingController _lineCtrl = TextEditingController();
   final TextEditingController _socialLinksCtrl = TextEditingController();
+  String? _emailError;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -62,7 +69,8 @@ class _RegistrationViewState extends State<RegistrationView> {
 
   // 提交全部資料：上傳 Storage、寫入 Firestore
   Future<void> _submitAll() async {
-    if (!_formKey4.currentState!.validate() || _croppedImage == null) {
+    _validateCurrentStep();
+    if (!_canProceed() || _croppedImage == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('請確認所有欄位填寫與上傳大頭貼')));
@@ -348,74 +356,62 @@ class _RegistrationViewState extends State<RegistrationView> {
   }
 
   Widget _buildBasicInfoStep() {
-    return Form(
-      key: _formKey1,
-      child: Column(
-        children: [
-          TextFormField(
-            controller: _nameCtrl,
-            decoration: const InputDecoration(
-              labelText: '姓名 *',
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) => v!.isEmpty ? '必填' : null,
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            value: _gender,
-            decoration: const InputDecoration(
-              labelText: '性別 *',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'male', child: Text('男')),
-              DropdownMenuItem(value: 'female', child: Text('女')),
-              DropdownMenuItem(value: 'other', child: Text('其他')),
-            ],
-            onChanged: (v) => setState(() => _gender = v),
-            validator: (v) => v == null ? '必選' : null,
-          ),
-          const SizedBox(height: 16),
-          InkWell(
-            onTap: () async {
-              final date = await showDatePicker(
-                context: context,
-                initialDate: DateTime(1990),
-                firstDate: DateTime(1900),
-                lastDate: DateTime.now(),
-              );
-              if (date != null) {
-                setState(() => _birthDate = date);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _birthDate == null
-                          ? '生日 *'
-                          : '${_birthDate!.year}-${_birthDate!.month.toString().padLeft(2, '0')}-${_birthDate!.day.toString().padLeft(2, '0')}',
-                      style: TextStyle(
-                        color: _birthDate == null
-                            ? Colors.grey[600]
-                            : Colors.black,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  const Icon(Icons.calendar_today),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        CustomTextField(
+          controller: _nameCtrl,
+          label: '姓名',
+          isRequired: true,
+          errorText: _nameError,
+          textInputAction: TextInputAction.next,
+          onChanged: (value) {
+            setState(() {
+              if (value.isNotEmpty) _nameError = null;
+            });
+          },
+        ),
+        const SizedBox(height: 24),
+        CustomDropdownField<String>(
+          label: '性別',
+          value: _gender,
+          isRequired: true,
+          errorText: _genderError,
+          icon: Icons.wc,
+          items: const [
+            DropdownMenuItem(value: 'male', child: Text('男')),
+            DropdownMenuItem(value: 'female', child: Text('女')),
+            DropdownMenuItem(value: 'other', child: Text('其他')),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _gender = value;
+              if (value != null) _genderError = null;
+            });
+          },
+        ),
+        const SizedBox(height: 24),
+        CustomDateTimeField(
+          label: '生日',
+          isRequired: true,
+          icon: Icons.calendar_today,
+          selectedDate: _birthDate,
+          errorText: _birthDateError,
+          onDateTap: () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: DateTime(1990),
+              firstDate: DateTime(1900),
+              lastDate: DateTime.now(),
+            );
+            if (date != null) {
+              setState(() {
+                _birthDate = date;
+                _birthDateError = null;
+              });
+            }
+          },
+        ),
+      ],
     );
   }
 
@@ -580,42 +576,44 @@ class _RegistrationViewState extends State<RegistrationView> {
   }
 
   Widget _buildContactStep() {
-    return Form(
-      key: _formKey4,
-      child: Column(
-        children: [
-          TextFormField(
-            controller: _emailCtrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: '聯絡信箱 *',
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) {
-              if (v!.isEmpty) return '必填';
-              if (!_isValidEmail(v)) return 'Email格式不正確';
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _lineCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Line ID (選填)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _socialLinksCtrl,
-            decoration: const InputDecoration(
-              labelText: '社群連結 (選填)',
-              border: OutlineInputBorder(),
-              hintText: 'Instagram、Facebook 等社群平台連結',
-            ),
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        CustomTextField(
+          controller: _emailCtrl,
+          label: '聯絡信箱',
+          isRequired: true,
+          errorText: _emailError,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          onChanged: (value) {
+            setState(() {
+              if (value.isNotEmpty) {
+                if (!_isValidEmail(value)) {
+                  _emailError = 'Email格式不正確';
+                } else {
+                  _emailError = null;
+                }
+              } else {
+                _emailError = null;
+              }
+            });
+          },
+        ),
+        const SizedBox(height: 24),
+        CustomTextField(
+          controller: _lineCtrl,
+          label: 'Line ID',
+          hintText: '選填',
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 24),
+        CustomTextField(
+          controller: _socialLinksCtrl,
+          label: '社群連結',
+          hintText: 'Instagram、Facebook 等社群平台連結',
+          textInputAction: TextInputAction.done,
+        ),
+      ],
     );
   }
 
@@ -630,7 +628,9 @@ class _RegistrationViewState extends State<RegistrationView> {
       case 2:
         return true; // 真人驗證可跳過
       case 3:
-        return true;
+        return _emailCtrl.text.isNotEmpty &&
+            _isValidEmail(_emailCtrl.text) &&
+            _emailError == null;
       default:
         return false;
     }
@@ -638,9 +638,35 @@ class _RegistrationViewState extends State<RegistrationView> {
 
   void _handleNext() {
     if (_currentStep < 3) {
-      setState(() => _currentStep++);
+      _validateCurrentStep();
+      if (_canProceed()) {
+        setState(() => _currentStep++);
+      }
     } else {
       _submitAll();
+    }
+  }
+
+  void _validateCurrentStep() {
+    switch (_currentStep) {
+      case 0:
+        setState(() {
+          _nameError = _nameCtrl.text.isEmpty ? '請輸入姓名' : null;
+          _genderError = _gender == null ? '請選擇性別' : null;
+          _birthDateError = _birthDate == null ? '請選擇生日' : null;
+        });
+        break;
+      case 3:
+        setState(() {
+          if (_emailCtrl.text.isEmpty) {
+            _emailError = '請輸入信箱';
+          } else if (!_isValidEmail(_emailCtrl.text)) {
+            _emailError = 'Email格式不正確';
+          } else {
+            _emailError = null;
+          }
+        });
+        break;
     }
   }
 }

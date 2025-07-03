@@ -3,6 +3,7 @@ import 'dart:async'; // 加入這行
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../widgets/custom_text_field.dart';
 
 class AuthView extends StatefulWidget {
   const AuthView({super.key});
@@ -516,28 +517,19 @@ class _AuthViewState extends State<AuthView>
                   child: Column(
                     children: [
                       if (!_isOtpSent) ...[
-                        TextField(
+                        CustomTextField(
                           controller: _phoneCtrl,
+                          label: '手機號碼',
+                          hintText: '0912345678 (測試) 或 09xxxxxxxx',
                           keyboardType: TextInputType.phone,
                           maxLength: 10,
-                          decoration: InputDecoration(
-                            labelText: '手機號碼',
-                            prefixIcon: const Icon(Icons.phone_outlined),
-                            hintText: '0912345678 (測試) 或 09xxxxxxxx',
-                            helperText: '請輸入台灣手機號碼或測試號碼',
-                            counterText: '',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.blue[400]!),
-                            ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '請輸入台灣手機號碼或測試號碼',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
                         ),
                       ] else ...[

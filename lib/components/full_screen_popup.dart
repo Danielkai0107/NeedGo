@@ -9,6 +9,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'dart:async';
+import '../widgets/custom_text_field.dart';
+import '../widgets/custom_dropdown_field.dart';
+import '../widgets/custom_date_time_field.dart';
 
 class FullScreenPopup extends StatelessWidget {
   final Widget child;
@@ -593,170 +596,71 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
           const SizedBox(height: 24),
 
           // 姓名
-          _buildInputSection(
-            title: '姓名',
-            icon: Icons.badge,
-            child: TextField(
-              controller: _nameCtrl,
-              focusNode: _nameFocus,
-              decoration: InputDecoration(
-                hintText: '請輸入您的姓名',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _phoneFocus.requestFocus(),
-            ),
+          CustomTextField(
+            controller: _nameCtrl,
+            focusNode: _nameFocus,
+            label: '姓名',
+            hintText: '請輸入您的姓名',
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _phoneFocus.requestFocus(),
           ),
           const SizedBox(height: 20),
 
           // 手機號碼
-          _buildInputSection(
-            title: '手機號碼',
-            icon: Icons.phone,
-            child: TextField(
-              controller: _phoneCtrl,
-              focusNode: _phoneFocus,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                hintText: '請輸入手機號碼',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _emailFocus.requestFocus(),
-            ),
+          CustomTextField(
+            controller: _phoneCtrl,
+            focusNode: _phoneFocus,
+            label: '手機號碼',
+            hintText: '請輸入手機號碼',
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _emailFocus.requestFocus(),
           ),
           const SizedBox(height: 20),
 
           // Email
-          _buildInputSection(
-            title: 'Email',
-            icon: Icons.email,
-            child: TextField(
-              controller: _emailCtrl,
-              focusNode: _emailFocus,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                hintText: '請輸入 Email',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _lineFocus.requestFocus(),
-            ),
+          CustomTextField(
+            controller: _emailCtrl,
+            focusNode: _emailFocus,
+            label: 'Email',
+            hintText: '請輸入 Email',
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _lineFocus.requestFocus(),
           ),
           const SizedBox(height: 20),
 
           // Line ID
-          _buildInputSection(
-            title: 'Line ID',
-            icon: Icons.chat,
-            child: TextField(
-              controller: _lineCtrl,
-              focusNode: _lineFocus,
-              decoration: InputDecoration(
-                hintText: '請輸入 Line ID（選填）',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _socialFocus.requestFocus(),
-            ),
+          CustomTextField(
+            controller: _lineCtrl,
+            focusNode: _lineFocus,
+            label: 'Line ID',
+            hintText: '請輸入 Line ID（選填）',
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _socialFocus.requestFocus(),
           ),
           const SizedBox(height: 20),
 
           // 社群連結
-          _buildInputSection(
-            title: '社群連結',
-            icon: Icons.link,
-            child: TextField(
-              controller: _socialLinksCtrl,
-              focusNode: _socialFocus,
-              decoration: InputDecoration(
-                hintText: 'Instagram、Facebook 等連結（選填）',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _bioFocus.requestFocus(),
-            ),
+          CustomTextField(
+            controller: _socialLinksCtrl,
+            focusNode: _socialFocus,
+            label: '社群連結',
+            hintText: 'Instagram、Facebook 等連結（選填）',
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _bioFocus.requestFocus(),
           ),
           const SizedBox(height: 20),
 
           // 個人簡介/履歷
-          _buildInputSection(
-            title: widget.isParentView ? '發布者簡介' : '應徵者履歷',
-            icon: Icons.description,
-            child: TextField(
-              controller: _bioCtrl,
-              focusNode: _bioFocus,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: widget.isParentView
-                    ? '簡單介紹一下自己，讓應徵者更了解你...'
-                    : '描述您的技能、經驗和專長...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.all(16),
-              ),
-            ),
+          CustomTextField(
+            controller: _bioCtrl,
+            focusNode: _bioFocus,
+            label: widget.isParentView ? '發布者簡介' : '應徵者履歷',
+            hintText: widget.isParentView
+                ? '簡單介紹一下自己，讓應徵者更了解你...'
+                : '描述您的技能、經驗和專長...',
+            maxLines: 4,
           ),
           const SizedBox(height: 32),
 
@@ -3270,101 +3174,40 @@ class _BasicInfoEditBottomSheetState extends State<BasicInfoEditBottomSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 姓名
-          _buildInputSection(
-            title: '姓名',
-            icon: Icons.person,
-            child: TextField(
-              controller: _nameCtrl,
-              focusNode: _nameFocus,
-              decoration: InputDecoration(
-                hintText: '請輸入您的姓名',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.done,
-            ),
+          CustomTextField(
+            controller: _nameCtrl,
+            focusNode: _nameFocus,
+            label: '姓名',
+            hintText: '請輸入您的姓名',
+            textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: 20),
 
           // 生日
-          _buildInputSection(
-            title: '生日',
-            icon: Icons.cake,
-            child: InkWell(
-              onTap: _selectBirthday,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[300]!),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _selectedBirthday != null
-                            ? '${_selectedBirthday!.year}年${_selectedBirthday!.month}月${_selectedBirthday!.day}日'
-                            : '請選擇生日',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: _selectedBirthday != null
-                              ? Colors.black
-                              : Colors.grey[500],
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.calendar_today, color: Colors.grey[600]),
-                  ],
-                ),
-              ),
-            ),
+          CustomDateTimeField(
+            label: '生日',
+            icon: Icons.calendar_today,
+            selectedDate: _selectedBirthday,
+            onDateTap: _selectBirthday,
           ),
           const SizedBox(height: 20),
 
           // 性別
-          _buildInputSection(
-            title: '性別',
+          CustomDropdownField<String>(
+            label: '性別',
+            value: _selectedGender,
             icon: Icons.wc,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedGender,
-                  hint: Text(
-                    '請選擇性別',
-                    style: TextStyle(color: Colors.grey[500]),
-                  ),
-                  isExpanded: true,
-                  items: const [
-                    DropdownMenuItem(value: '男', child: Text('男')),
-                    DropdownMenuItem(value: '女', child: Text('女')),
-                    DropdownMenuItem(value: '其他', child: Text('其他')),
-                  ],
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedGender = newValue;
-                    });
-                  },
-                ),
-              ),
-            ),
+            hintText: '請選擇性別',
+            items: const [
+              DropdownMenuItem(value: '男', child: Text('男')),
+              DropdownMenuItem(value: '女', child: Text('女')),
+              DropdownMenuItem(value: '其他', child: Text('其他')),
+            ],
+            onChanged: (String? newValue) {
+              setState(() {
+                _selectedGender = newValue;
+              });
+            },
           ),
           const SizedBox(height: 32),
 
@@ -3525,86 +3368,35 @@ class _ContactInfoEditBottomSheetState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Email
-          _buildInputSection(
-            title: 'Email',
-            icon: Icons.email,
-            child: TextField(
-              controller: _emailCtrl,
-              focusNode: _emailFocus,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                hintText: '請輸入 Email',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _lineFocus.requestFocus(),
-            ),
+          CustomTextField(
+            controller: _emailCtrl,
+            focusNode: _emailFocus,
+            label: 'Email',
+            hintText: '請輸入 Email',
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _lineFocus.requestFocus(),
           ),
           const SizedBox(height: 20),
 
           // Line ID
-          _buildInputSection(
-            title: 'Line ID',
-            icon: Icons.chat,
-            child: TextField(
-              controller: _lineCtrl,
-              focusNode: _lineFocus,
-              decoration: InputDecoration(
-                hintText: '請輸入 Line ID（選填）',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _socialFocus.requestFocus(),
-            ),
+          CustomTextField(
+            controller: _lineCtrl,
+            focusNode: _lineFocus,
+            label: 'Line ID',
+            hintText: '請輸入 Line ID（選填）',
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _socialFocus.requestFocus(),
           ),
           const SizedBox(height: 20),
 
           // 社群連結
-          _buildInputSection(
-            title: '社群連結',
-            icon: Icons.link,
-            child: TextField(
-              controller: _socialLinksCtrl,
-              focusNode: _socialFocus,
-              decoration: InputDecoration(
-                hintText: 'Instagram、Facebook 等連結（選填）',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              textInputAction: TextInputAction.done,
-            ),
+          CustomTextField(
+            controller: _socialLinksCtrl,
+            focusNode: _socialFocus,
+            label: '社群連結',
+            hintText: 'Instagram、Facebook 等連結（選填）',
+            textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: 32),
 
@@ -3751,28 +3543,14 @@ class _ResumeEditBottomSheetState extends State<ResumeEditBottomSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 簡介/履歷
-          _buildInputSection(
-            title: widget.isParentView ? '發布者簡介' : '應徵者履歷',
-            icon: Icons.description,
-            child: TextField(
-              controller: _resumeCtrl,
-              focusNode: _resumeFocus,
-              maxLines: 8,
-              decoration: InputDecoration(
-                hintText: widget.isParentView
-                    ? '簡單介紹一下自己，讓應徵者更了解你...'
-                    : '描述您的技能、經驗和專長...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.all(16),
-              ),
-            ),
+          CustomTextField(
+            controller: _resumeCtrl,
+            focusNode: _resumeFocus,
+            label: widget.isParentView ? '發布者簡介' : '應徵者履歷',
+            hintText: widget.isParentView
+                ? '簡單介紹一下自己，讓應徵者更了解你...'
+                : '描述您的技能、經驗和專長...',
+            maxLines: 8,
           ),
           const SizedBox(height: 32),
 
