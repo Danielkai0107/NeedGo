@@ -544,119 +544,131 @@ class _RegistrationViewState extends State<RegistrationView> {
   Widget _buildAvatarStep() {
     return Column(
       children: [
-        // 頭像顯示區域
-        GestureDetector(
-          onTap: _isProcessingImage ? null : _pickAndCropImage,
-          child: Stack(
-            children: [
-              Container(
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _croppedImage != null
-                        ? Colors.green[300]!
-                        : Colors.blue[300]!,
-                    width: 3,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          (_croppedImage != null ? Colors.green : Colors.blue)
-                              .withOpacity(0.2),
-                      spreadRadius: 2,
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: _croppedImage != null
-                    ? ClipOval(
-                        child: Image.memory(
-                          _croppedImage!,
-                          width: 150,
-                          height: 150,
-                          fit: BoxFit.cover,
-                        ),
-                      )
-                    : Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.grey[100],
-                        ),
-                        child: Icon(
-                          Icons.person,
-                          size: 60,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-              ),
-
-              // 處理中的遮罩
-              if (_isProcessingImage)
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-
-              // 右下角的相機圖標
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 40,
-                  height: 40,
+        // 頭像顯示區域 - 使用固定高度容器
+        Center(
+          child: GestureDetector(
+            onTap: _isProcessingImage ? null : _pickAndCropImage,
+            child: Stack(
+              children: [
+                Container(
+                  width: 150,
+                  height: 150,
                   decoration: BoxDecoration(
-                    color: _croppedImage != null
-                        ? Colors.green[600]
-                        : Colors.blue[600],
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
+                    border: Border.all(
+                      color: _croppedImage != null
+                          ? Colors.green[300]!
+                          : Colors.blue[300]!,
+                      width: 3,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        spreadRadius: 1,
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
+                        color:
+                            (_croppedImage != null ? Colors.green : Colors.blue)
+                                .withOpacity(0.2),
+                        spreadRadius: 2,
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: Icon(
-                    _croppedImage != null ? Icons.check : Icons.edit,
-                    size: 20,
-                    color: Colors.white,
+                  child: _croppedImage != null
+                      ? ClipOval(
+                          child: Image.memory(
+                            _croppedImage!,
+                            width: 150,
+                            height: 150,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.grey[100],
+                          ),
+                          child: Icon(
+                            Icons.person,
+                            size: 60,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                ),
+
+                // 處理中的遮罩
+                if (_isProcessingImage)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // 右下角的相機圖標
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _croppedImage != null
+                          ? Colors.green[600]
+                          : Colors.blue[600],
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          spreadRadius: 1,
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      _croppedImage != null ? Icons.check : Icons.edit,
+                      size: 20,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
 
         const SizedBox(height: 24),
 
-        // 狀態文字
-        Text(
-          _isProcessingImage
-              ? '處理中...'
-              : _croppedImage != null
-              ? '頭像已設定完成，點擊可重新選擇'
-              : '點擊上方圓圈選擇頭像照片',
-          style: TextStyle(
-            color: _croppedImage != null ? Colors.green[600] : Colors.blue[600],
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+        // 狀態文字區域 - 使用固定高度容器避免UI移動
+        Container(
+          height: 60, // 固定高度
+          alignment: Alignment.center,
+          child: Text(
+            _isProcessingImage
+                ? '處理中...'
+                : _croppedImage != null
+                ? '頭像已設定完成，點擊可重新選擇'
+                : '點擊上方圓圈選擇頭像照片',
+            style: TextStyle(
+              color: _croppedImage != null
+                  ? Colors.green[600]
+                  : Colors.blue[600],
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2, // 限制最大行數
+            overflow: TextOverflow.ellipsis,
           ),
-          textAlign: TextAlign.center,
         ),
       ],
     );
