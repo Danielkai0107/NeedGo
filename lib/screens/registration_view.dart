@@ -28,6 +28,15 @@ class _RegistrationViewState extends State<RegistrationView> {
   int _currentStep = 0;
   bool _loading = false;
 
+  // 添加鍵盤高度跟蹤變量
+  double _previousKeyboardHeight = 0.0;
+
+  // 添加一個空的FocusNode作為默認焦點，避免輸入框自動聚焦
+  late FocusNode _defaultFocusNode;
+
+  // 添加標記變量，用於控制何時需要強制移除焦點
+  bool _shouldForceClearFocus = false;
+
   // Step 1: 基本資訊
   final _formKey1 = GlobalKey<FormState>();
   final TextEditingController _nameCtrl = TextEditingController();
@@ -54,7 +63,18 @@ class _RegistrationViewState extends State<RegistrationView> {
   final ImagePicker _picker = ImagePicker();
 
   @override
+  void initState() {
+    super.initState();
+    _defaultFocusNode = FocusNode();
+    // 移除強制設置焦點的代碼，讓Flutter自然管理焦點
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _defaultFocusNode.requestFocus();
+    // });
+  }
+
+  @override
   void dispose() {
+    _defaultFocusNode.dispose();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _lineCtrl.dispose();
@@ -65,6 +85,15 @@ class _RegistrationViewState extends State<RegistrationView> {
   // Email 格式驗證
   bool _isValidEmail(String email) {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  // 檢查鍵盤狀態變化
+  void _handleKeyboardChange(double currentKeyboardHeight) {
+    // 如果鍵盤從顯示狀態變為隱藏狀態，移除焦點
+    if (_previousKeyboardHeight > 0 && currentKeyboardHeight == 0) {
+      FocusScope.of(context).unfocus();
+    }
+    _previousKeyboardHeight = currentKeyboardHeight;
   }
 
   // 提交全部資料：上傳 Storage、寫入 Firestore
@@ -238,6 +267,17 @@ class _RegistrationViewState extends State<RegistrationView> {
 
   @override
   Widget build(BuildContext context) {
+    // 監聽鍵盤高度變化
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleKeyboardChange(keyboardHeight);
+      // 只在用戶明確操作後才強制移除焦點
+      if (_shouldForceClearFocus) {
+        FocusScope.of(context).unfocus();
+        _shouldForceClearFocus = false; // 重置標記
+      }
+    });
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -256,121 +296,147 @@ class _RegistrationViewState extends State<RegistrationView> {
       ),
       body: Stack(
         children: [
-          Column(
-            children: [
-              // 步驟進度條
-              _buildStepIndicator(),
+          // 暫時移除不可見的Focus widget，讓Flutter自然管理焦點
+          // Focus(
+          //   focusNode: _defaultFocusNode,
+          //   child: Container(),
+          // ),
+          GestureDetector(
+            onTap: () {
+              // 點擊空白區域時移除所有焦點
+              FocusScope.of(context).unfocus();
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    // 步驟進度條
+                    _buildStepIndicator(),
 
-              // 主內容區
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 步驟標題
-                      Text(
-                        _getStepTitle(),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                    // 主內容區
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 步驟標題
+                            Text(
+                              _getStepTitle(),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+
+                            // 步驟內容
+                            _buildStepContent(),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 32),
+                    ),
 
-                      // 步驟內容
-                      _buildStepContent(),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 底部操作按鈕
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: Colors.grey[100]!)),
-                ),
-                child: SafeArea(
-                  child: Row(
-                    children: [
-                      // 上一步/跳過按鈕
-                      if (_currentStep > 0)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => setState(() => _currentStep--),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.grey[500],
-                              side: BorderSide(color: Colors.grey[400]!),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24.0,
-                                vertical: 16,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            child: const Text('上一步'),
-                          ),
-                        ),
-                      if (_currentStep == 2) // 真人驗證步驟可跳過
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => setState(() => _currentStep++),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.grey[500],
-                              side: BorderSide(color: Colors.grey[400]!),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24.0,
-                                vertical: 16,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            child: const Text('跳過'),
-                          ),
-                        ),
-
-                      // 間距
-                      if (_currentStep > 0 || _currentStep == 2)
-                        const SizedBox(width: 12),
-
-                      // 下一步/完成按鈕
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _canProceed() ? _handleNext : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange[600],
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24.0,
-                              vertical: 16,
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          child: Text(_currentStep == 3 ? '完成' : '下一步'),
+                    // 底部操作按鈕
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border(
+                          top: BorderSide(color: Colors.grey[100]!),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+                      child: SafeArea(
+                        child: Row(
+                          children: [
+                            // 上一步/跳過按鈕
+                            if (_currentStep > 0)
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => setState(() {
+                                    _currentStep--;
+                                    _shouldForceClearFocus =
+                                        true; // 設置標記確保返回上一步後強制移除焦點
+                                  }),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.grey[500],
+                                    side: BorderSide(color: Colors.grey[400]!),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24.0,
+                                      vertical: 16,
+                                    ),
+                                    textStyle: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  child: const Text('上一步'),
+                                ),
+                              ),
+                            if (_currentStep == 2) // 真人驗證步驟可跳過
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => setState(() {
+                                    _currentStep++;
+                                    _shouldForceClearFocus =
+                                        true; // 設置標記確保跳過後強制移除焦點
+                                  }),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.grey[500],
+                                    side: BorderSide(color: Colors.grey[400]!),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24.0,
+                                      vertical: 16,
+                                    ),
+                                    textStyle: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  child: const Text('跳過'),
+                                ),
+                              ),
 
-          // 載入中遮罩
-          if (_loading)
-            Container(
-              color: Colors.black26,
-              child: const Center(child: CircularProgressIndicator()),
+                            // 間距
+                            if (_currentStep > 0 || _currentStep == 2)
+                              const SizedBox(width: 12),
+
+                            // 下一步/完成按鈕
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _canProceed() ? _handleNext : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange[600],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24.0,
+                                    vertical: 16,
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                child: Text(_currentStep == 3 ? '完成' : '下一步'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // 載入中遮罩
+                if (_loading)
+                  Container(
+                    color: Colors.black26,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -416,9 +482,12 @@ class _RegistrationViewState extends State<RegistrationView> {
           errorText: _nameError,
           textInputAction: TextInputAction.next,
           onChanged: (value) {
-            setState(() {
-              if (value.isNotEmpty) _nameError = null;
-            });
+            // 只在有錯誤狀態需要清除時才調用setState，減少不必要的重新構建
+            if (_nameError != null && value.isNotEmpty) {
+              setState(() {
+                _nameError = null;
+              });
+            }
           },
         ),
         const SizedBox(height: 24),
@@ -434,9 +503,12 @@ class _RegistrationViewState extends State<RegistrationView> {
             DropdownMenuItem(value: 'other', child: Text('其他')),
           ],
           onChanged: (value) {
+            // 先移除焦點以避免重新構建後焦點跳回姓名輸入框
+            FocusScope.of(context).unfocus();
             setState(() {
               _gender = value;
               if (value != null) _genderError = null;
+              _shouldForceClearFocus = true; // 設置標記確保重新構建後強制移除焦點
             });
           },
         ),
@@ -448,16 +520,19 @@ class _RegistrationViewState extends State<RegistrationView> {
           selectedDate: _birthDate,
           errorText: _birthDateError,
           onDateTap: () async {
+            // 先移除焦點以避免重新構建後焦點跳回姓名輸入框
+            FocusScope.of(context).unfocus();
             final date = await showDatePicker(
               context: context,
               initialDate: DateTime(1990),
               firstDate: DateTime(1900),
               lastDate: DateTime.now(),
             );
-            if (date != null) {
+            if (date != null && mounted) {
               setState(() {
                 _birthDate = date;
                 _birthDateError = null;
+                _shouldForceClearFocus = true; // 設置標記確保重新構建後強制移除焦點
               });
             }
           },
@@ -637,17 +712,19 @@ class _RegistrationViewState extends State<RegistrationView> {
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           onChanged: (value) {
-            setState(() {
-              if (value.isNotEmpty) {
-                if (!_isValidEmail(value)) {
-                  _emailError = 'Email格式不正確';
-                } else {
-                  _emailError = null;
-                }
-              } else {
-                _emailError = null;
+            // 只在錯誤狀態需要改變時才調用setState
+            String? newError;
+            if (value.isNotEmpty) {
+              if (!_isValidEmail(value)) {
+                newError = 'Email格式不正確';
               }
-            });
+            }
+
+            if (_emailError != newError) {
+              setState(() {
+                _emailError = newError;
+              });
+            }
           },
         ),
         const SizedBox(height: 24),
@@ -691,7 +768,10 @@ class _RegistrationViewState extends State<RegistrationView> {
     if (_currentStep < 3) {
       _validateCurrentStep();
       if (_canProceed()) {
-        setState(() => _currentStep++);
+        setState(() {
+          _currentStep++;
+          _shouldForceClearFocus = true; // 設置標記確保切換步驟後強制移除焦點
+        });
       }
     } else {
       _submitAll();
@@ -699,6 +779,9 @@ class _RegistrationViewState extends State<RegistrationView> {
   }
 
   void _validateCurrentStep() {
+    // 在驗證之前先移除焦點，避免驗證時焦點跳轉
+    FocusScope.of(context).unfocus();
+
     switch (_currentStep) {
       case 0:
         setState(() {
