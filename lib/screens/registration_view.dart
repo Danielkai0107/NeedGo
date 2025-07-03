@@ -195,10 +195,92 @@ class _RegistrationViewState extends State<RegistrationView> {
   Future<void> _pickAndCropImage() async {
     if (_isProcessingImage) return;
 
+    // 顯示選擇對話框
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            '選擇照片來源',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.camera_alt, color: Colors.blue, size: 24),
+                      SizedBox(width: 16),
+                      Text(
+                        '拍照',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.photo_library, color: Colors.green, size: 24),
+                      SizedBox(width: 16),
+                      Text(
+                        '從相簿選擇',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                '取消',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (source == null) return;
+
     setState(() => _isProcessingImage = true);
 
     try {
-      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      final picked = await _picker.pickImage(source: source);
       if (picked == null) {
         setState(() => _isProcessingImage = false);
         return;
@@ -652,7 +734,7 @@ class _RegistrationViewState extends State<RegistrationView> {
                 ? '處理中...'
                 : _croppedImage != null
                 ? '頭像已設定完成，點擊可重新選擇'
-                : '點擊上方圓圈選擇頭像照片',
+                : '點擊上方圓圈拍照或選擇頭像照片',
             style: TextStyle(
               color: _croppedImage != null
                   ? Colors.green[600]
