@@ -293,6 +293,25 @@ class _RegistrationViewState extends State<RegistrationView> {
           child: const Text('離開', style: TextStyle(fontSize: 16)),
         ),
         leadingWidth: 80,
+        // 在真人驗證步驟時顯示跳過按鈕
+        actions: _currentStep == 2
+            ? [
+                TextButton(
+                  onPressed: () => setState(() {
+                    _currentStep++;
+                    _shouldForceClearFocus = true; // 設置標記確保跳過後強制移除焦點
+                  }),
+                  child: const Text(
+                    '跳過',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ]
+            : null,
       ),
       body: Stack(
         children: [
@@ -350,7 +369,7 @@ class _RegistrationViewState extends State<RegistrationView> {
                       child: SafeArea(
                         child: Row(
                           children: [
-                            // 上一步/跳過按鈕
+                            // 上一步按鈕
                             if (_currentStep > 0)
                               Expanded(
                                 child: OutlinedButton(
@@ -374,33 +393,9 @@ class _RegistrationViewState extends State<RegistrationView> {
                                   child: const Text('上一步'),
                                 ),
                               ),
-                            if (_currentStep == 2) // 真人驗證步驟可跳過
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => setState(() {
-                                    _currentStep++;
-                                    _shouldForceClearFocus =
-                                        true; // 設置標記確保跳過後強制移除焦點
-                                  }),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.grey[500],
-                                    side: BorderSide(color: Colors.grey[400]!),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24.0,
-                                      vertical: 16,
-                                    ),
-                                    textStyle: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  child: const Text('跳過'),
-                                ),
-                              ),
 
                             // 間距
-                            if (_currentStep > 0 || _currentStep == 2)
-                              const SizedBox(width: 12),
+                            if (_currentStep > 0) const SizedBox(width: 12),
 
                             // 下一步/完成按鈕
                             Expanded(
