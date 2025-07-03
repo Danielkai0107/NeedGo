@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/custom_snackbar.dart';
+import '../widgets/custom_text_field.dart';
+import '../widgets/custom_date_time_field.dart';
 
 // 任務數據模型
 class TaskData {
@@ -501,26 +503,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           _buildInputSection(
             title: '任務名稱',
             icon: Icons.assignment,
-            child: TextField(
-              controller: widget.nameController,
+            child: CustomTextField(
+              controller: widget.nameController!,
               focusNode: _nameFocus,
-              decoration: InputDecoration(
-                hintText: '請輸入任務名稱',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (v) => widget.taskForm!['name'] = v,
+              label: '任務名稱',
+              maxLength: 40,
               textInputAction: TextInputAction.next,
+              onChanged: (v) => widget.taskForm!['name'] = v,
               onSubmitted: (_) => _contentFocus.requestFocus(),
             ),
           ),
@@ -528,24 +517,15 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           _buildInputSection(
             title: '任務內容',
             icon: Icons.description,
-            child: TextField(
-              controller: widget.contentController,
+            child: CustomTextField(
+              controller: widget.contentController!,
               focusNode: _contentFocus,
+              label: '任務內容',
+              hintText: '請詳細描述任務內容...',
               maxLines: 3,
-              decoration: InputDecoration(
-                hintText: '請詳細描述任務內容...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.blue[500]!, width: 2),
-                ),
-                contentPadding: const EdgeInsets.all(16),
-              ),
-              onChanged: (v) => widget.taskForm!['content'] = v,
+              maxLength: 200,
               textInputAction: TextInputAction.next,
+              onChanged: (v) => widget.taskForm!['content'] = v,
               onSubmitted: (_) => _locationFocus.requestFocus(),
             ),
           ),
@@ -555,32 +535,16 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             icon: Icons.location_on,
             child: Column(
               children: [
-                TextField(
-                  controller: widget.locationSearchController,
+                CustomTextField(
+                  controller: widget.locationSearchController!,
                   focusNode: _locationFocus,
-                  decoration: InputDecoration(
-                    hintText: '搜尋地點...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.blue[500]!,
-                        width: 2,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
+                  label: '任務地點',
+                  hintText: '搜尋地點...',
+                  prefixIcon: const Icon(Icons.search),
+                  textInputAction: TextInputAction.search,
                   onChanged: (value) {
                     widget.onLocationSearch?.call(value);
                   },
-                  textInputAction: TextInputAction.search,
                 ),
                 if (widget.locationSuggestions!.isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -931,28 +895,14 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           ),
           const SizedBox(height: 24),
 
-          // 任務標題
-          const Text('任務標題 *', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextField(
+          CustomTextField(
             controller: _titleController,
             focusNode: _titleFocusNode,
-            decoration: InputDecoration(
-              hintText: '請輸入任務標題',
-              border: OutlineInputBorder(
-                borderSide: BorderSide(
-                  color: _titleError != null ? Colors.red : Colors.grey,
-                ),
-              ),
-              errorBorder: const OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.red),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 16,
-              ),
-              errorText: _titleError,
-            ),
+            label: '任務標題',
+            isRequired: true,
+            errorText: _titleError,
+            maxLength: 40,
+            textInputAction: TextInputAction.next,
             onChanged: (value) {
               setState(() {
                 _taskData.title = value;
@@ -963,89 +913,25 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
           const SizedBox(height: 24),
 
-          // 日期選擇
-          const Text('日期 *', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          InkWell(
-            onTap: () => _selectDate(),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: _dateError != null ? Colors.red : Colors.grey,
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    _taskData.date != null
-                        ? '${_taskData.date!.year}/${_taskData.date!.month}/${_taskData.date!.day}'
-                        : '選擇日期',
-                    style: TextStyle(
-                      color: _taskData.date != null
-                          ? Colors.black
-                          : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          CustomDateTimeField(
+            label: '日期',
+            isRequired: true,
+            icon: Icons.calendar_today,
+            selectedDate: _taskData.date,
+            errorText: _dateError,
+            onDateTap: _selectDate,
           ),
-          if (_dateError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8, left: 12),
-              child: Text(
-                _dateError!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ),
 
           const SizedBox(height: 24),
 
-          // 時間選擇
-          const Text('時間 *', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          InkWell(
-            onTap: () => _selectTime(),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: _timeError != null ? Colors.red : Colors.grey,
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.access_time, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    _taskData.time != null
-                        ? _taskData.time!.format(context)
-                        : '選擇時間',
-                    style: TextStyle(
-                      color: _taskData.time != null
-                          ? Colors.black
-                          : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          CustomDateTimeField(
+            label: '時間',
+            isRequired: true,
+            icon: Icons.access_time,
+            selectedTime: _taskData.time,
+            errorText: _timeError,
+            onTimeTap: _selectTime,
           ),
-          if (_timeError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8, left: 12),
-              child: Text(
-                _timeError!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ),
         ],
       ),
     );
@@ -1070,25 +956,16 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           ),
           const SizedBox(height: 24),
 
-          const Text('任務描述 *', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextField(
+          CustomTextField(
             controller: _contentController,
             focusNode: _contentFocusNode,
+            label: '任務描述',
+            isRequired: true,
+            hintText: '請詳細描述您的任務內容...',
+            errorText: _contentError,
             maxLines: 8,
-            decoration: InputDecoration(
-              hintText: '請詳細描述您的任務內容...',
-              border: OutlineInputBorder(
-                borderSide: BorderSide(
-                  color: _contentError != null ? Colors.red : Colors.grey,
-                ),
-              ),
-              errorBorder: const OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.red),
-              ),
-              contentPadding: const EdgeInsets.all(12),
-              errorText: _contentError,
-            ),
+            maxLength: 200,
+            textInputAction: TextInputAction.newline,
             onChanged: (value) {
               setState(() {
                 _taskData.content = value;
@@ -1120,28 +997,15 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
           ),
           const SizedBox(height: 24),
 
-          const Text('任務地點 *', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextField(
+          CustomTextField(
             controller: _addressController,
             focusNode: _addressFocusNode,
-            decoration: InputDecoration(
-              hintText: '搜尋地點...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderSide: BorderSide(
-                  color: _addressError != null ? Colors.red : Colors.grey,
-                ),
-              ),
-              errorBorder: const OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.red),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 16,
-              ),
-              errorText: _addressError,
-            ),
+            label: '任務地點',
+            isRequired: true,
+            hintText: '搜尋地點...',
+            errorText: _addressError,
+            prefixIcon: const Icon(Icons.search),
+            textInputAction: TextInputAction.search,
             onChanged: (value) {
               if (value.isNotEmpty) {
                 _searchLocations(value);
