@@ -260,35 +260,11 @@ class _AuthViewState extends State<AuthView>
     }
   }
 
-  // 導向註冊頁面或主頁面
+  // 導向主頁面（讓 AuthGate 負責狀態判斷）
   void _navigateToRegistration(User user, String phoneNumber) async {
-    try {
-      // 檢查用戶是否已註冊 - 統一使用 user 集合
-      final userDoc = await FirebaseFirestore.instance
-          .collection('user')
-          .doc(user.uid)
-          .get();
-
-      if (mounted) {
-        if (userDoc.exists) {
-          // 已註冊用戶，直接進入主頁面
-          Navigator.of(context).pushReplacementNamed('/parent');
-        } else {
-          // 新用戶，進入註冊流程 - 使用命名路由並傳遞參數
-          Navigator.of(context).pushReplacementNamed(
-            '/registration',
-            arguments: {'uid': user.uid, 'phoneNumber': phoneNumber},
-          );
-        }
-      }
-    } catch (e) {
-      print('檢查用戶註冊狀態失敗: $e');
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed(
-          '/registration',
-          arguments: {'uid': user.uid, 'phoneNumber': phoneNumber},
-        );
-      }
+    // 驗證成功後直接回到主頁面，讓 AuthGate 處理狀態判斷
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/');
     }
   }
 

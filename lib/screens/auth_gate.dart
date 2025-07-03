@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_view.dart';
 import 'parent_view.dart';
+import 'registration_view.dart';
 
 /// AuthGate - 登入狀態判斷的主入口元件
 /// 自動偵測使用者登入狀態，決定顯示登入頁面或主畫面
@@ -56,12 +57,15 @@ class AuthGate extends StatelessWidget {
               // 已註冊，進入主畫面
               return const ParentView();
             } else {
-              // 未註冊，重新導向至登入流程
-              // 這裡登出用戶，讓他們重新完成註冊流程
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                FirebaseAuth.instance.signOut();
-              });
-              return const AuthView();
+              // 未註冊，直接返回註冊頁面
+              // 取得用戶手機號碼
+              final phoneNumber = user.phoneNumber ?? '';
+              
+              // 直接導入註冊頁面而不是登出
+              return RegistrationView(
+                uid: user.uid,
+                phoneNumber: phoneNumber,
+              );
             }
           },
         );

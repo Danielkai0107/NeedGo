@@ -239,8 +239,10 @@ class _RegistrationViewState extends State<RegistrationView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(''),
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: TextButton(
           onPressed: () {
@@ -285,30 +287,79 @@ class _RegistrationViewState extends State<RegistrationView> {
 
               // 底部操作按鈕
               Container(
-                padding: const EdgeInsets.all(24),
-                child: Row(
-                  children: [
-                    // 上一步/跳過按鈕
-                    // 上一步/跳過按鈕
-                    if (_currentStep > 0)
-                      TextButton(
-                        onPressed: () => setState(() => _currentStep--),
-                        child: const Text('上一步'),
-                      ),
-                    if (_currentStep == 2) // 真人驗證步驟可跳過
-                      TextButton(
-                        onPressed: () => setState(() => _currentStep++),
-                        child: const Text('跳過'),
-                      ),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Colors.grey[100]!)),
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      // 上一步/跳過按鈕
+                      if (_currentStep > 0)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => setState(() => _currentStep--),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey[500],
+                              side: BorderSide(color: Colors.grey[400]!),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24.0,
+                                vertical: 16,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            child: const Text('上一步'),
+                          ),
+                        ),
+                      if (_currentStep == 2) // 真人驗證步驟可跳過
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => setState(() => _currentStep++),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey[500],
+                              side: BorderSide(color: Colors.grey[400]!),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24.0,
+                                vertical: 16,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            child: const Text('跳過'),
+                          ),
+                        ),
 
-                    const Spacer(),
+                      // 間距
+                      if (_currentStep > 0 || _currentStep == 2)
+                        const SizedBox(width: 12),
 
-                    // 下一步/完成按鈕
-                    ElevatedButton(
-                      onPressed: _canProceed() ? _handleNext : null,
-                      child: Text(_currentStep == 3 ? '完成' : '下一步'),
-                    ),
-                  ],
+                      // 下一步/完成按鈕
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _canProceed() ? _handleNext : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange[600],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                              vertical: 16,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          child: Text(_currentStep == 3 ? '完成' : '下一步'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
