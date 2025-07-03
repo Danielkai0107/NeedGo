@@ -50,7 +50,7 @@ class _ParentViewState extends State<ParentView> {
   String get _apiKey => dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
   late GoogleMapController _mapCtrl;
   LatLng _center = const LatLng(25.0479, 121.5171);
-  double _zoom = 14;
+  double _zoom = 16; // 設置為中等縮放
   LatLng? _myLocation;
   List<Map<String, dynamic>> _myPosts = [];
   Map<String, dynamic> _profile = {};
@@ -1356,7 +1356,11 @@ class _ParentViewState extends State<ParentView> {
 
     // 4. 地图移动到定位点并放大
     if (mounted) {
-      _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(newLatLng, 16));
+      _mapCtrl.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: newLatLng, zoom: _zoom, tilt: 60.0),
+        ),
+      );
     }
   }
 
@@ -1675,7 +1679,11 @@ class _ParentViewState extends State<ParentView> {
 
       // 創建成功後移動地圖到新任務位置
       final newLatLng = LatLng(lat, lng);
-      _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(newLatLng, 15));
+      _mapCtrl.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: newLatLng, zoom: _zoom, tilt: 60.0),
+        ),
+      );
     } catch (e) {
       print('創建任務失敗: $e');
       ScaffoldMessenger.of(
@@ -2778,7 +2786,11 @@ class _ParentViewState extends State<ParentView> {
         if (taskData.lat != null && taskData.lng != null) {
           try {
             final newLatLng = LatLng(taskData.lat!, taskData.lng!);
-            _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(newLatLng, 15));
+            _mapCtrl.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(target: newLatLng, zoom: _zoom, tilt: 60.0),
+              ),
+            );
           } catch (mapError) {
             print('⚠️ 地圖移動失敗: $mapError');
             // 地圖移動失敗不影響整體流程
@@ -2930,7 +2942,11 @@ class _ParentViewState extends State<ParentView> {
 
   /// 移動地圖到指定位置
   void _moveMapToLocation(LatLng position) {
-    _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(position, 16));
+    _mapCtrl.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: position, zoom: _zoom, tilt: 60.0),
+      ),
+    );
   }
 
   /// 顯示地點資訊彈窗
@@ -3082,7 +3098,11 @@ class _ParentViewState extends State<ParentView> {
         children: [
           // Google 地圖
           GoogleMap(
-            initialCameraPosition: CameraPosition(target: _center, zoom: _zoom),
+            initialCameraPosition: CameraPosition(
+              target: _center,
+              zoom: _zoom,
+              tilt: 60.0, // 固定仰角60度
+            ),
             onMapCreated: (c) {
               _mapCtrl = c;
               c.setMapStyle(mapStyleJson);
@@ -3101,7 +3121,12 @@ class _ParentViewState extends State<ParentView> {
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
             compassEnabled: false,
-            zoomGesturesEnabled: true,
+            zoomGesturesEnabled: true, // 允許縮放手勢
+            tiltGesturesEnabled: false, // 禁用仰角調整手勢
+            minMaxZoomPreference: const MinMaxZoomPreference(
+              14,
+              22,
+            ), // 縮放範圍14-22
           ),
 
           // 調試和測試按鈕
@@ -3271,12 +3296,12 @@ class _ParentViewState extends State<ParentView> {
                       Text(
                         '發布者',
                         style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       // 角色切換按鈕
                       InkWell(
                         onTap: () => _showRoleSwitchDialog(context, '陪伴者'),
@@ -3287,7 +3312,6 @@ class _ParentViewState extends State<ParentView> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: Colors.grey[300]!,
@@ -3297,7 +3321,7 @@ class _ParentViewState extends State<ParentView> {
                           child: const Text(
                             '角色切換',
                             style: TextStyle(
-                              color: Colors.black,
+                              color: Colors.grey,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
@@ -3479,7 +3503,13 @@ class _ParentViewState extends State<ParentView> {
                     setState(() => _myLocation = newLatLng);
                     _updateMarkers();
                     _mapCtrl.animateCamera(
-                      CameraUpdate.newLatLngZoom(newLatLng, 16),
+                      CameraUpdate.newCameraPosition(
+                        CameraPosition(
+                          target: newLatLng,
+                          zoom: _zoom,
+                          tilt: 60.0,
+                        ),
+                      ),
                     );
                   },
                 ),

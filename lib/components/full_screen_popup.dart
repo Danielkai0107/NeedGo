@@ -2914,13 +2914,13 @@ class ProfileViewBottomSheet extends StatelessWidget {
           const SizedBox(height: 16),
 
           // 姓名
-          _buildInfoRow('姓名', profile['name'], Icons.person),
+          _buildInfoRow('姓名 ', profile['name'], Icons.person),
 
           // 生日
-          _buildInfoRow('生日', _formatBirthday(), Icons.cake),
+          _buildInfoRow('生日 ', _formatBirthday(), Icons.cake),
 
           // 性別
-          _buildInfoRow('性別', _formatGender(), Icons.wc),
+          _buildInfoRow('性別 ', _formatGender(), Icons.wc),
         ],
       ),
     );
@@ -2952,13 +2952,13 @@ class ProfileViewBottomSheet extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Email
-          _buildInfoRow('Email', profile['email'] ?? '未設定', Icons.email),
+          _buildInfoRow('Email ', profile['email'] ?? '未設定', Icons.email),
 
           // Line ID
-          _buildInfoRow('Line ID', profile['lineId'] ?? '未設定', Icons.chat),
+          _buildInfoRow('Line ID ', profile['lineId'] ?? '未設定', Icons.chat),
 
           // 社群連結
-          _buildInfoRow('社群連結', _formatSocialLinks(), Icons.link),
+          _buildInfoRow('社群連結 ', _formatSocialLinks(), Icons.link),
         ],
       ),
     );

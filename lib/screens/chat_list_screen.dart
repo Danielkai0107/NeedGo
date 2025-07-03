@@ -95,14 +95,17 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
       ),
       backgroundColor: Colors.grey[50],
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Parent 角色的聊天室（我是發布者）
-          _buildChatRoomList(isParentView: true),
-          // Player 角色的聊天室（我是陪伴者）
-          _buildChatRoomList(isParentView: false),
-        ],
+      body: Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            // Parent 角色的聊天室（我是發布者）
+            _buildChatRoomList(isParentView: true),
+            // Player 角色的聊天室（我是陪伴者）
+            _buildChatRoomList(isParentView: false),
+          ],
+        ),
       ),
     );
   }

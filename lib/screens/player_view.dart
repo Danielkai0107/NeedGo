@@ -41,7 +41,7 @@ class PlayerView extends StatefulWidget {
 class _PlayerViewState extends State<PlayerView> {
   late GoogleMapController _mapCtrl;
   LatLng _center = const LatLng(25.0479, 121.5171);
-  double _zoom = 14;
+  double _zoom = 16; // 設置為中等縮放
   LatLng? _myLocation;
   final _firestore = FirebaseFirestore.instance;
 
@@ -657,7 +657,11 @@ class _PlayerViewState extends State<PlayerView> {
       final coord = LatLng(pos.latitude, pos.longitude);
       setState(() => _myLocation = coord);
       _updateMarkers(); // 更新標記以包含新的位置
-      _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(coord, 16));
+      _mapCtrl.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: coord, zoom: _zoom, tilt: 60.0),
+        ),
+      );
     } catch (_) {}
   }
 
@@ -1830,7 +1834,11 @@ class _PlayerViewState extends State<PlayerView> {
 
   /// 移動地圖到指定位置
   void _moveMapToLocation(LatLng position) {
-    _mapCtrl.animateCamera(CameraUpdate.newLatLngZoom(position, 16));
+    _mapCtrl.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: position, zoom: _zoom, tilt: 60.0),
+      ),
+    );
   }
 
   @override
@@ -1839,7 +1847,11 @@ class _PlayerViewState extends State<PlayerView> {
       body: Stack(
         children: [
           GoogleMap(
-            initialCameraPosition: CameraPosition(target: _center, zoom: _zoom),
+            initialCameraPosition: CameraPosition(
+              target: _center,
+              zoom: _zoom,
+              tilt: 60.0, // 固定仰角60度
+            ),
             onMapCreated: (c) => _mapCtrl = c..setMapStyle(mapStyleJson),
             markers: _markers,
             myLocationEnabled: false,
@@ -1847,7 +1859,12 @@ class _PlayerViewState extends State<PlayerView> {
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
             compassEnabled: false,
-            zoomGesturesEnabled: true,
+            zoomGesturesEnabled: true, // 允許縮放手勢
+            tiltGesturesEnabled: false, // 禁用仰角調整手勢
+            minMaxZoomPreference: const MinMaxZoomPreference(
+              14,
+              22,
+            ), // 縮放範圍14-22
           ),
 
           // 類別篩選器
@@ -1915,10 +1932,9 @@ class _PlayerViewState extends State<PlayerView> {
                                 ),
                                 child: Center(
                                   child: CircularProgressIndicator(
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(
-                                          Colors.white,
-                                        ),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                     strokeWidth: 2,
                                   ),
                                 ),
@@ -1962,12 +1978,12 @@ class _PlayerViewState extends State<PlayerView> {
                       Text(
                         '陪伴者',
                         style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       // 角色切換按鈕
                       InkWell(
                         onTap: () => _showRoleSwitchDialog(context, '發布者'),
@@ -1978,7 +1994,6 @@ class _PlayerViewState extends State<PlayerView> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: Colors.grey[300]!,
@@ -1988,7 +2003,7 @@ class _PlayerViewState extends State<PlayerView> {
                           child: const Text(
                             '角色切換',
                             style: TextStyle(
-                              color: Colors.black,
+                              color: Colors.grey,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
