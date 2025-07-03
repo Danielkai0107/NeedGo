@@ -63,6 +63,10 @@ class _AuthViewState extends State<AuthView>
       return '+1 0912345678'; // Firebase 測試號碼格式
     }
 
+    if (phone == '0900000000') {
+      return '+1 0900000000'; // Firebase 測試號碼格式
+    }
+
     if (phone == '0911111111') {
       return '+1 0911111111'; // Firebase 測試號碼格式
     }
@@ -86,6 +90,9 @@ class _AuthViewState extends State<AuthView>
       return true;
     }
     if (cleanPhone == '0912345678') {
+      return true;
+    }
+    if (cleanPhone == '0900000000') {
       return true;
     }
     if (cleanPhone == '0911111111') {
@@ -323,6 +330,8 @@ class _AuthViewState extends State<AuthView>
     switch (cleanPhone) {
       case '0912345678':
         return '111111';
+      case '0900000000':
+        return '000000';
       case '0912341234':
         return '123456';
       case '0911111111':
