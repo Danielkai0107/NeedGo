@@ -3121,6 +3121,7 @@ class _ParentViewState extends State<ParentView> {
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
             compassEnabled: false,
+            buildingsEnabled: false, // 隱藏3D建築
             zoomGesturesEnabled: true, // 允許縮放手勢
             tiltGesturesEnabled: false, // 禁用仰角調整手勢
             minMaxZoomPreference: const MinMaxZoomPreference(
