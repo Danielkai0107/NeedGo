@@ -733,7 +733,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                       child: Text(
                         widget.existingTask != null ? '編輯任務' : '新增任務',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
@@ -926,8 +926,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 1/6: 基礎資訊',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            '首先，請填寫基礎資訊',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
 
@@ -1763,12 +1763,19 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         }
       });
 
-      // 確保選擇完成後不會重新獲得焦點
-      FocusScope.of(context).unfocus();
+      // 延遲確保 setState 完成後再清除焦點，防止重建時重新獲得焦點
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+        // 明確清除所有相關的 FocusNode
+        _titleFocusNode.unfocus();
+        _contentFocusNode.unfocus();
+        _addressFocusNode.unfocus();
+      }
     }
   }
 
-  // 選擇時間
+  // 選擇時間 - 改為滾動選擇器
   void _selectTime() async {
     // 先清除所有輸入框的焦點，防止選擇完成後重新獲得焦點
     FocusScope.of(context).unfocus();
@@ -1776,10 +1783,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     // 延遲一下確保焦點清除完成
     await Future.delayed(const Duration(milliseconds: 100));
 
-    final selectedTime = await showTimePicker(
-      context: context,
-      initialTime: _taskData.time ?? TimeOfDay.now(),
-    );
+    final selectedTime = await _showScrollTimePickerDialog();
 
     if (selectedTime != null && mounted) {
       setState(() {
@@ -1810,9 +1814,190 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         }
       });
 
-      // 確保選擇完成後不會重新獲得焦點
-      FocusScope.of(context).unfocus();
+      // 延遲確保 setState 完成後再清除焦點，防止重建時重新獲得焦點
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+        // 明確清除所有相關的 FocusNode
+        _titleFocusNode.unfocus();
+        _contentFocusNode.unfocus();
+        _addressFocusNode.unfocus();
+      }
     }
+  }
+
+  // 滾動時間選擇器對話框
+  Future<TimeOfDay?> _showScrollTimePickerDialog() async {
+    final now = TimeOfDay.now();
+    final currentTime = _taskData.time ?? now;
+
+    int selectedHour = currentTime.hour;
+    int selectedMinute = currentTime.minute;
+
+    return showDialog<TimeOfDay>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            '選擇時間',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return SizedBox(
+                height: 200,
+                width: 300,
+                child: Row(
+                  children: [
+                    // 小時選擇器
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Text(
+                            '時',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: ListWheelScrollView.useDelegate(
+                              itemExtent: 40,
+                              perspective: 0.005,
+                              diameterRatio: 1.2,
+                              physics: const FixedExtentScrollPhysics(),
+                              controller: FixedExtentScrollController(
+                                initialItem: selectedHour,
+                              ),
+                              onSelectedItemChanged: (index) {
+                                setDialogState(() {
+                                  selectedHour = index;
+                                });
+                              },
+                              childDelegate: ListWheelChildBuilderDelegate(
+                                builder: (context, index) {
+                                  if (index < 0 || index > 23) return null;
+                                  return Container(
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      index.toString().padLeft(2, '0'),
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: selectedHour == index
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: selectedHour == index
+                                            ? Colors.blue
+                                            : Colors.black,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                childCount: 24,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // 分隔符
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: const Text(
+                        ':',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+
+                    // 分鐘選擇器
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Text(
+                            '分',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: ListWheelScrollView.useDelegate(
+                              itemExtent: 40,
+                              perspective: 0.005,
+                              diameterRatio: 1.2,
+                              physics: const FixedExtentScrollPhysics(),
+                              controller: FixedExtentScrollController(
+                                initialItem: selectedMinute ~/ 5, // 5分鐘間隔
+                              ),
+                              onSelectedItemChanged: (index) {
+                                setDialogState(() {
+                                  selectedMinute = index * 5; // 5分鐘間隔
+                                });
+                              },
+                              childDelegate: ListWheelChildBuilderDelegate(
+                                builder: (context, index) {
+                                  if (index < 0 || index > 11)
+                                    return null; // 0, 5, 10, ..., 55
+                                  final minute = index * 5;
+                                  return Container(
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      minute.toString().padLeft(2, '0'),
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: selectedMinute == minute
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: selectedMinute == minute
+                                            ? Colors.blue
+                                            : Colors.black,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                childCount: 12, // 0-55分，每5分鐘一個間隔
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // 取消
+              },
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final selectedTime = TimeOfDay(
+                  hour: selectedHour,
+                  minute: selectedMinute,
+                );
+                Navigator.of(context).pop(selectedTime);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('確認'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // 選擇圖片 - 改進版本，直接自動壓縮
@@ -2091,7 +2276,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   }
 
   // 選擇地點
-  void _selectLocation(Map<String, dynamic> place) {
+  void _selectLocation(Map<String, dynamic> place) async {
     if (mounted) {
       setState(() {
         _taskData.address = place['description'];
@@ -2101,9 +2286,16 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         _locationSuggestions = []; // 清空建議列表
         if (_addressError != null) _addressError = null; // 清除錯誤
       });
-    }
 
-    // 選擇地點後清除焦點，關閉鍵盤
-    FocusScope.of(context).unfocus();
+      // 延遲確保 setState 完成後再清除焦點，防止重建時重新獲得焦點
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+        // 明確清除所有相關的 FocusNode
+        _titleFocusNode.unfocus();
+        _contentFocusNode.unfocus();
+        _addressFocusNode.unfocus();
+      }
+    }
   }
 }
