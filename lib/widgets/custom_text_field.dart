@@ -14,8 +14,6 @@ class CustomTextField extends StatefulWidget {
   final VoidCallback? onTap;
   final Function(String)? onSubmitted;
   final bool readOnly;
-  final Widget? prefixIcon;
-  final Widget? suffixIcon;
   final bool isRequired;
 
   const CustomTextField({
@@ -33,8 +31,6 @@ class CustomTextField extends StatefulWidget {
     this.onTap,
     this.onSubmitted,
     this.readOnly = false,
-    this.prefixIcon,
-    this.suffixIcon,
     this.isRequired = false,
   });
 
@@ -162,16 +158,14 @@ class _CustomTextFieldState extends State<CustomTextField> {
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
-                  prefixIcon: widget.prefixIcon,
-                  suffixIcon: widget.suffixIcon,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   errorBorder: InputBorder.none,
                   disabledBorder: InputBorder.none,
                   contentPadding: EdgeInsets.only(
-                    left: widget.prefixIcon != null ? 48 : 20,
-                    right: widget.suffixIcon != null ? 48 : 20,
+                    left: 20,
+                    right: 20,
                     top: shouldFloatLabel ? 32 : 16,
                     bottom: 16,
                   ),

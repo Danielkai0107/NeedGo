@@ -540,7 +540,6 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   focusNode: _locationFocus,
                   label: '任務地點',
                   hintText: '搜尋地點...',
-                  prefixIcon: const Icon(Icons.search),
                   textInputAction: TextInputAction.search,
                   onChanged: (value) {
                     widget.onLocationSearch?.call(value);
@@ -1004,7 +1003,6 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             isRequired: true,
             hintText: '搜尋地點...',
             errorText: _addressError,
-            prefixIcon: const Icon(Icons.search),
             textInputAction: TextInputAction.search,
             onChanged: (value) {
               if (value.isNotEmpty) {

@@ -97,7 +97,7 @@ class _CustomDateTimeFieldState extends State<CustomDateTimeField> {
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeInOut,
                   left: 16,
-                  top: shouldFloatLabel ? 8 : 16,
+                  top: shouldFloatLabel ? 12 : 16,
                   child: AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 200),
                     style: TextStyle(
@@ -149,7 +149,7 @@ class _CustomDateTimeFieldState extends State<CustomDateTimeField> {
                 // 圖標
                 Positioned(
                   right: 16,
-                  top: shouldFloatLabel ? 28 : 12,
+                  top: shouldFloatLabel ? 28 : 19,
                   child: Icon(
                     widget.icon,
                     size: 20,
