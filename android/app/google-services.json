@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "421770252027",
+    "project_id": "nanny-now-app",
+    "storage_bucket": "nanny-now-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:421770252027:android:e9acb41645e36e89f26a5e",
+        "android_client_info": {
+          "package_name": "com.needgo.mvpapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "421770252027-jdcdhs66qnhp0lk1a34kqi9sbpc2qpif.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.needgo.mvpapp",
+            "certificate_hash": "0c54fb99e329948d09205939fa2d6c89c5f5f5c4"
+          }
+        },
+        {
+          "client_id": "421770252027-ilr2oneq9kls0ueecdq410bs0bhdem85.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHxX-EVyhTldBSDa9Pg1OQH771oFDJWjs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "421770252027-ilr2oneq9kls0ueecdq410bs0bhdem85.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "421770252027-fmbna35tb2iqkt36m92u32l8nhdnkhso.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "io.flutter.flutter.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
