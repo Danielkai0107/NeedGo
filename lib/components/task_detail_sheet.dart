@@ -2844,9 +2844,14 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
   }
 
   Widget _buildResumeSection() {
-    final resume = widget.applicantData['applicantResume']?.toString() ?? '';
-    final bio = widget.applicantData['bio']?.toString() ?? '';
-    final displayText = bio.isNotEmpty ? bio : resume;
+    final education = widget.applicantData['education']?.toString() ?? '';
+    final hasCarLicense = widget.applicantData['hasCarLicense'] ?? false;
+    final hasMotorcycleLicense =
+        widget.applicantData['hasMotorcycleLicense'] ?? false;
+    final resumePdfName =
+        widget.applicantData['resumePdfName']?.toString() ?? '';
+    final resumePdfUrl = widget.applicantData['resumePdfUrl']?.toString() ?? '';
+    final selfIntro = widget.applicantData['selfIntro']?.toString() ?? '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2858,17 +2863,177 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
           height: 50,
         ),
         const Text(
-          '個人簡介',
+          '應徵簡歷',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
+        const SizedBox(height: 24),
+
+        // 學歷
+        _buildResumeItem(
+          Icons.school_rounded,
+          '學歷',
+          education.isNotEmpty ? education : '未設定',
+          education.isEmpty,
+        ),
         const SizedBox(height: 20),
-        Container(
-          child: Text(
-            displayText.isNotEmpty ? displayText : '申請者尚未填寫個人簡介',
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.6,
-              color: displayText.isNotEmpty ? Colors.black : Colors.grey[600],
+
+        // 駕照資訊
+        _buildResumeItem(
+          Icons.directions_car_rounded,
+          '汽車駕照',
+          hasCarLicense ? '有' : '無',
+          false,
+          color: hasCarLicense ? Colors.green[600] : Colors.grey[500],
+        ),
+        const SizedBox(height: 12),
+
+        _buildResumeItem(
+          Icons.two_wheeler_rounded,
+          '機車駕照',
+          hasMotorcycleLicense ? '有' : '無',
+          false,
+          color: hasMotorcycleLicense ? Colors.green[600] : Colors.grey[500],
+        ),
+        const SizedBox(height: 20),
+
+        // 履歷PDF
+        Row(
+          children: [
+            Icon(Icons.picture_as_pdf_rounded, color: Colors.black, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '履歷PDF',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  if (resumePdfName.isNotEmpty && resumePdfUrl.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => _openPdfResume(resumePdfUrl),
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.picture_as_pdf,
+                              color: Colors.green[600],
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                resumePdfName,
+                                style: TextStyle(
+                                  color: Colors.green[800],
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.open_in_new,
+                              color: Colors.green[600],
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Text(
+                      '未上傳',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // 自我介紹
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.person_rounded, color: Colors.black, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '自我介紹',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Text(
+                      selfIntro.isNotEmpty ? selfIntro : '申請者尚未填寫自我介紹',
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.6,
+                        color: selfIntro.isNotEmpty
+                            ? Colors.black
+                            : Colors.grey[500],
+                        fontStyle: selfIntro.isEmpty
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResumeItem(
+    IconData icon,
+    String label,
+    String value,
+    bool isEmpty, {
+    Color? color,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: color ?? Colors.black, size: 24),
+        const SizedBox(width: 12),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(fontSize: 16, color: Colors.black),
+              children: [
+                TextSpan(
+                  text: '$label：',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                TextSpan(
+                  text: value,
+                  style: TextStyle(
+                    color: isEmpty ? Colors.grey[500] : (color ?? Colors.black),
+                    fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -2876,55 +3041,23 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     );
   }
 
-  Widget _buildTaskInfo() {
-    final taskTitle =
-        widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 水平分隔線
-        const Divider(
-          color: Color.fromARGB(255, 220, 220, 220),
-          thickness: 1.0,
-          height: 50,
-        ),
-        const Text(
-          '申請的任務',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 20),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.orange[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.orange[200]!),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                taskTitle,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (widget.taskData['price'] != null &&
-                  widget.taskData['price'] > 0) ...[
-                const SizedBox(height: 4),
-                Text(
-                  '報酬：NT\$ ${widget.taskData['price']}',
-                  style: TextStyle(fontSize: 15, color: Colors.orange[700]),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
+  /// 開啟PDF履歷
+  void _openPdfResume(String pdfUrl) async {
+    try {
+      final uri = Uri.parse(pdfUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          _showErrorMessage('無法開啟PDF履歷');
+        }
+      }
+    } catch (e) {
+      print('開啟PDF履歷失敗: $e');
+      if (mounted) {
+        _showErrorMessage('開啟PDF履歷失敗: $e');
+      }
+    }
   }
 
   /// 撥打電話
@@ -3538,9 +3671,8 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
   }
 
   Widget _buildResumeSection() {
-    final resume = widget.publisherData['applicantResume']?.toString() ?? '';
-    final bio = widget.publisherData['bio']?.toString() ?? '';
-    final displayText = bio.isNotEmpty ? bio : resume;
+    final publisherIntro =
+        widget.publisherData['publisherResume']?.toString() ?? '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3552,17 +3684,29 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
           height: 50,
         ),
         const Text(
-          '個人簡介',
+          '個人介紹 (發布用)',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 20),
         Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
           child: Text(
-            displayText.isNotEmpty ? displayText : '發布者尚未填寫個人簡介',
+            publisherIntro.isNotEmpty ? publisherIntro : '發布者尚未填寫個人介紹',
             style: TextStyle(
               fontSize: 15,
               height: 1.6,
-              color: displayText.isNotEmpty ? Colors.black : Colors.grey[600],
+              color: publisherIntro.isNotEmpty
+                  ? Colors.black
+                  : Colors.grey[500],
+              fontStyle: publisherIntro.isEmpty
+                  ? FontStyle.italic
+                  : FontStyle.normal,
             ),
           ),
         ),

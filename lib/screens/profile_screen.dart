@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:file_picker/file_picker.dart';
 
 import '../utils/custom_snackbar.dart';
 import '../widgets/custom_text_field.dart';
@@ -46,17 +45,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _publisherIntroController = TextEditingController();
 
   // 應徵簡歷相關控制器
-  final _educationController = TextEditingController();
   final _selfIntroController = TextEditingController();
 
   // 駕照狀態
   bool _hasCarLicense = false;
   bool _hasMotorcycleLicense = false;
 
-  // 履歷PDF相關
-  String? _resumePdfUrl;
-  String? _resumePdfName;
-  bool _isUploadingPdf = false;
+  // 學歷選擇
+  String? _selectedEducation;
 
   DateTime? _selectedBirthday;
   String? _selectedGender;
@@ -74,7 +70,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _lineIdController.dispose();
     _socialLinksController.dispose();
     _publisherIntroController.dispose();
-    _educationController.dispose();
     _selfIntroController.dispose();
     super.dispose();
   }
@@ -88,6 +83,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final doc = await _firestore.collection('user').doc(user.uid).get();
       if (doc.exists && mounted) {
         final data = doc.data()!;
+
+        // 檢查是否需要遷移資料（為現有用戶添加缺少的欄位）
+        await _migrateUserDataIfNeeded(user.uid, data);
+
         setState(() {
           _profile = data;
 
@@ -105,16 +104,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               data['publisherResume']?.toString() ?? '';
 
           // 初始化應徵簡歷相關控制器
-          _educationController.text = data['education']?.toString() ?? '';
+          _selectedEducation = data['education']?.toString();
           _selfIntroController.text = data['selfIntro']?.toString() ?? '';
 
           // 初始化駕照狀態
           _hasCarLicense = data['hasCarLicense'] ?? false;
           _hasMotorcycleLicense = data['hasMotorcycleLicense'] ?? false;
-
-          // 初始化履歷PDF
-          _resumePdfUrl = data['resumePdfUrl']?.toString();
-          _resumePdfName = data['resumePdfName']?.toString();
 
           // 初始化生日
           final birthday = data['birthday'];
@@ -149,8 +144,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'selfIntro': '',
             'hasCarLicense': false,
             'hasMotorcycleLicense': false,
-            'resumePdfUrl': '',
-            'resumePdfName': '',
             'avatarUrl': '',
           };
           _isLoading = false;
@@ -162,6 +155,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  /// 為現有用戶遷移資料，添加缺少的欄位
+  Future<void> _migrateUserDataIfNeeded(
+    String uid,
+    Map<String, dynamic> data,
+  ) async {
+    // 檢查是否缺少新的應徵簡歷欄位
+    final needsMigration =
+        data['education'] == null ||
+        data['selfIntro'] == null ||
+        data['hasCarLicense'] == null ||
+        data['hasMotorcycleLicense'] == null;
+
+    if (needsMigration) {
+      try {
+        final updateData = <String, dynamic>{};
+
+        // 添加缺少的欄位
+        if (data['education'] == null) updateData['education'] = '';
+        if (data['selfIntro'] == null) updateData['selfIntro'] = '';
+        if (data['hasCarLicense'] == null) updateData['hasCarLicense'] = false;
+        if (data['hasMotorcycleLicense'] == null)
+          updateData['hasMotorcycleLicense'] = false;
+
+        await _firestore.collection('user').doc(uid).update(updateData);
+
+        // 更新本地資料
+        data.addAll(updateData);
+
+        print('✅ 已自動遷移用戶資料，添加缺少的欄位');
+      } catch (e) {
+        print('❌ 用戶資料遷移失敗: $e');
       }
     }
   }
@@ -289,12 +317,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final updateData = <String, dynamic>{
-        'education': _educationController.text.trim(),
+        'education': _selectedEducation ?? '',
         'selfIntro': _selfIntroController.text.trim(),
         'hasCarLicense': _hasCarLicense,
         'hasMotorcycleLicense': _hasMotorcycleLicense,
-        'resumePdfUrl': _resumePdfUrl,
-        'resumePdfName': _resumePdfName,
       };
 
       await _firestore.collection('user').doc(user.uid).update(updateData);
@@ -363,75 +389,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     }
-  }
-
-  /// 上傳PDF履歷
-  Future<void> _uploadResumePdf() async {
-    try {
-      setState(() {
-        _isUploadingPdf = true;
-      });
-
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        allowMultiple: false,
-      );
-
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-
-        // 檢查文件大小 (10MB = 10 * 1024 * 1024 bytes)
-        if (file.size > 10 * 1024 * 1024) {
-          if (mounted) {
-            CustomSnackBar.showError(context, 'PDF文件大小不能超過10MB');
-          }
-          return;
-        }
-
-        final user = FirebaseAuth.instance.currentUser;
-        if (user == null) return;
-
-        final fileBytes = file.bytes;
-        if (fileBytes == null) return;
-
-        // 上傳到 Firebase Storage
-        final storageRef = FirebaseStorage.instance.ref().child(
-          'resumes/${user.uid}_${DateTime.now().millisecondsSinceEpoch}.pdf',
-        );
-
-        await storageRef.putData(fileBytes);
-        final downloadUrl = await storageRef.getDownloadURL();
-
-        setState(() {
-          _resumePdfUrl = downloadUrl;
-          _resumePdfName = file.name;
-        });
-
-        if (mounted) {
-          CustomSnackBar.showSuccess(context, '履歷PDF上傳成功！');
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        CustomSnackBar.showError(context, 'PDF上傳失敗：$e');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploadingPdf = false;
-        });
-      }
-    }
-  }
-
-  /// 刪除PDF履歷
-  void _deleteResumePdf() {
-    setState(() {
-      _resumePdfUrl = null;
-      _resumePdfName = null;
-    });
-    CustomSnackBar.showSuccess(context, '已移除履歷PDF');
   }
 
   /// 登出
@@ -957,87 +914,112 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 24),
 
-          // 學歷
-          CustomTextField(
-            controller: _educationController,
+          // 學歷下拉選單
+          CustomDropdownField<String>(
             label: '學歷',
-            hintText: '請輸入您的最高學歷...',
-            maxLines: 2,
+            value: _selectedEducation,
+            icon: Icons.school,
+            hintText: '請選擇您的最高學歷',
+            items: const [
+              DropdownMenuItem(value: '高中以下', child: Text('高中以下')),
+              DropdownMenuItem(value: '高中/職', child: Text('高中/職')),
+              DropdownMenuItem(value: '專科', child: Text('專科')),
+              DropdownMenuItem(value: '學士', child: Text('學士')),
+              DropdownMenuItem(value: '碩士或博士', child: Text('碩士或博士')),
+            ],
+            onChanged: (String? newValue) {
+              setState(() {
+                _selectedEducation = newValue;
+              });
+            },
           ),
           const SizedBox(height: 20),
 
-          // 駕照資訊
+          // 駕照資訊 - 使用開關
           Text(
             '駕照',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-          CheckboxListTile(
-            title: const Text('汽車駕照'),
-            value: _hasCarLicense,
-            onChanged: (bool? value) {
-              setState(() {
-                _hasCarLicense = value ?? false;
-              });
-            },
-            controlAffinity: ListTileControlAffinity.leading,
-          ),
-          CheckboxListTile(
-            title: const Text('機車駕照'),
-            value: _hasMotorcycleLicense,
-            onChanged: (bool? value) {
-              setState(() {
-                _hasMotorcycleLicense = value ?? false;
-              });
-            },
-            controlAffinity: ListTileControlAffinity.leading,
-          ),
-          const SizedBox(height: 20),
 
-          // PDF履歷上傳
-          Text(
-            '履歷PDF (< 10MB)',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          // 汽車駕照開關
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.directions_car,
+                      color: Colors.grey[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      '汽車駕照',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                Switch(
+                  value: _hasCarLicense,
+                  onChanged: (bool value) {
+                    setState(() {
+                      _hasCarLicense = value;
+                    });
+                  },
+                  activeColor: Colors.green,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
-          if (_resumePdfUrl != null)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.picture_as_pdf, color: Colors.green[600]),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _resumePdfName ?? '履歷.pdf',
-                      style: TextStyle(color: Colors.green[800]),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _deleteResumePdf,
-                    icon: Icon(Icons.delete, color: Colors.red[600]),
-                    iconSize: 20,
-                  ),
-                ],
-              ),
-            )
-          else
-            ElevatedButton.icon(
-              onPressed: _isUploadingPdf ? null : _uploadResumePdf,
-              icon: _isUploadingPdf
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.upload_file),
-              label: Text(_isUploadingPdf ? '上傳中...' : '上傳履歷PDF'),
+
+          // 機車駕照開關
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[300]!),
             ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.two_wheeler, color: Colors.grey[600], size: 20),
+                    const SizedBox(width: 12),
+                    const Text(
+                      '機車駕照',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                Switch(
+                  value: _hasMotorcycleLicense,
+                  onChanged: (bool value) {
+                    setState(() {
+                      _hasMotorcycleLicense = value;
+                    });
+                  },
+                  activeColor: Colors.green,
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
 
           // 自我介紹
@@ -1351,7 +1333,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final selfIntro = _profile['selfIntro']?.toString();
     final hasCarLicense = _profile['hasCarLicense'] ?? false;
     final hasMotorcycleLicense = _profile['hasMotorcycleLicense'] ?? false;
-    final resumePdfName = _profile['resumePdfName']?.toString();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1398,11 +1379,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 '機車駕照',
                 hasMotorcycleLicense ? '有' : '無',
                 Icons.two_wheeler,
-              ),
-              _buildInfoRow(
-                '履歷PDF',
-                resumePdfName ?? '未上傳',
-                Icons.picture_as_pdf,
               ),
               const Divider(),
               const Text(

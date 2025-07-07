@@ -55,9 +55,11 @@ class AuthGate extends StatelessWidget {
 
             if (isRegistered) {
               // 已註冊，進入主畫面
+              print('🏠 進入主畫面 (MainTabView)');
               return const MainTabView();
             } else {
               // 未註冊，直接返回註冊頁面
+              print('📝 進入註冊頁面 (RegistrationView)');
               // 取得用戶手機號碼
               final phoneNumber = user.phoneNumber ?? '';
 
@@ -208,14 +210,25 @@ class AuthGate extends StatelessWidget {
   /// 回傳 true 表示已註冊，false 表示未註冊
   Future<bool> _checkIfUserRegistered(String uid) async {
     try {
+      print('🔍 檢查用戶註冊狀態 (UID: $uid)...');
+      
       // 檢查 Firestore 中是否存在用戶資料
       final userDoc = await FirebaseFirestore.instance
           .collection('user')
           .doc(uid)
           .get();
 
-      return userDoc.exists;
+      final exists = userDoc.exists;
+      print('📊 用戶註冊狀態: ${exists ? "已註冊" : "未註冊"}');
+      
+      if (exists) {
+        final userData = userDoc.data();
+        print('👤 用戶資料: ${userData?['name'] ?? "未知"}');
+      }
+
+      return exists;
     } catch (e) {
+      print('❌ 檢查用戶註冊狀態失敗: $e');
       // 發生錯誤時回傳 false，讓用戶重新完成註冊流程
       return false;
     }

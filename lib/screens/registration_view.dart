@@ -122,7 +122,10 @@ class _RegistrationViewState extends State<RegistrationView> {
     setState(() => _loading = true);
 
     try {
+      print('🚀 開始註冊流程...');
+
       // 1. 上傳裁切後影像到 Firebase Storage
+      print('📤 上傳頭像到 Firebase Storage...');
       final storageRef = FirebaseStorage.instance.ref().child(
         'avatars/${widget.uid}.jpg',
       );
@@ -131,6 +134,7 @@ class _RegistrationViewState extends State<RegistrationView> {
         SettableMetadata(contentType: 'image/jpeg'),
       );
       final avatarUrl = await storageRef.getDownloadURL();
+      print('✅ 頭像上傳成功: $avatarUrl');
 
       // 2. 準備社群連結 Map
       Map<String, String> socialLinks = {};
@@ -139,7 +143,8 @@ class _RegistrationViewState extends State<RegistrationView> {
       }
 
       // 3. 寫入 Firestore user 集合
-      await FirebaseFirestore.instance.collection('user').doc(widget.uid).set({
+      print('💾 寫入用戶資料到 Firestore...');
+      final userData = {
         'userId': widget.uid,
         'name': _nameCtrl.text.trim(),
         'gender': _gender,
@@ -150,37 +155,78 @@ class _RegistrationViewState extends State<RegistrationView> {
         'email': _emailCtrl.text.trim(),
         'lineId': _lineCtrl.text.trim(),
         'socialLinks': socialLinks,
-        'publisherResume': '', // 空的字串，後續填寫
-        'applicantResume': '', // 空的字串，後續填寫
+        'publisherResume': '', // 發布者簡介（發布用）
+        'applicantResume': '', // 舊的應徵簡歷欄位，保持向後相容
+        // 新的應徵簡歷詳細欄位
+        'education': '', // 學歷
+        'selfIntro': '', // 自我介紹
+        'hasCarLicense': false, // 汽車駕照
+        'hasMotorcycleLicense': false, // 機車駕照
         'subscriptionStatus': 'free',
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
 
-      // 4. 導向主流程
-      if (mounted) {
-        // 檢查是否已有註冊記錄來決定跳轉到哪個頁面
-        final navigator = Navigator.of(context);
-        navigator.pushNamedAndRemoveUntil(
-          '/parent', // 或根據用戶類型決定
-          (route) => false,
-        );
+      await FirebaseFirestore.instance
+          .collection('user')
+          .doc(widget.uid)
+          .set(userData);
+      print('✅ 用戶資料寫入成功');
+
+      // 4. 驗證寫入是否成功
+      print('🔍 驗證用戶資料是否成功寫入...');
+      final doc = await FirebaseFirestore.instance
+          .collection('user')
+          .doc(widget.uid)
+          .get();
+      if (doc.exists) {
+        print('✅ 用戶資料驗證成功');
+
+        // 5. 導向主流程
+        if (mounted) {
+          print('🚀 導航到主頁面...');
+          // 導航到根路由，讓 AuthGate 處理狀態判斷
+          final navigator = Navigator.of(context);
+          navigator.pushNamedAndRemoveUntil(
+            '/', // 讓 AuthGate 自動判斷應該進入哪個頁面
+            (route) => false,
+          );
+        }
+      } else {
+        throw Exception('用戶資料寫入失敗，請重試');
       }
     } catch (e) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('上傳失敗'),
-          content: Text(e.toString()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('確定'),
+      print('❌ 註冊失敗: $e');
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('註冊失敗'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('註冊過程中發生錯誤，請重試。'),
+                const SizedBox(height: 8),
+                Text(
+                  '錯誤詳情：$e',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('確定'),
+              ),
+            ],
+          ),
+        );
+      }
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
