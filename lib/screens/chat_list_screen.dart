@@ -96,7 +96,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       ),
       backgroundColor: Colors.grey[50],
       body: Padding(
-        padding: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.only(top: 16, bottom: 140), // 為導覽列預留空間
         child: TabBarView(
           controller: _tabController,
           children: [

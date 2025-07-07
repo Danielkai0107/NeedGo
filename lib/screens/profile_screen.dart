@@ -390,9 +390,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: Colors.grey[50],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _isEditing
-          ? _buildEditForm()
-          : _buildProfileView(),
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 140), // 為導覽列預留空間
+              child: _isEditing
+                  ? _buildEditForm()
+                  : _buildProfileView(),
+            ),
     );
   }
 

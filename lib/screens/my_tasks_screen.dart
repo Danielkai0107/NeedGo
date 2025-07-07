@@ -754,9 +754,12 @@ class _MyTasksScreenState extends State<MyTasksScreen>
       backgroundColor: Colors.grey[50],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [_buildMyTasksTab(), _buildMyApplicationsTab()],
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 140), // 為導覽列預留空間
+              child: TabBarView(
+                controller: _tabController,
+                children: [_buildMyTasksTab(), _buildMyApplicationsTab()],
+              ),
             ),
     );
   }
@@ -844,7 +847,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               : RefreshIndicator(
                   onRefresh: _loadAllTasks,
                   child: ListView.builder(
-                    padding: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.only(top: 16, bottom: 16),
                     itemCount: filteredTasks.length,
                     itemBuilder: (context, index) {
                       final task = filteredTasks[index];
@@ -948,7 +951,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               : RefreshIndicator(
                   onRefresh: _loadAllTasks,
                   child: ListView.builder(
-                    padding: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.only(top: 16, bottom: 16),
                     itemCount: filteredTasks.length,
                     itemBuilder: (context, index) {
                       final task = filteredTasks[index];

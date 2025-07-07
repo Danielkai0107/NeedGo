@@ -334,9 +334,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
       backgroundColor: Colors.grey[50],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _initializeNotifications,
-              child: _buildBody(),
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 140), // 為導覽列預留空間
+              child: RefreshIndicator(
+                onRefresh: _initializeNotifications,
+                child: _buildBody(),
+              ),
             ),
     );
   }
