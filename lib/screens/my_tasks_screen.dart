@@ -336,6 +336,29 @@ class _MyTasksScreenState extends State<MyTasksScreen>
     }
   }
 
+  /// 取消應徵
+  Future<void> _cancelApplication(String taskId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 從任務的 applicants 列表中移除當前用戶
+      await _firestore.collection('posts').doc(taskId).update({
+        'applicants': FieldValue.arrayRemove([user.uid]),
+        'updatedAt': Timestamp.now(),
+      });
+
+      if (mounted) {
+        CustomSnackBar.showSuccess(context, '已取消應徵');
+        await _loadAllTasks();
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.showError(context, '取消應徵失敗：$e');
+      }
+    }
+  }
+
   /// 顯示刪除確認對話框
   Future<bool?> _showDeleteConfirmDialog(Map<String, dynamic> task) async {
     return showDialog<bool>(
@@ -357,6 +380,185 @@ class _MyTasksScreenState extends State<MyTasksScreen>
           ],
         );
       },
+    );
+  }
+
+  /// 顯示取消應徵確認對話框
+  Future<bool?> _showCancelApplicationDialog(Map<String, dynamic> task) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('取消應徵'),
+          content: Text('確定要取消應徵「${task['title'] ?? task['name']}」嗎？'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              child: const Text('確認取消'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 顯示長按選項
+  void _showLongPressOptions(
+    Map<String, dynamic> task, {
+    required bool isCreatedByMe,
+  }) {
+    final status = _getTaskStatus(task);
+    final taskName =
+        task['title']?.toString() ?? task['name']?.toString() ?? '未命名任務';
+
+    // 判斷操作類型
+    bool isDeleteAction;
+    String actionText;
+    String confirmText;
+
+    if (isCreatedByMe) {
+      // 我的任務：總是刪除
+      isDeleteAction = true;
+      actionText = '刪除';
+      confirmText = '確定刪除「$taskName」嗎？';
+    } else {
+      // 我的應徵：根據狀態決定
+      if (status == 'completed' || status == 'expired') {
+        // 已完成或已過期：刪除
+        isDeleteAction = true;
+        actionText = '刪除';
+        confirmText = '確定刪除「$taskName」嗎？';
+      } else {
+        // 進行中：取消應徵
+        isDeleteAction = false;
+        actionText = '取消應徵';
+        confirmText = '確定取消應徵「$taskName」嗎？';
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 拖拽指示器
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 任務標題
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  taskName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 確認文案
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  confirmText,
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              // 左右按鈕
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    // 左邊取消按鈕
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(color: Colors.grey[400]!),
+                        ),
+                        child: const Text(
+                          '取消',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // 右邊操作按鈕
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          if (isCreatedByMe || isDeleteAction) {
+                            await _deleteTask(task['id']);
+                          } else {
+                            await _cancelApplication(task['id']);
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(
+                            color: isDeleteAction
+                                ? Colors.red[400]!
+                                : Colors.orange[400]!,
+                          ),
+                        ),
+                        child: Text(
+                          actionText,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: isDeleteAction
+                                ? Colors.red[600]
+                                : Colors.orange[600],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -642,7 +844,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               : RefreshIndicator(
                   onRefresh: _loadAllTasks,
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.only(top: 16),
                     itemCount: filteredTasks.length,
                     itemBuilder: (context, index) {
                       final task = filteredTasks[index];
@@ -746,7 +948,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               : RefreshIndicator(
                   onRefresh: _loadAllTasks,
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.only(top: 16),
                     itemCount: filteredTasks.length,
                     itemBuilder: (context, index) {
                       final task = filteredTasks[index];
@@ -869,46 +1071,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
     Map<String, dynamic> task, {
     required bool isCreatedByMe,
   }) {
-    final status = _getTaskStatus(task);
-    final taskDate = _parseTaskDate(task['date']);
-    final price = task['price'] ?? 0;
-    final applicantCount = (task['applicants'] as List?)?.length ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: isCreatedByMe
-          ? Dismissible(
-              key: Key('task_${task['id']}'),
-              direction: DismissDirection.endToStart,
-              background: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                decoration: BoxDecoration(
-                  color: Colors.red[600],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.delete_rounded, color: Colors.white, size: 24),
-                    SizedBox(height: 4),
-                    Text(
-                      '刪除',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              confirmDismiss: (direction) => _showDeleteConfirmDialog(task),
-              onDismissed: (direction) => _deleteTask(task['id']),
-              child: _buildTaskCardContent(task, isCreatedByMe: isCreatedByMe),
-            )
-          : _buildTaskCardContent(task, isCreatedByMe: isCreatedByMe),
-    );
+    return _buildTaskCardContent(task, isCreatedByMe: isCreatedByMe);
   }
 
   /// 建立任務卡片內容
@@ -921,219 +1084,220 @@ class _MyTasksScreenState extends State<MyTasksScreen>
     final price = task['price'] ?? 0;
     final applicantCount = (task['applicants'] as List?)?.length ?? 0;
 
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _showTaskDetail(task, isCreatedByMe: isCreatedByMe),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              // 左側圓形圖標
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: _getStatusColors(status),
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          onTap: () => _showTaskDetail(task, isCreatedByMe: isCreatedByMe),
+          onLongPress: () =>
+              _showLongPressOptions(task, isCreatedByMe: isCreatedByMe),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: _buildTaskAvatar(status),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    task['title']?.toString() ??
+                        task['name']?.toString() ??
+                        '未命名任務',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _getStatusColors(status)[0].withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
-                child: Icon(
-                  _getStatusIcon(status),
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-
-              const SizedBox(width: 16),
-
-              // 右側資訊
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 第一行：任務標題 + 狀態標籤
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            task['title']?.toString() ??
-                                task['name']?.toString() ??
-                                '未命名任務',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildStatusChip(status),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // 第二行：日期 + 價格
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today_rounded,
-                          size: 14,
-                          color: Colors.grey[500],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          taskDate != null
-                              ? '${taskDate.month}月${taskDate.day}日'
-                              : '日期未設定',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '\$${price.toStringAsFixed(0)}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange[700],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // 第三行：任務描述
-                    if (task['content']?.toString().isNotEmpty == true)
-                      Text(
-                        task['content'],
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                _buildStatusChip(status),
+              ],
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 日期和價格行
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 14,
+                        color: Colors.grey[500],
                       ),
-
-                    const SizedBox(height: 12),
-
-                    // 第四行：應徵者數量 + 編輯按鈕（只有我發布的任務才有編輯按鈕）
-                    Row(
-                      children: [
+                      const SizedBox(width: 4),
+                      Text(
+                        taskDate != null
+                            ? '${taskDate.month}月${taskDate.day}日'
+                            : '日期未設定',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '\$${price.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // 任務描述
+                  if (task['content']?.toString().isNotEmpty == true)
+                    Text(
+                      task['content'],
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  const SizedBox(height: 12),
+                  // 應徵者數量和編輯按鈕
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: applicantCount > 0
+                              ? Colors.blue[50]
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: applicantCount > 0
+                                ? Colors.blue[200]!
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.people_rounded,
+                              size: 14,
+                              color: applicantCount > 0
+                                  ? Colors.blue[600]
+                                  : Colors.grey[500],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$applicantCount 位應徵者',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: applicantCount > 0
+                                    ? Colors.blue[600]
+                                    : Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      if (isCreatedByMe)
+                        TextButton.icon(
+                          onPressed: () => _editTask(task),
+                          icon: const Icon(Icons.edit, size: 16),
+                          label: const Text('編輯'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.orange[600],
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        )
+                      else
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: applicantCount > 0
-                                ? Colors.blue[50]
-                                : Colors.grey[100],
+                            color: Colors.green[50],
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: applicantCount > 0
-                                  ? Colors.blue[200]!
-                                  : Colors.grey[300]!,
-                            ),
+                            border: Border.all(color: Colors.green[200]!),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.people_rounded,
+                                Icons.check_circle_rounded,
                                 size: 14,
-                                color: applicantCount > 0
-                                    ? Colors.blue[600]
-                                    : Colors.grey[500],
+                                color: Colors.green[600],
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '$applicantCount 位應徵者',
+                                '已應徵',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: applicantCount > 0
-                                      ? Colors.blue[600]
-                                      : Colors.grey[500],
+                                  color: Colors.green[600],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const Spacer(),
-                        if (isCreatedByMe)
-                          TextButton.icon(
-                            onPressed: () => _editTask(task),
-                            icon: const Icon(Icons.edit, size: 16),
-                            label: const Text('編輯'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.orange[600],
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          )
-                        else
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green[50],
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.green[200]!),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_rounded,
-                                  size: 14,
-                                  color: Colors.green[600],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '已應徵',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// 建立任務頭像
+  Widget _buildTaskAvatar(String status) {
+    final colors = _getStatusColors(status);
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: colors[0].withOpacity(0.3),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(_getStatusIcon(status), color: Colors.white, size: 24),
     );
   }
 

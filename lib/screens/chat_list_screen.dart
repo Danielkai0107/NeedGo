@@ -266,105 +266,95 @@ class _ChatListScreenState extends State<ChatListScreen>
         : chatRoom.parentId;
     final unreadCount = chatRoom.unreadCount[currentUser?.uid] ?? 0;
 
-    return Dismissible(
-      key: Key(chatRoom.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(
-          Icons.delete,
-          color: Colors.white,
-          size: 24,
-        ),
-      ),
-      confirmDismiss: (direction) async {
-        return await _showDeleteConfirmDialog(chatRoom);
-      },
-      onDismissed: (direction) {
-        _deleteChatRoom(chatRoom);
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: _buildChatRoomAvatar(otherUserId),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  chatRoom.taskTitle,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                _formatTime(chatRoom.updatedAt),
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ],
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          onTap: () => _enterChatRoom(chatRoom),
+          onLongPress: () => _showLongPressOptions(chatRoom),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: _buildChatRoomAvatar(otherUserId),
+            title: Row(
               children: [
                 Expanded(
                   child: Text(
-                    _formatLastMessage(chatRoom),
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
-                      fontWeight: unreadCount > 0
-                          ? FontWeight.w500
-                          : FontWeight.normal,
+                    chatRoom.taskTitle,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (unreadCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      unreadCount > 99 ? '99+' : unreadCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                Text(
+                  _formatTime(chatRoom.updatedAt),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                ),
               ],
             ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _formatLastMessage(chatRoom),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: unreadCount > 0
+                            ? Colors.black87
+                            : Colors.grey[600],
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.w500
+                            : FontWeight.normal,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (unreadCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : unreadCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-          onTap: () => _enterChatRoom(chatRoom),
         ),
       ),
     );
@@ -435,6 +425,127 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  /// 顯示長按選項
+  void _showLongPressOptions(ChatRoom chatRoom) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              spreadRadius: 0,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 拖拽指示器
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 聊天室標題
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  chatRoom.taskTitle,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 確認文案
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  '確定刪除「${chatRoom.taskTitle}」的聊天室嗎？',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              // 左右按鈕
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    // 左邊取消按鈕
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(color: Colors.grey[400]!),
+                        ),
+                        child: const Text(
+                          '取消',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // 右邊刪除按鈕
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          await _deleteChatRoom(chatRoom);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(color: Colors.red[400]!),
+                        ),
+                        child: Text(
+                          '刪除',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.red[600],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// 顯示刪除確認對話框
   Future<bool?> _showDeleteConfirmDialog(ChatRoom chatRoom) async {
     return showDialog<bool>(
@@ -460,10 +571,10 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   /// 刪除聊天室
-  void _deleteChatRoom(ChatRoom chatRoom) async {
+  Future<void> _deleteChatRoom(ChatRoom chatRoom) async {
     try {
       await ChatService.deleteChatRoom(chatRoom.id);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -479,20 +590,17 @@ class _ChatListScreenState extends State<ChatListScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('刪除聊天室失敗：$e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('刪除聊天室失敗：$e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
   /// 恢復聊天室
-  void _restoreChatRoom(ChatRoom chatRoom) async {
+  Future<void> _restoreChatRoom(ChatRoom chatRoom) async {
     try {
       await ChatService.restoreChatRoom(chatRoom.id);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -504,10 +612,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('恢復聊天室失敗：$e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('恢復聊天室失敗：$e'), backgroundColor: Colors.red),
         );
       }
     }

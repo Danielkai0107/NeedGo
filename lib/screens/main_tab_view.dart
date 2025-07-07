@@ -24,6 +24,7 @@ class _MainTabViewState extends State<MainTabView> {
   String _userRole = 'parent'; // 預設為 parent
   int _totalUnreadCount = 0;
   int _notificationCount = 0;
+  int _tasksPageKey = 0; // 用於強制重新創建我的活動頁面
 
   @override
   void initState() {
@@ -83,7 +84,8 @@ class _MainTabViewState extends State<MainTabView> {
   /// 獲取當前角色的任務頁面
   Widget _getCurrentRoleTasksPage() {
     // Player 和 Parent 角色都使用 MyTasksScreen，但會顯示不同的內容
-    return const MyTasksScreen();
+    // 使用 key 來強制重新創建頁面，確保每次進入都載入最新資料
+    return MyTasksScreen(key: ValueKey(_tasksPageKey));
   }
 
   /// 獲取當前角色的任務標題
@@ -265,6 +267,11 @@ class _MainTabViewState extends State<MainTabView> {
   void _onNavItemTap(int index) {
     setState(() {
       _currentIndex = index;
+      // 當切換到我的活動頁面時，更新 key 以強制重新創建頁面並載入最新資料
+      if (index == 1) {
+        _tasksPageKey++;
+        print('切換到我的活動頁面，強制重新載入資料');
+      }
     });
   }
 }

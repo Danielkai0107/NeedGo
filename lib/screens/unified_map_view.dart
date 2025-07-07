@@ -565,8 +565,8 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
           // 左下角 - 篩選和定位
           Positioned(
-            bottom: 90,
-            left: 16,
+            bottom: 140,
+            right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -597,40 +597,19 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
           // 右下角 - 角色相關功能
           Positioned(
-            bottom: 90,
-            right: 16,
+            bottom: 140,
+            left: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_userRole == UserRole.parent) ...[
-                  // Parent 角色 - 我的任務列表
-                  _buildActionButton(
-                    icon: Icons.list_rounded,
-                    onPressed: () => setState(() {
-                      _currentBottomSheet = BottomSheetType.myPostsList;
-                    }),
-                    heroTag: 'myPosts',
-                    isLarge: true,
-                  ),
-                  const SizedBox(height: 16),
-                  // Parent 角色 - 創建任務
-                  _buildActionButton(
-                    icon: Icons.add_rounded,
-                    onPressed: _startCreatePostManually,
-                    heroTag: 'create',
-                    isLarge: true,
-                    backgroundColor: Colors.orange[600],
-                  ),
-                ] else ...[
-                  // Player 角色 - 我的應徵清單
-                  _buildActionButton(
-                    icon: Icons.assignment_turned_in_rounded,
-                    onPressed: _openMyApplications,
-                    heroTag: 'applications',
-                    isLarge: true,
-                    backgroundColor: Colors.blue[600],
-                  ),
-                ],
+                // Parent 角色 - 創建任務
+                _buildActionButton(
+                  icon: Icons.add_rounded,
+                  onPressed: _startCreatePostManually,
+                  heroTag: 'create',
+                  isLarge: true,
+                  backgroundColor: Colors.orange[600],
+                ),
               ],
             ),
           ),
