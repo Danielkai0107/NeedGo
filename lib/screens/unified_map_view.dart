@@ -59,6 +59,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   Map<String, dynamic> _profile = {};
   Map<String, dynamic> _profileForm = {};
   bool _isUploadingAvatar = false;
+  StreamSubscription<DocumentSnapshot>? _userProfileSubscription;
 
   // 地圖相關
   Set<Marker> _markers = {};
@@ -127,6 +128,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     _notificationTimer?.cancel();
     _saveReadNotificationIds();
     _saveReadApplicantIds();
+    _userProfileSubscription?.cancel();
     super.dispose();
   }
 
@@ -171,6 +173,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     if (user == null) return;
 
     try {
+      // 首先載入一次用戶資料
       final doc = await _firestore.collection('user').doc(user.uid).get();
       if (doc.exists && mounted) {
         final data = doc.data()!;
@@ -194,10 +197,31 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             'applicantResume': '',
             'parentBio': '',
             'avatarUrl': '',
+            'isVerified': false,
           };
           _profileForm = Map.from(_profile);
         });
       }
+
+      // 設置即時監聽用戶資料變化
+      _userProfileSubscription = _firestore
+          .collection('user')
+          .doc(user.uid)
+          .snapshots()
+          .listen((snapshot) {
+            if (snapshot.exists && mounted) {
+              final data = snapshot.data()!;
+              setState(() {
+                _profile = data;
+                _profileForm = Map.from(_profile);
+                // 根據用戶偏好設定角色
+                final roleString = _profile['preferredRole'] ?? 'parent';
+                _userRole = roleString == 'player'
+                    ? UserRole.player
+                    : UserRole.parent;
+              });
+            }
+          });
     } catch (e) {
       print('載入用戶資料失敗: $e');
     }
@@ -274,6 +298,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     if (user == null) return;
 
     try {
+      // 嘗試使用複合索引查詢
       final snapshot = await _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
@@ -303,6 +328,67 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       }
     } catch (e) {
       print('載入所有任務失敗: $e');
+
+      // 如果是索引問題，嘗試替代查詢方法
+      if (e.toString().contains('FAILED_PRECONDITION') ||
+          e.toString().contains('index')) {
+        print('🔄 索引缺失，嘗試替代查詢方法...');
+        await _loadAllPostsAlternative();
+      }
+    }
+  }
+
+  /// 替代的載入方法（當索引缺失時使用）
+  Future<void> _loadAllPostsAlternative() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // 先只按 isActive 篩選，然後在客戶端排序
+      final snapshot = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final posts = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        if (data['lat'] != null) {
+          data['lat'] = data['lat'] is String
+              ? double.parse(data['lat'])
+              : data['lat'].toDouble();
+        }
+        if (data['lng'] != null) {
+          data['lng'] = data['lng'] is String
+              ? double.parse(data['lng'])
+              : data['lng'].toDouble();
+        }
+        return data;
+      }).toList();
+
+      // 在客戶端按 createdAt 排序
+      posts.sort((a, b) {
+        final aTime = a['createdAt'];
+        final bTime = b['createdAt'];
+        if (aTime is Timestamp && bTime is Timestamp) {
+          return bTime.compareTo(aTime); // 降序排序
+        }
+        return 0;
+      });
+
+      if (mounted) {
+        setState(() {
+          _allPosts = posts;
+        });
+        print('✅ 使用替代方法成功載入 ${posts.length} 個任務');
+      }
+    } catch (e) {
+      print('❌ 替代查詢也失敗: $e');
+      if (mounted) {
+        setState(() {
+          _allPosts = [];
+        });
+      }
     }
   }
 
@@ -487,7 +573,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(36),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
@@ -499,35 +585,49 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 用戶頭像
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.grey[200],
-                    backgroundImage:
-                        _profile['avatarUrl'] != null &&
-                            _profile['avatarUrl'].isNotEmpty
-                        ? NetworkImage(_profile['avatarUrl'])
+                  // 用戶頭像 - 使用VerifiedAvatar
+                  VerifiedAvatar(
+                    avatarUrl: _profile['avatarUrl']?.isNotEmpty == true
+                        ? _profile['avatarUrl']
                         : null,
-                    child:
-                        _profile['avatarUrl'] == null ||
-                            _profile['avatarUrl'].isEmpty
-                        ? Icon(Icons.person, color: Colors.grey[600], size: 24)
-                        : null,
+                    radius: 40, // 72px 直徑
+                    isVerified: _profile['isVerified'] ?? false,
+                    defaultIcon: Icons.person_rounded,
+                    badgeSize: 24,
                   ),
                   const SizedBox(width: 12),
                   // 角色信息
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        _userRole == UserRole.parent ? '發布者' : '陪伴者',
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                      // 問候語 (在中間)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          'Hi, ${_profile['name'] ?? '未設定'}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      // 角色
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          _userRole == UserRole.parent ? '發布者' : '陪伴者',
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
+                      // 角色切換按鈕
                       InkWell(
                         onTap: () => _showRoleSwitchDialog(
                           context,

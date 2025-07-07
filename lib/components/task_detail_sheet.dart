@@ -35,8 +35,6 @@ class VerifiedAvatar extends StatelessWidget {
     final verifiedBadgeSize = badgeSize ?? (radius * 0.28).clamp(16.0, 32.0);
     // 認證圖標內的icon大小（badge大小的0.6倍）
     final badgeIconSize = (verifiedBadgeSize * 0.6).clamp(10.0, 20.0);
-    // 認證圖標位置偏移（從右下角向內偏移）
-    final badgeOffset = radius * 0.05;
     // 頭像內圖標大小（默認為半徑的1.2倍）
     final avatarIconSize = radius * 1.2;
 
@@ -53,8 +51,8 @@ class VerifiedAvatar extends StatelessWidget {
         ),
         if (isVerified)
           Positioned(
-            bottom: badgeOffset,
-            right: badgeOffset,
+            bottom: 0,
+            right: 0,
             child: Container(
               width: verifiedBadgeSize,
               height: verifiedBadgeSize,

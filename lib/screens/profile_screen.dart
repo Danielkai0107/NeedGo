@@ -426,10 +426,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (result != true || !mounted) return;
 
-    // 保存context引用以避免在異步操作中出現問題
-    final navigator = Navigator.of(context);
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
     // 顯示載入指示器
     showDialog(
       context: context,
@@ -450,17 +446,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final authService = AuthService();
       await authService.signOut();
 
-      // 關閉載入對話框並導航到首頁
       if (mounted) {
-        navigator.pop(); // 關閉載入對話框
-        navigator.pushReplacementNamed('/');
+        // 關閉載入對話框
+        Navigator.pop(context);
+
+        // 清除所有路由並返回到根路由，讓 AuthGate 處理重新導向到登入頁面
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
-      // 關閉載入對話框並顯示錯誤
       if (mounted) {
-        navigator.pop(); // 關閉載入對話框
-        scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('登出失敗：$e'), backgroundColor: Colors.red),
+        // 關閉載入對話框
+        Navigator.pop(context);
+
+        // 顯示錯誤訊息
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('登出失敗：$e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: '重試',
+              textColor: Colors.white,
+              onPressed: _logout,
+            ),
+          ),
         );
       }
     }

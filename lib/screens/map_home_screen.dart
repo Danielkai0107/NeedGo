@@ -155,6 +155,7 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
     if (user == null) return;
 
     try {
+      // 嘗試使用複合索引查詢
       final snapshot = await _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
@@ -184,6 +185,67 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
       }
     } catch (e) {
       print('載入所有任務失敗: $e');
+
+      // 如果是索引問題，嘗試替代查詢方法
+      if (e.toString().contains('FAILED_PRECONDITION') ||
+          e.toString().contains('index')) {
+        print('🔄 索引缺失，嘗試替代查詢方法...');
+        await _loadAllPostsAlternative();
+      }
+    }
+  }
+
+  /// 替代的載入方法（當索引缺失時使用）
+  Future<void> _loadAllPostsAlternative() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // 先只按 isActive 篩選，然後在客戶端排序
+      final snapshot = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final posts = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        if (data['lat'] != null) {
+          data['lat'] = data['lat'] is String
+              ? double.parse(data['lat'])
+              : data['lat'].toDouble();
+        }
+        if (data['lng'] != null) {
+          data['lng'] = data['lng'] is String
+              ? double.parse(data['lng'])
+              : data['lng'].toDouble();
+        }
+        return data;
+      }).toList();
+
+      // 在客戶端按 createdAt 排序
+      posts.sort((a, b) {
+        final aTime = a['createdAt'];
+        final bTime = b['createdAt'];
+        if (aTime is Timestamp && bTime is Timestamp) {
+          return bTime.compareTo(aTime); // 降序排序
+        }
+        return 0;
+      });
+
+      if (mounted) {
+        setState(() {
+          _allPosts = posts;
+        });
+        print('✅ 使用替代方法成功載入 ${posts.length} 個任務');
+      }
+    } catch (e) {
+      print('❌ 替代查詢也失敗: $e');
+      if (mounted) {
+        setState(() {
+          _allPosts = [];
+        });
+      }
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'dart:ui' as ui;
 import 'dart:math' as math;
@@ -14,7 +15,8 @@ import '../services/rekognition_service.dart';
 
 class RegistrationView extends StatefulWidget {
   final String uid;
-  final String phoneNumber; // 新增：從登入時傳入的手機號碼
+  final String phoneNumber;
+
   const RegistrationView({
     super.key,
     required this.uid,
@@ -71,10 +73,11 @@ class _RegistrationViewState extends State<RegistrationView> {
   void initState() {
     super.initState();
     _defaultFocusNode = FocusNode();
-    // 移除強制設置焦點的代碼，讓Flutter自然管理焦點
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   _defaultFocusNode.requestFocus();
-    // });
+    // 預先填入 Google 帳號的 email
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser?.email != null) {
+      _emailCtrl.text = currentUser!.email!;
+    }
   }
 
   @override
@@ -561,11 +564,6 @@ class _RegistrationViewState extends State<RegistrationView> {
       ),
       body: Stack(
         children: [
-          // 暫時移除不可見的Focus widget，讓Flutter自然管理焦點
-          // Focus(
-          //   focusNode: _defaultFocusNode,
-          //   child: Container(),
-          // ),
           GestureDetector(
             onTap: () {
               // 點擊空白區域時移除所有焦點

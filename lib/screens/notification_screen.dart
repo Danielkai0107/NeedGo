@@ -159,7 +159,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (user == null) return;
 
     try {
-      // 載入最近的任務
+      // 嘗試使用複合索引查詢
       final tasksSnapshot = await _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
@@ -167,49 +167,106 @@ class _NotificationScreenState extends State<NotificationScreen> {
           .limit(50)
           .get();
 
-      final notifications = <Map<String, dynamic>>[];
+      await _processTasksForNotifications(tasksSnapshot, user);
+    } catch (e) {
+      print('載入 Player 通知失敗: $e');
 
-      for (var doc in tasksSnapshot.docs) {
-        final task = doc.data();
-
-        // 跳過自己發布的任務
-        if (task['userId'] == user.uid) continue;
-
-        final notificationId = 'task_${doc.id}';
-        if (!_readNotificationIds.contains(notificationId)) {
-          notifications.add({
-            'id': notificationId,
-            'type': 'new_task',
-            'taskId': doc.id,
-            'taskName': task['title'] ?? task['name'] ?? '未命名任務',
-            'taskData': {...task, 'id': doc.id},
-            'message': '新任務：${task['title'] ?? task['name']}',
-            'timestamp':
-                (task['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            'isRead': false,
+      // 如果是索引問題，嘗試替代查詢方法
+      if (e.toString().contains('FAILED_PRECONDITION') ||
+          e.toString().contains('index')) {
+        print('🔄 索引缺失，嘗試替代查詢方法...');
+        await _loadPlayerNotificationsAlternative();
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
           });
         }
       }
+    }
+  }
 
-      // 按時間排序，最新的在前
-      notifications.sort(
-        (a, b) =>
-            (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime),
-      );
+  /// 替代的 Player 通知載入方法
+  Future<void> _loadPlayerNotificationsAlternative() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-      if (mounted) {
-        setState(() {
-          _notifications = notifications;
-          _isLoading = false;
-        });
-      }
+    try {
+      // 先只按 isActive 篩選
+      final tasksSnapshot = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      await _processTasksForNotifications(tasksSnapshot, user);
+      print('✅ 使用替代方法成功載入通知');
     } catch (e) {
-      print('載入 Player 通知失敗: $e');
+      print('❌ 替代通知查詢也失敗: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// 處理任務數據生成通知
+  Future<void> _processTasksForNotifications(
+    QuerySnapshot tasksSnapshot,
+    User user,
+  ) async {
+    final notifications = <Map<String, dynamic>>[];
+
+    // 轉換並排序任務
+    final tasks = tasksSnapshot.docs.map((doc) {
+      final task = doc.data() as Map<String, dynamic>;
+      task['id'] = doc.id;
+      return task;
+    }).toList();
+
+    // 在客戶端按 createdAt 排序，只取前 50 個
+    tasks.sort((a, b) {
+      final aTime = a['createdAt'];
+      final bTime = b['createdAt'];
+      if (aTime is Timestamp && bTime is Timestamp) {
+        return bTime.compareTo(aTime); // 降序排序
+      }
+      return 0;
+    });
+
+    final limitedTasks = tasks.take(50).toList();
+
+    for (var task in limitedTasks) {
+      // 跳過自己發布的任務
+      if (task['userId'] == user.uid) continue;
+
+      final notificationId = 'task_${task['id']}';
+      if (!_readNotificationIds.contains(notificationId)) {
+        notifications.add({
+          'id': notificationId,
+          'type': 'new_task',
+          'taskId': task['id'],
+          'taskName': task['title'] ?? task['name'] ?? '未命名任務',
+          'taskData': task,
+          'message': '新任務：${task['title'] ?? task['name']}',
+          'timestamp':
+              (task['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          'isRead': false,
+        });
+      }
+    }
+
+    // 按時間排序，最新的在前
+    notifications.sort(
+      (a, b) =>
+          (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime),
+    );
+
+    if (mounted) {
+      setState(() {
+        _notifications = notifications;
+        _isLoading = false;
+      });
     }
   }
 
