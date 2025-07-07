@@ -108,26 +108,9 @@ class _MainTabViewState extends State<MainTabView> {
       backgroundColor: Colors.transparent, // 設置背景透明
       body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(32),
-            topRight: Radius.circular(32),
-          ),
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 20,
-              spreadRadius: 0,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
+        decoration: _getNavigationBarDecoration(),
         child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(32),
-            topRight: Radius.circular(32),
-          ),
+          borderRadius: _getNavigationBarBorderRadius(),
           child: SafeArea(
             child: Container(
               height: 90, // 增加導航欄高度給文字更多空間
@@ -273,5 +256,50 @@ class _MainTabViewState extends State<MainTabView> {
         print('切換到我的活動頁面，強制重新載入資料');
       }
     });
+  }
+
+  /// 獲取導覽列裝飾樣式
+  /// 地圖頁面（index 0）：保持陰影和圓角
+  /// 其他頁面：移除陰影和圓角，加上頂部灰線
+  BoxDecoration _getNavigationBarDecoration() {
+    if (_currentIndex == 0) {
+      // 地圖頁面：保持現在的陰影和圓角
+      return BoxDecoration(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(32),
+          topRight: Radius.circular(32),
+        ),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      );
+    } else {
+      // 其他頁面：移除陰影和圓角，加上頂部灰線
+      return BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Colors.grey.shade300, width: 1.0),
+        ),
+      );
+    }
+  }
+
+  /// 獲取導覽列圓角樣式
+  /// 地圖頁面有圓角，其他頁面沒有
+  BorderRadiusGeometry _getNavigationBarBorderRadius() {
+    if (_currentIndex == 0) {
+      return const BorderRadius.only(
+        topLeft: Radius.circular(32),
+        topRight: Radius.circular(32),
+      );
+    } else {
+      return BorderRadius.zero;
+    }
   }
 }
