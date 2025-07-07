@@ -3,12 +3,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 
 import '../utils/custom_snackbar.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_date_time_field.dart';
 import '../widgets/custom_dropdown_field.dart';
 import '../services/auth_service.dart';
+import '../services/rekognition_service.dart';
 
 /// 個人資料頁面
 class ProfileScreen extends StatefulWidget {
@@ -53,6 +55,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // 學歷選擇
   String? _selectedEducation;
+
+  // 身份驗證相關
+  bool _isVerifying = false;
+  int _todayVerificationFailures = 0;
+  DateTime? _lastVerificationDate;
 
   DateTime? _selectedBirthday;
   String? _selectedGender;
@@ -129,6 +136,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _selectedGender = _convertGenderToDisplayValue(
             data['gender']?.toString(),
           );
+
+          // 初始化驗證相關資料
+          _loadVerificationData(data);
 
           _isLoading = false;
         });
@@ -1212,6 +1222,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ],
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: _canVerifyToday() ? _showVerificationDialog : null,
+              icon: Icon(
+                Icons.verified_user,
+                size: 16,
+                color: _canVerifyToday() ? Colors.blue[600] : Colors.grey,
+              ),
+              label: Text(
+                _canVerifyToday() ? '前往驗證' : '今日驗證次數已用完',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _canVerifyToday() ? Colors.blue[600] : Colors.grey,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: _canVerifyToday()
+                      ? Colors.blue[300]!
+                      : Colors.grey[300]!,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+              ),
             ),
         ],
       ),
@@ -1419,5 +1457,279 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final socialLinks = _profile['socialLinks'] as Map<String, dynamic>? ?? {};
     final otherLink = socialLinks['other']?.toString();
     return otherLink?.isNotEmpty == true ? otherLink! : '未設定';
+  }
+
+  /// 載入驗證相關資料
+  void _loadVerificationData(Map<String, dynamic> data) {
+    // 從 Firebase 載入驗證失敗記錄
+    final verificationData =
+        data['verificationFailures'] as Map<String, dynamic>? ?? {};
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    _todayVerificationFailures = verificationData[todayStr] ?? 0;
+
+    if (_todayVerificationFailures > 0) {
+      _lastVerificationDate = today;
+    }
+  }
+
+  /// 檢查今日是否還能進行驗證
+  bool _canVerifyToday() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // 如果不是同一天，重置計數
+    if (_lastVerificationDate == null ||
+        DateTime(
+              _lastVerificationDate!.year,
+              _lastVerificationDate!.month,
+              _lastVerificationDate!.day,
+            ) !=
+            today) {
+      _todayVerificationFailures = 0;
+      _lastVerificationDate = today;
+    }
+
+    return _todayVerificationFailures < 3;
+  }
+
+  /// 顯示身份驗證對話框
+  void _showVerificationDialog() async {
+    if (_isVerifying) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _buildVerificationDialog(),
+    );
+  }
+
+  /// 建立驗證對話框
+  Widget _buildVerificationDialog() {
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            '身份驗證',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '請拍攝一張清晰的正面照片進行身份驗證',
+                style: TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+
+              // 說明
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '拍攝要求：',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '• 光線充足，避免過亮或過暗\n'
+                      '• 正面拍攝，眼睛看向鏡頭\n'
+                      '• 請勿佩戴口罩、帽子或墨鏡\n'
+                      '• 保持表情自然',
+                      style: TextStyle(fontSize: 14, color: Colors.blue[700]),
+                    ),
+                  ],
+                ),
+              ),
+
+              if (_todayVerificationFailures > 0) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '今日已驗證失敗 $_todayVerificationFailures 次，剩餘 ${3 - _todayVerificationFailures} 次機會',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.orange[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: _isVerifying ? null : () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: _isVerifying
+                  ? null
+                  : () => _startVerification(setState),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+              ),
+              child: _isVerifying
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text('開始驗證'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 開始身份驗證
+  void _startVerification(StateSetter setDialogState) async {
+    setDialogState(() {
+      _isVerifying = true;
+    });
+
+    try {
+      // 拍攝驗證照片
+      final ImagePicker picker = ImagePicker();
+      final XFile? verificationImage = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 70,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+
+      if (verificationImage == null) {
+        setDialogState(() {
+          _isVerifying = false;
+        });
+        return;
+      }
+
+      final verificationBytes = await verificationImage.readAsBytes();
+
+      // 檢查文件大小
+      if (verificationBytes.length > 5 * 1024 * 1024) {
+        throw Exception('照片文件過大，請重新拍攝');
+      }
+
+      // 獲取用戶頭像進行比對
+      final avatarUrl = _profile['avatarUrl']?.toString();
+      if (avatarUrl == null || avatarUrl.isEmpty) {
+        throw Exception('請先設置頭像照片');
+      }
+
+      // 下載頭像圖片
+      final response = await http.get(Uri.parse(avatarUrl));
+      if (response.statusCode != 200) {
+        throw Exception('無法獲取頭像照片');
+      }
+      final avatarBytes = response.bodyBytes;
+
+      // 進行人臉比對
+      final result = await RekognitionService.compareFaces(
+        avatarBytes,
+        verificationBytes,
+      );
+
+      if (mounted) {
+        Navigator.pop(context); // 關閉驗證對話框
+
+        if (result.isSuccess && result.isVerified) {
+          // 驗證成功
+          await _updateVerificationStatus(true);
+          CustomSnackBar.showSuccess(context, '身份驗證成功！');
+        } else {
+          // 驗證失敗
+          _recordVerificationFailure();
+          final remainingAttempts = 3 - _todayVerificationFailures;
+
+          if (remainingAttempts > 0) {
+            CustomSnackBar.showError(
+              context,
+              '身份驗證失敗，今日還剩 $remainingAttempts 次驗證機會',
+            );
+          } else {
+            CustomSnackBar.showError(context, '今日驗證次數已用完，請明日再試');
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        _recordVerificationFailure();
+        CustomSnackBar.showError(context, '驗證失敗：$e');
+      }
+    } finally {
+      if (mounted) {
+        setDialogState(() {
+          _isVerifying = false;
+        });
+      }
+    }
+  }
+
+  /// 更新驗證狀態
+  Future<void> _updateVerificationStatus(bool isVerified) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await _firestore.collection('user').doc(user.uid).update({
+        'isVerified': isVerified,
+      });
+
+      // 重新載入資料
+      await _loadProfile();
+    } catch (e) {
+      print('更新驗證狀態失敗: $e');
+    }
+  }
+
+  /// 記錄驗證失敗
+  void _recordVerificationFailure() async {
+    setState(() {
+      _todayVerificationFailures++;
+      _lastVerificationDate = DateTime.now();
+    });
+
+    // 將失敗記錄保存到 Firebase
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final today = DateTime.now();
+        final todayStr =
+            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+        await _firestore.collection('user').doc(user.uid).update({
+          'verificationFailures.$todayStr': _todayVerificationFailures,
+        });
+      } catch (e) {
+        print('保存驗證失敗記錄失敗: $e');
+      }
+    }
   }
 }
