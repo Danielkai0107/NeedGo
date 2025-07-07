@@ -374,12 +374,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _userRole == 'parent' ? '應徵者通知' : '新任務通知',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          '通知中心',
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: Colors.grey[300],
         actions: [
           if (_notifications.isNotEmpty)
             TextButton(
@@ -388,7 +391,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ),
         ],
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(

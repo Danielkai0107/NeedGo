@@ -559,16 +559,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text(
           '個人資料',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: Colors.grey[300],
         actions: [
           IconButton(onPressed: _logout, icon: const Icon(Icons.logout)),
         ],
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(

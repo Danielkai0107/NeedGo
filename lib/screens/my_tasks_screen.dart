@@ -712,11 +712,14 @@ class _MyTasksScreenState extends State<MyTasksScreen>
       appBar: AppBar(
         title: const Text(
           '我的活動',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: Colors.grey[300],
         bottom: TabBar(
           controller: _tabController,
           tabs: [
