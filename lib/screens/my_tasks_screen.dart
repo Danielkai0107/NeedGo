@@ -297,6 +297,22 @@ class _MyTasksScreenState extends State<MyTasksScreen>
     }
   }
 
+  /// 建立 Tab 內容（包含圖標、文字和計數）
+  Widget _buildTabContent({
+    required IconData icon,
+    required String text,
+    required int count,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 6),
+        Text(count > 0 ? '$text ($count)' : text),
+      ],
+    );
+  }
+
   /// 顯示任務詳情
   void _showTaskDetail(
     Map<String, dynamic> task, {
@@ -777,36 +793,36 @@ class _MyTasksScreenState extends State<MyTasksScreen>
         shadowColor: Colors.grey[300],
         bottom: TabBar(
           controller: _tabController,
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.assignment_rounded, size: 18),
-                  const SizedBox(width: 6),
-                  Text('我的任務 (${_myCreatedTasks.length})'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.person_search_rounded, size: 18),
-                  const SizedBox(width: 6),
-                  Text('我的應徵 (${_myAppliedTasks.length})'),
-                ],
-              ),
-            ),
-          ],
-          labelColor: AppColors.primary,
+          indicator: UnderlineTabIndicator(
+            borderSide: BorderSide(width: 2.0, color: Colors.black),
+            insets: const EdgeInsets.symmetric(horizontal: 48.0),
+          ),
+          labelColor: Colors.black,
           unselectedLabelColor: Colors.grey[600],
-          indicatorColor: AppColors.primary,
-          indicatorWeight: 3,
           labelStyle: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+          ),
+          tabs: [
+            Tab(
+              child: _buildTabContent(
+                icon: Icons.assignment_rounded,
+                text: '我的任務',
+                count: _myCreatedTasks.length,
+              ),
+            ),
+            Tab(
+              child: _buildTabContent(
+                icon: Icons.person_search_rounded,
+                text: '我的應徵',
+                count: _myAppliedTasks.length,
+              ),
+            ),
+          ],
         ),
       ),
       backgroundColor: Colors.grey[50],

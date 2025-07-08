@@ -85,10 +85,10 @@ class _ChatListScreenState extends State<ChatListScreen>
         bottom: TabBar(
           controller: _tabController,
           indicator: UnderlineTabIndicator(
-            borderSide: BorderSide(width: 2.0, color: AppColors.primary),
+            borderSide: BorderSide(width: 2.0, color: Colors.black),
             insets: const EdgeInsets.symmetric(horizontal: 48.0),
           ),
-          labelColor: AppColors.primary,
+          labelColor: Colors.black,
           unselectedLabelColor: Colors.grey[600],
           labelStyle: const TextStyle(
             fontSize: 16,
@@ -169,42 +169,18 @@ class _ChatListScreenState extends State<ChatListScreen>
     return totalUnread;
   }
 
-  /// 建立 Tab 內容（包含圖標、文字和未讀角標）
+  /// 建立 Tab 內容（包含圖標、文字和未讀計數）
   Widget _buildTabContent({
     required IconData icon,
     required String text,
     required int unreadCount,
   }) {
-    return Stack(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 6),
-            Text(text),
-          ],
-        ),
-        if (unreadCount > 0)
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                unreadCount > 99 ? '99+' : unreadCount.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
+        Icon(icon, size: 18),
+        const SizedBox(width: 6),
+        Text(unreadCount > 0 ? '$text ($unreadCount)' : text),
       ],
     );
   }
