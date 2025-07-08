@@ -25,6 +25,7 @@ class _MainTabViewState extends State<MainTabView> {
   int _totalUnreadCount = 0;
   int _notificationCount = 0;
   int _tasksPageKey = 0; // 用於強制重新創建我的活動頁面
+  int _mapPageKey = 0; // 用於強制重新創建地圖頁面
 
   @override
   void initState() {
@@ -96,7 +97,7 @@ class _MainTabViewState extends State<MainTabView> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      const UnifiedMapView(), // 使用統一地圖視角
+      UnifiedMapView(key: ValueKey(_mapPageKey)), // 使用統一地圖視角，支持刷新
       _getCurrentRoleTasksPage(), // 我的任務/應徵
       const ChatListScreen(), // 訊息
       const NotificationScreen(), // 通知
@@ -250,6 +251,11 @@ class _MainTabViewState extends State<MainTabView> {
   void _onNavItemTap(int index) {
     setState(() {
       _currentIndex = index;
+      // 當切換到地圖頁面時，更新 key 以強制重新創建頁面並載入最新資料
+      if (index == 0) {
+        _mapPageKey++;
+        print('切換到地圖頁面，強制重新載入資料');
+      }
       // 當切換到我的活動頁面時，更新 key 以強制重新創建頁面並載入最新資料
       if (index == 1) {
         _tasksPageKey++;

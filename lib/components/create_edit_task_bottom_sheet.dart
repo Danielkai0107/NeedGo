@@ -81,6 +81,7 @@ class CreateEditTaskBottomSheet extends StatefulWidget {
   // 新的 API（完整功能）
   final Map<String, dynamic>? existingTask;
   final Function(TaskData)? onSubmit;
+  final Map<String, dynamic>? prefilledLocationData; // 新增：預填地點資料
 
   // 舊的 API（兼容現有代碼）
   final bool? isEditing;
@@ -99,6 +100,7 @@ class CreateEditTaskBottomSheet extends StatefulWidget {
     // 新 API
     this.existingTask,
     this.onSubmit,
+    this.prefilledLocationData, // 新增：預填地點資料
     // 舊 API（兼容）
     this.isEditing,
     this.taskForm,
@@ -120,6 +122,7 @@ class CreateEditTaskBottomSheet extends StatefulWidget {
   static void show(
     BuildContext context, {
     Map<String, dynamic>? existingTask,
+    Map<String, dynamic>? prefilledLocationData,
     required Function(TaskData) onSubmit,
   }) {
     showModalBottomSheet(
@@ -130,6 +133,7 @@ class CreateEditTaskBottomSheet extends StatefulWidget {
       useSafeArea: true, // 使用安全區域
       builder: (context) => CreateEditTaskBottomSheet(
         existingTask: existingTask,
+        prefilledLocationData: prefilledLocationData,
         onSubmit: onSubmit,
       ),
     );
@@ -239,6 +243,14 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       _addressController.text = _taskData.address ?? ''; // 初始化地址
     } else {
       _taskData = TaskData();
+      
+      // 如果有預填地點資料，使用它們
+      if (widget.prefilledLocationData != null) {
+        _taskData.address = widget.prefilledLocationData!['address'];
+        _taskData.lat = widget.prefilledLocationData!['lat']?.toDouble();
+        _taskData.lng = widget.prefilledLocationData!['lng']?.toDouble();
+        _addressController.text = _taskData.address ?? '';
+      }
     }
   }
 

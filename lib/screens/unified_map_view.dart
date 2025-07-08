@@ -139,27 +139,33 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     try {
       print('🚀 開始初始化統一地圖視角...');
 
-      // 載入用戶資料和角色
+      // 載入用戶資料和角色（這是第一步，確保角色正確設定）
       await _loadUserProfile();
+      print('✅ 用戶資料載入完成，當前角色: ${_userRole.name}');
+
       await _loadSystemLocations();
       await _findAndRecenter();
       await _loadReadNotificationIds();
       await _loadReadApplicantIds();
 
       // 根據角色載入不同的數據
+      print('🔄 根據角色載入數據 - 當前角色: ${_userRole.name}');
       if (_userRole == UserRole.parent) {
         await _loadMyPosts();
         await _loadHistoricalApplicantNotifications();
         _startListeningForApplicants();
+        print('📍 Parent 視角數據載入完成，更新地圖標記...');
       } else {
         await _loadAllPosts();
         _initializeNotificationSystem();
         _attachPostsListener();
+        print('📍 Player 視角數據載入完成，更新地圖標記...');
       }
 
       // 初始化時檢查過期任務
       await _checkAndUpdateExpiredTasks();
       _updateMarkers();
+      print('🏁 初始化完成，地圖標記已更新');
 
       print('✅ 統一地圖視角初始化完成');
     } catch (e) {
@@ -185,8 +191,10 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           _userRole = roleString == 'player'
               ? UserRole.player
               : UserRole.parent;
+          print('👤 用戶角色設定: $roleString -> ${_userRole.name}');
         });
       } else if (mounted) {
+        print('⚠️  用戶文檔不存在，使用預設設定');
         setState(() {
           _profile = {
             'name': '未設定',
@@ -198,8 +206,12 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             'parentBio': '',
             'avatarUrl': '',
             'isVerified': false,
+            'preferredRole': 'parent', // 確保有預設角色
           };
           _profileForm = Map.from(_profile);
+          // 設定預設角色為 parent
+          _userRole = UserRole.parent;
+          print('👤 使用預設角色: parent -> ${_userRole.name}');
         });
       }
 
@@ -216,9 +228,14 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                 _profileForm = Map.from(_profile);
                 // 根據用戶偏好設定角色
                 final roleString = _profile['preferredRole'] ?? 'parent';
+                final oldRole = _userRole;
                 _userRole = roleString == 'player'
                     ? UserRole.player
                     : UserRole.parent;
+
+                if (oldRole != _userRole) {
+                  print('👤 角色變更偵測: ${oldRole.name} -> ${_userRole.name}');
+                }
               });
             }
           });
@@ -257,18 +274,32 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   /// 載入我的任務（Parent 視角）
   Future<void> _loadMyPosts() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      print('❌ 用戶未登入，無法載入我的任務');
+      return;
+    }
+
+    print('🔄 開始載入我的任務（Parent 視角）- 用戶ID: ${user.uid}');
 
     try {
+      // 首先嘗試使用複合索引查詢
       final snapshot = await _firestore
           .collection('posts')
           .where('userId', isEqualTo: user.uid)
           .orderBy('createdAt', descending: true)
           .get();
 
+      print('📦 Firestore 查詢結果：${snapshot.docs.length} 個文檔');
+
       final posts = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] = doc.id;
+
+        print('📄 任務 ${doc.id}: ${data['title'] ?? data['name'] ?? '無標題'}');
+        print('   - lat: ${data['lat']}, lng: ${data['lng']}');
+        print('   - isActive: ${data['isActive']}');
+        print('   - userId: ${data['userId']}');
+
         if (data['lat'] != null) {
           data['lat'] = data['lat'] is String
               ? double.parse(data['lat'])
@@ -282,23 +313,117 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         return data;
       }).toList();
 
+      print('✅ 成功載入 ${posts.length} 個我的任務');
+
+      // 統計有地理位置的任務
+      final tasksWithLocation = posts
+          .where((task) => task['lat'] != null && task['lng'] != null)
+          .length;
+      print('📍 其中 $tasksWithLocation 個任務有地理位置');
+
       if (mounted) {
         setState(() {
           _myPosts = posts;
         });
+
+        // 數據載入完成後立即更新標記
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateMarkers();
+          print('🔄 _loadMyPosts 完成後已觸發地圖標記更新');
+        });
       }
     } catch (e) {
-      print('載入我的任務失敗: $e');
+      print('❌ 載入我的任務失敗: $e');
+
+      // 如果是索引問題，嘗試替代查詢方法
+      if (e.toString().contains('FAILED_PRECONDITION') ||
+          e.toString().contains('index')) {
+        print('🔄 索引缺失，嘗試替代查詢方法...');
+        await _loadMyPostsAlternative();
+      } else {
+        // 其他錯誤，確保UI狀態正確
+        if (mounted) {
+          setState(() {
+            _myPosts = [];
+          });
+        }
+      }
+    }
+  }
+
+  /// 替代的載入我的任務方法（當索引缺失時使用）
+  Future<void> _loadMyPostsAlternative() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // 只按 userId 篩選，然後在客戶端排序
+      final snapshot = await _firestore
+          .collection('posts')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      final posts = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+
+        // 確保座標是 double 類型
+        if (data['lat'] != null) {
+          data['lat'] = data['lat'] is String
+              ? double.parse(data['lat'])
+              : data['lat'].toDouble();
+        }
+        if (data['lng'] != null) {
+          data['lng'] = data['lng'] is String
+              ? double.parse(data['lng'])
+              : data['lng'].toDouble();
+        }
+        return data;
+      }).toList();
+
+      // 在客戶端按 createdAt 排序
+      posts.sort((a, b) {
+        final aTime = a['createdAt'];
+        final bTime = b['createdAt'];
+        if (aTime is Timestamp && bTime is Timestamp) {
+          return bTime.compareTo(aTime); // 降序排序
+        }
+        return 0;
+      });
+
+      if (mounted) {
+        setState(() {
+          _myPosts = posts;
+        });
+        print('✅ 使用替代方法成功載入 ${posts.length} 個我的任務');
+
+        // 數據載入完成後立即更新標記
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateMarkers();
+        });
+      }
+    } catch (e) {
+      print('❌ 替代查詢也失敗: $e');
+      if (mounted) {
+        setState(() {
+          _myPosts = [];
+        });
+      }
     }
   }
 
   /// 載入所有任務（Player 視角）
   Future<void> _loadAllPosts() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      print('❌ 用戶未登入，無法載入任務');
+      return;
+    }
+
+    print('🔄 開始載入所有任務（Player 視角）...');
 
     try {
-      // 嘗試使用複合索引查詢
+      // 嘗試使用複合索引查詢，只載入活躍的任務
       final snapshot = await _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
@@ -321,13 +446,19 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         return data;
       }).toList();
 
+      // 進一步過濾，只保留真正活躍的任務（排除已過期的任務）
+      final activePosts = posts.where((task) => _isTaskActive(task)).toList();
+
+      print('✅ 成功載入 ${posts.length} 個標記為活躍的任務');
+      print('🔍 過濾後實際活躍任務: ${activePosts.length} 個');
+
       if (mounted) {
         setState(() {
-          _allPosts = posts;
+          _allPosts = activePosts;
         });
       }
     } catch (e) {
-      print('載入所有任務失敗: $e');
+      print('❌ 載入所有任務失敗: $e');
 
       // 如果是索引問題，嘗試替代查詢方法
       if (e.toString().contains('FAILED_PRECONDITION') ||
@@ -376,11 +507,21 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         return 0;
       });
 
+      // 進一步過濾，只保留真正活躍的任務（排除已過期的任務）
+      final activePosts = posts.where((task) => _isTaskActive(task)).toList();
+
+      print('✅ 使用替代方法成功載入 ${posts.length} 個標記為活躍的任務');
+      print('🔍 過濾後實際活躍任務: ${activePosts.length} 個');
+
       if (mounted) {
         setState(() {
-          _allPosts = posts;
+          _allPosts = activePosts;
         });
-        print('✅ 使用替代方法成功載入 ${posts.length} 個任務');
+
+        // 數據載入完成後立即更新標記
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateMarkers();
+        });
       }
     } catch (e) {
       print('❌ 替代查詢也失敗: $e');
@@ -394,26 +535,45 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
   /// 切換角色
   void _switchRole() {
+    final oldRole = _userRole;
     setState(() {
       _userRole = _userRole == UserRole.parent
           ? UserRole.player
           : UserRole.parent;
     });
 
+    print('🔄 角色切換: ${oldRole.name} → ${_userRole.name}');
+
     // 保存角色偏好
     _saveRolePreference();
 
     // 重新載入數據
     if (_userRole == UserRole.parent) {
-      _loadMyPosts();
+      print('📥 切換到 Parent 視角，清空舊數據並載入我的任務...');
+      setState(() {
+        _myPosts.clear(); // 清空舊數據
+        _allPosts.clear();
+      });
+
+      _loadMyPosts().then((_) {
+        print('✅ Parent 任務載入完成，觸發標記更新');
+        _updateMarkers();
+      });
       _startListeningForApplicants();
     } else {
-      _loadAllPosts();
+      print('📥 切換到 Player 視角，清空舊數據並載入所有任務...');
+      setState(() {
+        _myPosts.clear(); // 清空舊數據
+        _allPosts.clear();
+      });
+
+      _loadAllPosts().then((_) {
+        print('✅ Player 任務載入完成，觸發標記更新');
+        _updateMarkers();
+      });
       _initializeNotificationSystem();
       _attachPostsListener();
     }
-
-    _updateMarkers();
   }
 
   /// 保存角色偏好
@@ -663,6 +823,18 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             ),
           ),
 
+          // 右上角 - 重新整理按鈕
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            right: 16,
+            child: _buildActionButton(
+              icon: Icons.refresh_rounded,
+              onPressed: _forceReloadData,
+              heroTag: 'refresh',
+              isLarge: false,
+            ),
+          ),
+
           // 左下角 - 篩選和定位
           Positioned(
             bottom: 140,
@@ -696,23 +868,18 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           ),
 
           // 右下角 - 角色相關功能
-          Positioned(
-            bottom: 140,
-            left: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Parent 角色 - 創建任務
-                _buildActionButton(
-                  icon: Icons.add_rounded,
-                  onPressed: _startCreatePostManually,
-                  heroTag: 'create',
-                  isLarge: true,
-                  backgroundColor: Colors.orange[600],
-                ),
-              ],
+          if (_userRole == UserRole.parent)
+            Positioned(
+              bottom: 140,
+              left: 16,
+              child: _buildActionButton(
+                icon: Icons.add_rounded,
+                onPressed: _startCreatePostManually,
+                heroTag: 'create',
+                isLarge: true,
+                backgroundColor: Colors.orange[600],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -773,52 +940,212 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     return button;
   }
 
+  /// 計算兩個地理位置之間的距離（米）
+  double _calculateDistance(LatLng position1, LatLng position2) {
+    return Geolocator.distanceBetween(
+      position1.latitude,
+      position1.longitude,
+      position2.latitude,
+      position2.longitude,
+    );
+  }
+
+  /// 手動重新載入所有數據（調試用）
+  Future<void> _forceReloadData() async {
+    print('🔄 手動強制重新載入所有數據...');
+
+    // 重新載入用戶資料
+    await _loadUserProfile();
+
+    // 根據角色載入相應數據
+    if (_userRole == UserRole.parent) {
+      print('📥 強制重新載入 Parent 任務...');
+      await _loadMyPosts();
+    } else {
+      print('📥 強制重新載入 Player 任務...');
+      await _loadAllPosts();
+    }
+
+    // 更新地圖標記
+    _updateMarkers();
+
+    print('✅ 手動重新載入完成');
+
+    if (mounted) {
+      CustomSnackBar.showSuccess(context, '數據已重新載入');
+    }
+  }
+
+  /// 檢查任務是否過期
+  bool _isTaskExpired(Map<String, dynamic> task) {
+    if (task['date'] == null) return false;
+
+    try {
+      DateTime taskDate;
+      if (task['date'] is String) {
+        taskDate = DateTime.parse(task['date']);
+      } else if (task['date'] is DateTime) {
+        taskDate = task['date'];
+      } else if (task['date'] is Timestamp) {
+        taskDate = (task['date'] as Timestamp).toDate();
+      } else {
+        print('未知的日期格式: ${task['date'].runtimeType}');
+        return false;
+      }
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final taskDay = DateTime(taskDate.year, taskDate.month, taskDate.day);
+
+      return taskDay.isBefore(today);
+    } catch (e) {
+      print('檢查任務過期失敗: $e');
+      return false;
+    }
+  }
+
+  /// 獲取任務狀態
+  String _getTaskStatus(Map<String, dynamic> task) {
+    if (task['status'] == 'completed') return 'completed';
+    if (task['acceptedApplicant'] != null) return 'accepted';
+    if (_isTaskExpired(task)) return 'expired';
+    return task['status'] ?? 'open';
+  }
+
+  /// 檢查任務是否為活躍狀態（可以在地圖上顯示）
+  bool _isTaskActive(Map<String, dynamic> task) {
+    final status = _getTaskStatus(task);
+    // 只顯示開放狀態和已接受狀態的任務，不顯示已完成或已過期的任務
+    return status == 'open' || status == 'accepted';
+  }
+
   /// 更新地圖標記
   void _updateMarkers() {
     if (!mounted) return;
 
     final allMarkers = <Marker>{};
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    // 取得要檢查的任務列表（根據角色決定）
+    final tasksToCheck = _userRole == UserRole.parent ? _myPosts : _allPosts;
+
+    print('🗺️ 更新地圖標記 - 角色: ${_userRole.name}, 任務數量: ${tasksToCheck.length}');
+
+    // 過濾出活躍的任務（不包括過期和已完成的任務）
+    final activeTasks = tasksToCheck
+        .where((task) => _isTaskActive(task))
+        .toList();
+    print('🔍 過濾後的活躍任務數量: ${activeTasks.length}');
 
     // 添加系統地點標記
     for (var location in _systemLocations) {
       if (!_selectedCategories.contains(location['category'])) continue;
 
-      allMarkers.add(
-        Marker(
-          markerId: MarkerId('system_${location['id']}'),
-          position: LatLng(location['lat'], location['lng']),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
+      final locationPosition = LatLng(location['lat'], location['lng']);
+      bool hasTaskNearby = false;
+      BitmapDescriptor markerIcon;
+
+      // 檢查這個系統地點附近是否有活躍任務
+      for (var task in activeTasks) {
+        if (task['lat'] == null || task['lng'] == null) continue;
+
+        // 在 Player 視角下，跳過自己的任務
+        if (_userRole == UserRole.player &&
+            task['userId'] == currentUser?.uid) {
+          continue;
+        }
+
+        final taskPosition = LatLng(task['lat'], task['lng']);
+        final distance = _calculateDistance(locationPosition, taskPosition);
+
+        // 如果距離小於100米，認為任務在這個地點附近
+        if (distance <= 100) {
+          hasTaskNearby = true;
+          break;
+        }
+      }
+
+      // 根據是否有任務決定標記樣式和顯示邏輯
+      if (_userRole == UserRole.parent) {
+        // Parent 視角：如果附近有我的任務，隱藏系統地點標記
+        if (!hasTaskNearby) {
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueGreen,
+          );
+          allMarkers.add(
+            Marker(
+              markerId: MarkerId('system_${location['id']}'),
+              position: locationPosition,
+              icon: markerIcon,
+              onTap: () => _showLocationDetail(location),
+            ),
+          );
+        }
+      } else {
+        // Player 視角：顯示所有系統地點，但有任務的地點用不同顏色
+        if (hasTaskNearby) {
+          // 有任務的地點用橙色標記
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueOrange,
+          );
+        } else {
+          // 沒有任務的地點用綠色標記
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          );
+        }
+
+        allMarkers.add(
+          Marker(
+            markerId: MarkerId('system_${location['id']}'),
+            position: locationPosition,
+            icon: markerIcon,
+            onTap: () => _showLocationDetail(location),
           ),
-          onTap: () => _showLocationDetail(location),
-        ),
-      );
+        );
+      }
     }
 
     // 根據角色添加不同的任務標記
     if (_userRole == UserRole.parent) {
-      // Parent 視角 - 顯示我的任務
-      for (var task in _myPosts) {
-        if (task['lat'] == null || task['lng'] == null) continue;
+      // Parent 視角 - 顯示我的活躍任務
+      print('📍 Parent 視角 - 檢查 ${activeTasks.length} 個活躍任務');
+      int addedTaskMarkers = 0;
 
-        allMarkers.add(
-          Marker(
-            markerId: MarkerId('my_task_${task['id']}'),
-            position: LatLng(task['lat'], task['lng']),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueOrange,
-            ),
-            onTap: () => _showTaskDetail(task, isMyTask: true),
+      for (var task in activeTasks) {
+        print('🔍 檢查任務 ${task['id']}: lat=${task['lat']}, lng=${task['lng']}');
+        print('   狀態: ${_getTaskStatus(task)}');
+
+        if (task['lat'] == null || task['lng'] == null) {
+          print('⚠️  跳過任務 ${task['id']} - 缺少地理位置');
+          continue;
+        }
+
+        final marker = Marker(
+          markerId: MarkerId('my_task_${task['id']}'),
+          position: LatLng(task['lat'], task['lng']),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueOrange,
           ),
+          onTap: () => _showTaskDetail(task, isMyTask: true),
         );
+
+        allMarkers.add(marker);
+        addedTaskMarkers++;
+        print('✅ 添加任務標記: ${task['id']} at (${task['lat']}, ${task['lng']})');
       }
+
+      print('📍 Parent 視角 - 實際添加了 $addedTaskMarkers 個活躍任務標記');
     } else {
-      // Player 視角 - 顯示所有可應徵的任務
-      final currentUser = FirebaseAuth.instance.currentUser;
-      for (var task in _allPosts) {
+      // Player 視角 - 顯示所有可應徵的活躍任務
+      int taskCount = 0;
+      for (var task in activeTasks) {
         if (task['lat'] == null || task['lng'] == null) continue;
         if (task['userId'] == currentUser?.uid) continue;
 
+        print('🔍 檢查他人任務 ${task['id']}: 狀態=${_getTaskStatus(task)}');
+
+        taskCount++;
         allMarkers.add(
           Marker(
             markerId: MarkerId('task_${task['id']}'),
@@ -830,6 +1157,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           ),
         );
       }
+      print('📍 Player 視角 - 添加 $taskCount 個可應徵活躍任務標記');
     }
 
     // 添加我的位置標記
@@ -844,6 +1172,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       );
     }
 
+    print('🗺️ 總共添加 ${allMarkers.length} 個標記到地圖');
     setState(() {
       _markers = allMarkers;
     });
@@ -863,7 +1192,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         onCreateTaskAtLocation: () {
           Navigator.of(context).pop();
           if (_userRole == UserRole.parent) {
-            _startCreatePostManually();
+            _startCreatePostAtLocation(locationData);
           }
         },
       ),
@@ -1001,27 +1330,143 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     );
   }
 
+  /// 在指定地點創建任務
+  void _startCreatePostAtLocation(Map<String, dynamic> locationData) {
+    if (_userRole != UserRole.parent) return;
+
+    // 準備地點資料
+    final prefilledData = {
+      'address': locationData['name'] ?? '未知地點',
+      'lat': locationData['lat'],
+      'lng': locationData['lng'],
+    };
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      isDismissible: true,
+      builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
+        prefilledLocationData: prefilledData,
+        onSubmit: (taskData) async {
+          Navigator.of(context).pop();
+          await _saveNewTask(taskData.toJson());
+        },
+      ),
+    );
+  }
+
   /// 保存新任務
   Future<void> _saveNewTask(Map<String, dynamic> taskData) async {
+    print('💾 開始保存新任務到 Firestore...');
+    print('📋 原始任務數據: $taskData');
+
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        print('❌ 用戶未登入，無法保存任務');
+        return;
+      }
 
-      await _firestore.collection('posts').add({
+      // 創建任務資料
+      final newTaskData = {
         ...taskData,
         'userId': user.uid,
         'createdAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),
         'isActive': true,
         'applicants': [],
-      });
+      };
+
+      print('📝 準備保存的完整數據: $newTaskData');
+      print('🗂️ 數據字段檢查:');
+      print('   - title: ${newTaskData['title']}');
+      print('   - name: ${newTaskData['name']}');
+      print('   - address: ${newTaskData['address']}');
+      print(
+        '   - lat: ${newTaskData['lat']} (${newTaskData['lat'].runtimeType})',
+      );
+      print(
+        '   - lng: ${newTaskData['lng']} (${newTaskData['lng'].runtimeType})',
+      );
+      print('   - userId: ${newTaskData['userId']}');
+      print('   - isActive: ${newTaskData['isActive']}');
+
+      // 保存到 Firestore 並獲取文檔引用
+      print('🚀 正在保存到 Firestore...');
+      final docRef = await _firestore.collection('posts').add(newTaskData);
+
+      print('✅ Firestore 保存成功！文檔 ID: ${docRef.id}');
+
+      // 驗證保存是否成功 - 立即讀取剛保存的文檔
+      print('🔍 驗證保存結果...');
+      final savedDoc = await _firestore
+          .collection('posts')
+          .doc(docRef.id)
+          .get();
+
+      if (savedDoc.exists) {
+        final savedData = savedDoc.data()!;
+        print('✅ 驗證成功！保存的數據: $savedData');
+
+        // 檢查關鍵字段
+        if (savedData['userId'] == user.uid) {
+          print('✅ userId 匹配');
+        } else {
+          print('⚠️  userId 不匹配: 期望 ${user.uid}, 實際 ${savedData['userId']}');
+        }
+
+        if (savedData['lat'] != null && savedData['lng'] != null) {
+          print('✅ 地理位置保存成功');
+        } else {
+          print('⚠️  地理位置保存失敗');
+        }
+      } else {
+        print('❌ 驗證失敗！文檔不存在');
+      }
 
       if (mounted) {
-        CustomSnackBar.showSuccess(context, '任務創建成功！');
-        await _loadMyPosts();
+        // 立即將新任務添加到本地列表中，避免重新載入的延遲
+        final newTask = Map<String, dynamic>.from(newTaskData);
+        newTask['id'] = docRef.id; // 添加文檔 ID
+
+        // 確保座標是 double 類型
+        if (newTask['lat'] != null) {
+          newTask['lat'] = newTask['lat'] is String
+              ? double.parse(newTask['lat'])
+              : newTask['lat'].toDouble();
+        }
+        if (newTask['lng'] != null) {
+          newTask['lng'] = newTask['lng'] is String
+              ? double.parse(newTask['lng'])
+              : newTask['lng'].toDouble();
+        }
+
+        setState(() {
+          // 將新任務添加到列表開頭（因為按時間降序排列）
+          _myPosts.insert(0, newTask);
+        });
+
+        print('📝 新任務已添加到本地 _myPosts: ${newTask['id']}');
+        print('📊 目前本地 _myPosts 包含 ${_myPosts.length} 個任務');
+
+        // 立即更新地圖標記，讓新任務即時顯示
         _updateMarkers();
+
+        // 為了確保數據同步，在保存成功後稍微延遲再重新載入一次
+        Future.delayed(const Duration(seconds: 2), () {
+          print('🔄 延遲重新載入任務確保數據同步...');
+          _loadMyPosts();
+        });
+
+        CustomSnackBar.showSuccess(context, '任務創建成功！文檔 ID: ${docRef.id}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ 保存任務失敗: $e');
+      print('📋 錯誤堆疊: $stackTrace');
+
       if (mounted) {
         CustomSnackBar.showError(context, '創建任務失敗：$e');
       }
@@ -1058,6 +1503,13 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     if (expiredTaskIds.isNotEmpty) {
       for (String taskId in expiredTaskIds) {
         await _markTaskAsExpired(taskId);
+      }
+
+      // 重新載入數據以確保過期任務從列表中移除
+      if (_userRole == UserRole.parent) {
+        await _loadMyPosts();
+      } else {
+        await _loadAllPosts();
       }
 
       _updateMarkers();
