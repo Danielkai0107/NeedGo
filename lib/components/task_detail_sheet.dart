@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/chat_service.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -697,7 +698,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         'expiredAt': Timestamp.now(),
       });
 
-      print('✅ 任務狀態已更新為過期');
+      // 發送聊天室關閉提醒訊息
+      await ChatService.sendTaskExpiredChatCloseReminder(taskId);
+
+      print('✅ 任務狀態已更新為過期，聊天室關閉提醒已發送');
     } catch (e) {
       print('❌ 更新任務過期狀態失敗: $e');
     }
@@ -1523,9 +1527,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
           ),
           const Text(
             '任務地點',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1632,9 +1636,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
           const SizedBox(height: 20),
           const Text(
             '交通資訊',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           ..._travelInfo!.entries.map((entry) {
             IconData icon;
             Color color;
@@ -1698,9 +1702,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
           ),
           const Text(
             '任務內容',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Container(
             child: Text(
               content,
@@ -1725,10 +1729,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
             height: 50,
           ),
           Text(
-            '申請者 (${_applicants.length})',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+            '申請者列表 (${_applicants.length})',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           if (_isLoadingApplicants)
             const Center(child: CircularProgressIndicator())
           else if (_applicants.isEmpty)
@@ -1910,14 +1914,32 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
             'completedAt': Timestamp.now(),
           });
 
+      // 發送聊天室關閉提醒訊息
+      await ChatService.sendChatRoomCloseReminder(widget.taskData['id']);
+
       if (mounted) {
         // 通知父組件任務已更新
         widget.onTaskUpdated?.call();
 
         // 關閉詳情頁
         Navigator.of(context).pop();
+
+        // 顯示成功訊息
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('任務已完成，已通知相關聊天室'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
-    } catch (e) {}
+    } catch (e) {
+      print('完成任務時發生錯誤: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('完成任務失敗: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   // 顯示任務完成確認對話框
@@ -2797,7 +2819,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
       children: [
         const Text(
           '聯絡資訊',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         ...contacts,
       ],
@@ -2862,9 +2884,9 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
         ),
         const Text(
           '應徵簡歷',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
 
         // 學歷
         _buildResumeItem(
@@ -2873,7 +2895,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
           education.isNotEmpty ? education : '未設定',
           education.isEmpty,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 26),
 
         // 駕照資訊
         _buildResumeItem(
@@ -2883,7 +2905,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
           false,
           color: hasCarLicense ? Colors.green[600] : Colors.grey[500],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 26),
 
         _buildResumeItem(
           Icons.two_wheeler_rounded,
@@ -2892,71 +2914,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
           false,
           color: hasMotorcycleLicense ? Colors.green[600] : Colors.grey[500],
         ),
-        const SizedBox(height: 20),
-
-        // 履歷PDF
-        Row(
-          children: [
-            Icon(Icons.picture_as_pdf_rounded, color: Colors.black, size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '履歷PDF',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  if (resumePdfName.isNotEmpty && resumePdfUrl.isNotEmpty)
-                    GestureDetector(
-                      onTap: () => _openPdfResume(resumePdfUrl),
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.green[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green[200]!),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.picture_as_pdf,
-                              color: Colors.green[600],
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                resumePdfName,
-                                style: TextStyle(
-                                  color: Colors.green[800],
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              Icons.open_in_new,
-                              color: Colors.green[600],
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    Text(
-                      '未上傳',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 26),
 
         // 自我介紹
         Row(
@@ -2969,36 +2927,29 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '自我介紹',
+                    '自我介紹 ：',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[200]!),
-                    ),
-                    child: Text(
-                      selfIntro.isNotEmpty ? selfIntro : '申請者尚未填寫自我介紹',
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.6,
-                        color: selfIntro.isNotEmpty
-                            ? Colors.black
-                            : Colors.grey[500],
-                        fontStyle: selfIntro.isEmpty
-                            ? FontStyle.italic
-                            : FontStyle.normal,
-                      ),
-                    ),
                   ),
                 ],
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(),
+          child: Text(
+            selfIntro.isNotEmpty ? selfIntro : '申請者尚未填寫自我介紹',
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: selfIntro.isNotEmpty ? Colors.black : Colors.grey[500],
+              fontStyle: selfIntro.isEmpty
+                  ? FontStyle.italic
+                  : FontStyle.normal,
+            ),
+          ),
         ),
       ],
     );
@@ -3021,7 +2972,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
               style: const TextStyle(fontSize: 16, color: Colors.black),
               children: [
                 TextSpan(
-                  text: '$label：',
+                  text: '$label ：',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 TextSpan(

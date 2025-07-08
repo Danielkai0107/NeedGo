@@ -57,6 +57,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if (user != null) {
         // 用戶登入時設置為在線狀態
         ChatService.updateOnlineStatus(true);
+        
+        // 啟動聊天室清理定時器
+        ChatService.startChatRoomCleanupTimer();
+      } else {
+        // 用戶登出時停止聊天室清理定時器
+        ChatService.stopChatRoomCleanupTimer();
       }
     });
 

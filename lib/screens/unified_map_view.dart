@@ -11,6 +11,7 @@ import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
 import '../components/map_marker_manager.dart';
 import '../utils/custom_snackbar.dart';
+import '../services/chat_service.dart';
 
 /// 用戶角色枚舉
 enum UserRole { parent, player }
@@ -730,7 +731,12 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             top: MediaQuery.of(context).padding.top + 16,
             left: 16,
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.only(
+                left: 16.0,
+                top: 16.0,
+                bottom: 16.0,
+                right: 24.0, // 右邊 24，其餘維持 16
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(36),
@@ -1629,6 +1635,9 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         'expiredAt': Timestamp.now(),
       });
 
+      // 發送聊天室關閉提醒訊息
+      await ChatService.sendTaskExpiredChatCloseReminder(taskId);
+
       final tasksToUpdate = _userRole == UserRole.parent ? _myPosts : _allPosts;
       final taskIndex = tasksToUpdate.indexWhere((t) => t['id'] == taskId);
       if (taskIndex != -1 && mounted) {
@@ -1637,6 +1646,8 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           tasksToUpdate[taskIndex]['isActive'] = false;
         });
       }
+
+      print('✅ 任務已標記為過期，聊天室關閉提醒已發送: $taskId');
     } catch (e) {
       print('❌ 更新任務過期狀態失敗: $e');
     }

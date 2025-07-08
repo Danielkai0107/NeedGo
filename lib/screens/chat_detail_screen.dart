@@ -21,7 +21,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final FocusNode _focusNode = FocusNode();
   final currentUser = FirebaseAuth.instance.currentUser;
 
-  bool _isComposing = false;
+  // 使用 ValueNotifier 來管理輸入狀態，避免不必要的 setState
+  final ValueNotifier<bool> _isComposingNotifier = ValueNotifier<bool>(false);
   bool _isInitialLoad = true;
 
   @override
@@ -39,6 +40,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
+    _isComposingNotifier.dispose();
     super.dispose();
   }
 
@@ -390,28 +392,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ),
                 textInputAction: TextInputAction.send,
                 onChanged: (text) {
-                  setState(() {
-                    _isComposing = text.trim().isNotEmpty;
-                  });
+                  _isComposingNotifier.value = text.trim().isNotEmpty;
                 },
-                onSubmitted: _isComposing ? (_) => _sendMessage() : null,
+                onSubmitted: (_) => _sendMessage(),
                 maxLines: 3,
                 minLines: 1,
               ),
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: _isComposing ? Colors.blue : Colors.grey[300],
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              onPressed: _isComposing ? _sendMessage : null,
-              icon: const Icon(Icons.send),
-              color: Colors.white,
-              splashRadius: 24,
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _isComposingNotifier,
+            builder: (context, isComposing, child) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: isComposing ? Colors.blue : Colors.grey[300],
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  onPressed: isComposing ? _sendMessage : null,
+                  icon: const Icon(Icons.send),
+                  color: Colors.white,
+                  splashRadius: 24,
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -425,9 +430,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     // 清空輸入框
     _messageController.clear();
-    setState(() {
-      _isComposing = false;
-    });
+    _isComposingNotifier.value = false;
 
     // 滾動到底部
     _scrollToBottom();

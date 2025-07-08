@@ -43,6 +43,20 @@ class _ChatListScreenState extends State<ChatListScreen>
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.grey[300],
+        actions: [
+          // 顯示系統配置
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: '查看系統配置',
+            onPressed: _showSystemConfig,
+          ),
+          // 調試按鈕：手動觸發聊天室清理
+          IconButton(
+            icon: const Icon(Icons.cleaning_services),
+            tooltip: '清理過期聊天室',
+            onPressed: _triggerChatRoomCleanup,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicator: UnderlineTabIndicator(
@@ -616,6 +630,162 @@ class _ChatListScreenState extends State<ChatListScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('恢復聊天室失敗：$e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// 顯示系統配置資訊
+  Future<void> _showSystemConfig() async {
+    try {
+      // 獲取當前緩存的配置
+      final cachedTimer = ChatService.getCachedChatCloseTimer();
+
+      // 顯示配置資訊對話框
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('系統配置'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '聊天室清理配置：',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text('資料庫文檔: system/DtLX3K2FgJEGWvguqplh'),
+                const SizedBox(height: 4),
+                Text('欄位: chatCloseTimer'),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cachedTimer != null
+                            ? '當前配置: $cachedTimer 分鐘 (緩存中)'
+                            : '當前配置: 讀取中...',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        '任務結束後將在配置時間後自動清理聊天室',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '💡 提示：可以通過 Firebase 後台修改 chatCloseTimer 值來調整清理時間',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  ChatService.clearSystemConfigCache();
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('配置緩存已清除，下次將重新讀取'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                },
+                child: const Text('清除緩存'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('確定'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('獲取系統配置失敗：$e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// 手動觸發聊天室清理（調試功能）
+  Future<void> _triggerChatRoomCleanup() async {
+    try {
+      // 顯示確認對話框
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('清理過期聊天室'),
+            content: const Text('這會清空所有已結束超過系統配置時間的任務的聊天紀錄，並留下系統訊息。確定要執行嗎？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                child: const Text('執行清理'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed != true) return;
+
+      // 顯示載入指示器
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('正在清理過期聊天室...'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // 觸發清理
+      await ChatService.triggerChatRoomCleanupNow();
+
+      // 顯示完成訊息
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('聊天室清理完成！'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('清理聊天室失敗：$e'), backgroundColor: Colors.red),
         );
       }
     }
