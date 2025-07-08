@@ -545,50 +545,53 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       _isRoleSwitching = true;
     });
 
-    // 延遲3秒後執行角色切換
-    Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
+    // 立即執行角色切換邏輯
+    final oldRole = _userRole;
+    setState(() {
+      _userRole = _userRole == UserRole.parent
+          ? UserRole.player
+          : UserRole.parent;
+    });
 
-      final oldRole = _userRole;
+    print('🔄 角色切換: ${oldRole.name} → ${_userRole.name}');
+
+    // 保存角色偏好
+    _saveRolePreference();
+
+    // 立即重新載入數據
+    if (_userRole == UserRole.parent) {
+      print('📥 切換到 Parent 視角，清空舊數據並載入我的任務...');
       setState(() {
-        _userRole = _userRole == UserRole.parent
-            ? UserRole.player
-            : UserRole.parent;
-        _isRoleSwitching = false;
+        _myPosts.clear(); // 清空舊數據
+        _allPosts.clear();
       });
 
-      print('🔄 角色切換: ${oldRole.name} → ${_userRole.name}');
+      _loadMyPosts().then((_) {
+        print('✅ Parent 任務載入完成，觸發標記更新');
+        _updateMarkers();
+      });
+      _startListeningForApplicants();
+    } else {
+      print('📥 切換到 Player 視角，清空舊數據並載入所有任務...');
+      setState(() {
+        _myPosts.clear(); // 清空舊數據
+        _allPosts.clear();
+      });
 
-      // 保存角色偏好
-      _saveRolePreference();
+      _loadAllPosts().then((_) {
+        print('✅ Player 任務載入完成，觸發標記更新');
+        _updateMarkers();
+      });
+      _initializeNotificationSystem();
+      _attachPostsListener();
+    }
 
-      // 重新載入數據
-      if (_userRole == UserRole.parent) {
-        print('📥 切換到 Parent 視角，清空舊數據並載入我的任務...');
-        setState(() {
-          _myPosts.clear(); // 清空舊數據
-          _allPosts.clear();
-        });
-
-        _loadMyPosts().then((_) {
-          print('✅ Parent 任務載入完成，觸發標記更新');
-          _updateMarkers();
-        });
-        _startListeningForApplicants();
-      } else {
-        print('📥 切換到 Player 視角，清空舊數據並載入所有任務...');
-        setState(() {
-          _myPosts.clear(); // 清空舊數據
-          _allPosts.clear();
-        });
-
-        _loadAllPosts().then((_) {
-          print('✅ Player 任務載入完成，觸發標記更新');
-          _updateMarkers();
-        });
-        _initializeNotificationSystem();
-        _attachPostsListener();
-      }
+    // 3秒後結束Loading動畫
+    Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() {
+        _isRoleSwitching = false;
+      });
     });
   }
 
