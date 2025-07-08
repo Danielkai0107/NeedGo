@@ -1171,7 +1171,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                             task['name']?.toString() ??
                             '未命名任務',
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.w600,
                           color: Colors.black87,
                         ),
@@ -1190,27 +1190,31 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                     // 時間
                     if (timeText.isNotEmpty) ...[
                       Icon(
-                        Icons.access_time,
+                        Icons.access_time_filled_rounded,
                         size: 14,
                         color: Colors.grey[600],
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       Text(
                         timeText,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        style: TextStyle(
+                          fontSize: 14,
+                          // fontWeight: FontWeight.w500,
+                          color: Colors.grey[600],
+                        ),
                       ),
                       const SizedBox(width: 16),
                     ],
 
                     // 報酬
                     Icon(Icons.payments, size: 14, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 8),
                     Text(
                       price == 0 ? '免費' : 'NT\$ $price',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 14,
                         color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
+                        // fontWeight: FontWeight.w500,
                       ),
                     ),
 
@@ -1220,7 +1224,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                     if (isCreatedByMe) ...[
                       Icon(
                         Icons.people_rounded,
-                        size: 14,
+                        size: 16,
                         color: applicantCount > 0
                             ? AppColors.primary
                             : Colors.grey[500],
@@ -1229,7 +1233,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                       Text(
                         '$applicantCount',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: applicantCount > 0
                               ? AppColors.primary
@@ -1246,16 +1250,16 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                   Row(
                     children: [
                       Icon(
-                        Icons.location_on,
-                        size: 14,
+                        Icons.location_on_rounded,
+                        size: 15,
                         color: Colors.grey[600],
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           address,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 14,
                             color: Colors.grey[600],
                           ),
                           maxLines: 1,
@@ -1263,21 +1267,6 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                         ),
                       ),
                     ],
-                  ),
-                ],
-
-                // 任務描述
-                if (task['content']?.toString().isNotEmpty == true) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    task['content'],
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      height: 1.3,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ],
