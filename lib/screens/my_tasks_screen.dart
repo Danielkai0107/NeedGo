@@ -879,7 +879,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               : RefreshIndicator(
                   onRefresh: _loadAllTasks,
                   child: ListView.builder(
-                    padding: const EdgeInsets.only(top: 16, bottom: 16),
+                    padding: const EdgeInsets.only(top: 0, bottom: 16),
                     itemCount: filteredTasks.length,
                     itemBuilder: (context, index) {
                       final task = filteredTasks[index];
@@ -946,7 +946,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               : RefreshIndicator(
                   onRefresh: _loadAllTasks,
                   child: ListView.builder(
-                    padding: const EdgeInsets.only(top: 16, bottom: 16),
+                    padding: const EdgeInsets.only(top: 0, bottom: 16),
                     itemCount: filteredTasks.length,
                     itemBuilder: (context, index) {
                       final task = filteredTasks[index];

@@ -1038,9 +1038,10 @@ class ChatService {
         final parentId = chatData['parentId'] as String?;
         final playerId = chatData['playerId'] as String?;
         final isConnectionLost = chatData['isConnectionLost'] ?? false;
+        final isCleanedUp = chatData['isCleanedUp'] ?? false;
 
-        // 跳過已經失去聯繫的聊天室，避免重複處理
-        if (isConnectionLost) {
+        // 跳過已經失去聯繫或已清理的聊天室，避免重複處理
+        if (isConnectionLost || isCleanedUp) {
           continue;
         }
 
@@ -1054,23 +1055,64 @@ class ChatService {
         if (shouldCleanup) {
           print('🧹 清理過期聊天室: $chatId');
 
-          // 清空聊天室訊息
-          await clearChatRoomMessages(chatId);
+          try {
+            // 使用事務確保原子性操作
+            await _firestore.runTransaction((transaction) async {
+              // 重新讀取聊天室狀態
+              final chatRef = _firestore.collection('chats').doc(chatId);
+              final currentChatDoc = await transaction.get(chatRef);
 
-          // 發送一條簡潔的失去聯繫訊息
-          await _sendConnectionLostMessage(chatId);
+              if (!currentChatDoc.exists) {
+                print('⚠️ 聊天室已被刪除: $chatId');
+                return;
+              }
 
-          // 標記聊天室為已清理
-          await _firestore.collection('chats').doc(chatId).update({
-            'isConnectionLost': true,
-            'isCleanedUp': true,
-            'cleanedUpAt': Timestamp.now(),
-            'lastMessage': '聯繫已失去',
-            'lastMessageSender': 'system',
-            'updatedAt': Timestamp.now(),
-          });
+              final currentChatData = currentChatDoc.data()!;
+              final currentIsConnectionLost =
+                  currentChatData['isConnectionLost'] ?? false;
+              final currentIsCleanedUp =
+                  currentChatData['isCleanedUp'] ?? false;
 
-          cleanedCount++;
+              // 再次確認聊天室未被處理
+              if (currentIsConnectionLost || currentIsCleanedUp) {
+                print('⚠️ 聊天室已被其他進程處理: $chatId');
+                return;
+              }
+
+              // 先標記為正在清理
+              transaction.update(chatRef, {
+                'isCleanedUp': true,
+                'cleanedUpAt': Timestamp.now(),
+              });
+            });
+
+            // 清空聊天室訊息
+            await clearChatRoomMessages(chatId);
+
+            // 發送失去聯繫訊息
+            await _sendConnectionLostMessage(chatId);
+
+            // 最終標記聊天室為已失去聯繫
+            await _firestore.collection('chats').doc(chatId).update({
+              'isConnectionLost': true,
+              'lastMessage': '任務已結束，聊天室已關閉。',
+              'lastMessageSender': 'system',
+              'updatedAt': Timestamp.now(),
+            });
+
+            cleanedCount++;
+            print('✅ 聊天室清理完成: $chatId');
+          } catch (e) {
+            print('❌ 清理聊天室 $chatId 失敗: $e');
+            // 如果清理失敗，回滾 isCleanedUp 標記
+            try {
+              await _firestore.collection('chats').doc(chatId).update({
+                'isCleanedUp': false,
+              });
+            } catch (rollbackError) {
+              print('❌ 回滾清理標記失敗: $rollbackError');
+            }
+          }
         }
       }
 
@@ -1083,12 +1125,35 @@ class ChatService {
   /// 發送失去聯繫訊息（簡化版本，避免重複）
   static Future<void> _sendConnectionLostMessage(String chatId) async {
     try {
+      // 檢查最近的訊息，避免重複發送相同的系統訊息
+      final recentMessagesSnapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .orderBy('timestamp', descending: true)
+          .limit(3) // 檢查最近3條訊息
+          .get();
+
+      final targetContent = '任務已結束，聊天室已關閉。';
+
+      // 檢查是否已有相同的系統訊息
+      for (var doc in recentMessagesSnapshot.docs) {
+        final messageData = doc.data();
+        final senderId = messageData['senderId'] as String?;
+        final content = messageData['content'] as String?;
+
+        if (senderId == 'system' && content == targetContent) {
+          print('⚠️ 聊天室 $chatId 已存在相同的系統訊息，跳過發送');
+          return;
+        }
+      }
+
       final systemMessage = ChatMessage(
         id: '',
         senderId: 'system',
         senderName: '系統',
         senderAvatar: '',
-        content: '任務已結束，聊天室已關閉。',
+        content: targetContent,
         timestamp: DateTime.now(),
         type: 'system',
         isRead: true,
