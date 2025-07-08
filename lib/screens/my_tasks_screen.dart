@@ -1271,29 +1271,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                   ),
                 ],
 
-                // 底部操作區域
-                if (isCreatedByMe) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: () => _editTask(task),
-                        icon: const Icon(Icons.edit, size: 16),
-                        label: const Text('編輯'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+
               ],
             ),
           ),

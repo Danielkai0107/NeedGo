@@ -1139,6 +1139,14 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                           !_isPastTask())
                         _buildApplicantsSection(),
 
+                      // 任務結束按鈕（僅Parent視角且任務進行中時）
+                      if (widget.isParentView && !_isPastTask())
+                        _buildTaskCompleteButton(),
+
+                      // 取消申請按鈕（僅Player視角且已申請時）
+                      if (!widget.isParentView && _hasApplied && !_isPastTask())
+                        _buildCancelApplicationButton(),
+
                       const SizedBox(height: 100), // 為按鈕留出空間
                     ],
                   ),
@@ -1844,7 +1852,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
               icon: const Icon(Icons.chat_rounded, size: 16),
               label: const Text('聊天'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[600],
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -1855,7 +1863,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                   fontWeight: FontWeight.w600,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(100),
                 ),
                 minimumSize: const Size(80, 36),
               ),
@@ -2041,9 +2049,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
 
   Widget _buildMainActionButton() {
     if (widget.isParentView) {
-      // Parent 視角：檢查任務狀態來決定按鈕
-      final status = _getTaskStatus();
-
+      // Parent 視角：顯示關閉和編輯任務按鈕
       return Row(
         children: [
           Expanded(
@@ -2066,21 +2072,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: ElevatedButton(
-              onPressed: () {
-                if (status == 'open' || status == 'accepted') {
-                  // 如果是進行中的任務，執行任務結束
-                  _completeTask();
-                } else {
-                  // 其他狀態執行編輯
-                  widget.onEditTask?.call();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: (status == 'open' || status == 'accepted')
-                    ? Colors.green[600] // 任務結束用綠色
-                    : AppColors.primary, // 編輯任務用品牌色
-                foregroundColor: Colors.white,
+            child: OutlinedButton(
+              onPressed: () => widget.onEditTask?.call(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(color: AppColors.primary),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24.0,
                   vertical: 16,
@@ -2090,9 +2086,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              child: Text(
-                (status == 'open' || status == 'accepted') ? '任務結束' : '編輯任務',
-              ),
+              child: const Text('編輯任務'),
             ),
           ),
         ],
@@ -2130,61 +2124,20 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
           child: Text(status == 'completed' ? '任務已完成' : '任務已過期'),
         );
       } else if (_hasApplied) {
-        // 已申請的任務，顯示聊天和取消申請按鈕
-        return Row(
-          children: [
-            // 聊天按鈕
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _startChatWithPublisher(),
-                icon: const Icon(Icons.chat_rounded, size: 18),
-                label: const Text('聊天'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue[600],
-                  side: BorderSide(color: Colors.blue[300]!),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 16,
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+        // 已申請的任務，顯示聊天按鈕
+        actionButton = ElevatedButton.icon(
+          onPressed: () => _startChatWithPublisher(),
+          icon: const Icon(Icons.chat_rounded, size: 18),
+          label: const Text('聊天'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(width: 12),
-            // 取消申請按鈕
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _isApplying ? null : _cancelApplication,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 16,
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                child: _isApplying
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : const Text('取消申請'),
-              ),
-            ),
-          ],
+          ),
         );
       } else {
         actionButton = ElevatedButton(
@@ -2211,38 +2164,33 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         );
       }
 
-      // 如果需要顯示返回按鈕，使用 Row 佈局
-      if (widget.showBackButton && widget.onBack != null) {
-        return Row(
-          children: [
-            // 返回按鈕
-            Expanded(
-              child: OutlinedButton(
-                onPressed: widget.onBack,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.grey[600],
-                  side: BorderSide(color: Colors.grey[400]!),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 16,
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+      // 陪伴者視角總是顯示返回按鈕 + 主要操作按鈕
+      return Row(
+        children: [
+          // 返回按鈕
+          Expanded(
+            child: OutlinedButton(
+              onPressed: widget.onBack ?? (() => Navigator.of(context).pop()),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey[600],
+                side: BorderSide(color: Colors.grey[400]!),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 16,
                 ),
-                child: const Text('返回'),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+              child: const Text('返回'),
             ),
-            const SizedBox(width: 12),
-            // 主要操作按鈕
-            Expanded(flex: 2, child: actionButton),
-          ],
-        );
-      } else {
-        // 不顯示返回按鈕時，全寬顯示操作按鈕
-        return SizedBox(width: double.infinity, child: actionButton);
-      }
+          ),
+          const SizedBox(width: 12),
+          // 主要操作按鈕
+          Expanded(flex: 2, child: actionButton),
+        ],
+      );
     }
   }
 
@@ -2259,6 +2207,94 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         publisherData: _publisherData!,
         taskCount: _publisherTaskCount,
         currentTaskData: widget.taskData,
+      ),
+    );
+  }
+
+  Widget _buildTaskCompleteButton() {
+    final status = _getTaskStatus();
+
+    // 只有在任務進行中時才顯示完成按鈕
+    if (status != 'open' && status != 'accepted') {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 水平分隔線
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220),
+            thickness: 1.0,
+            height: 50,
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => _completeTask(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[600],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('提早結束任務'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCancelApplicationButton() {
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 水平分隔線
+          const Divider(
+            color: Color.fromARGB(255, 220, 220, 220),
+            thickness: 1.0,
+            height: 50,
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _isApplying ? null : _cancelApplication,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red[600],
+                side: BorderSide(color: Colors.red[400]!),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isApplying
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                      ),
+                    )
+                  : const Text('取消申請'),
+            ),
+          ),
+        ],
       ),
     );
   }
