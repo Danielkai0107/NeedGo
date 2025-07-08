@@ -598,7 +598,8 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(40)),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -610,7 +611,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+                  color: Colors.black,
                 ),
               ),
               const SizedBox(height: 16),
@@ -627,7 +628,10 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
+                      child: const Text(
+                        '取消',
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -638,10 +642,10 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                         _switchRole();
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[600],
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('確定'),
+                      child: const Text('確定', style: TextStyle(fontSize: 16)),
                     ),
                   ),
                 ],
@@ -818,7 +822,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: _userRole == UserRole.player
-                                  ? Colors.white.withOpacity(0.3)
+                                  ? Colors.white.withOpacity(0.6)
                                   : Colors.grey[300]!,
                               width: 1,
                             ),
