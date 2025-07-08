@@ -21,6 +21,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    // 進入聊天分頁時自動檢查清理過期聊天室
+    _checkAndCleanupExpiredChatRooms();
   }
 
   @override
@@ -338,18 +341,22 @@ class _ChatListScreenState extends State<ChatListScreen>
                       _formatLastMessage(chatRoom),
                       style: TextStyle(
                         fontSize: 14,
-                        color: unreadCount > 0
-                            ? Colors.black87
-                            : Colors.grey[600],
-                        fontWeight: unreadCount > 0
-                            ? FontWeight.w500
-                            : FontWeight.normal,
+                        color: chatRoom.isConnectionLost
+                            ? Colors.grey[500]
+                            : (unreadCount > 0
+                                  ? Colors.black87
+                                  : Colors.grey[600]),
+                        fontWeight: chatRoom.isConnectionLost
+                            ? FontWeight.normal
+                            : (unreadCount > 0
+                                  ? FontWeight.w500
+                                  : FontWeight.normal),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (unreadCount > 0)
+                  if (unreadCount > 0 && !chatRoom.isConnectionLost)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -423,6 +430,11 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   /// 格式化最後訊息顯示
   String _formatLastMessage(ChatRoom chatRoom) {
+    // 如果聊天室已失去聯繫，顯示失去聯繫狀態
+    if (chatRoom.isConnectionLost) {
+      return '已失去聯繫';
+    }
+
     if (chatRoom.lastMessageSender == 'system') {
       return chatRoom.lastMessage;
     }
@@ -788,6 +800,18 @@ class _ChatListScreenState extends State<ChatListScreen>
           SnackBar(content: Text('清理聊天室失敗：$e'), backgroundColor: Colors.red),
         );
       }
+    }
+  }
+
+  /// 自動檢查並清理過期聊天室
+  Future<void> _checkAndCleanupExpiredChatRooms() async {
+    try {
+      // 靜默執行，不顯示任何UI反饋
+      await ChatService.triggerChatRoomCleanupNow();
+      print('✅ 聊天分頁：自動清理過期聊天室完成');
+    } catch (e) {
+      print('❌ 聊天分頁：自動清理過期聊天室失敗: $e');
+      // 靜默失敗，不影響用戶體驗
     }
   }
 }

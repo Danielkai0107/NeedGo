@@ -360,6 +360,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   /// 建立訊息輸入區域
   Widget _buildMessageInput() {
+    // 如果聊天室已失去聯繫，顯示特殊的UI
+    if (widget.chatRoom.isConnectionLost) {
+      return _buildConnectionLostInput();
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -421,6 +426,101 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// 建立失去聯繫時的輸入區域
+  Widget _buildConnectionLostInput() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        border: Border(top: BorderSide(color: Colors.grey[300]!)),
+      ),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 16 + MediaQuery.of(context).padding.bottom,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, size: 20, color: Colors.grey[600]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '聊天已結束',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          // 刪除按鈕
+          TextButton.icon(
+            onPressed: _showDeleteConnectionLostChatRoom,
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('刪除'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[600],
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 顯示刪除失去聯繫聊天室的確認對話框
+  void _showDeleteConnectionLostChatRoom() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('刪除聊天室'),
+          content: Text(
+            '確定要刪除「${widget.chatRoom.taskTitle}」的聊天室嗎？',
+            style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _deleteConnectionLostChatRoom();
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.grey[600]),
+              child: const Text('刪除'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 刪除失去聯繫的聊天室
+  Future<void> _deleteConnectionLostChatRoom() async {
+    try {
+      await ChatService.deleteChatRoom(widget.chatRoom.id);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // 返回聊天室列表
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('聊天室「${widget.chatRoom.taskTitle}」已刪除'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('刪除聊天室失敗：$e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   /// 發送訊息

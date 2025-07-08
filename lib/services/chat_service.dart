@@ -15,6 +15,7 @@ class ChatRoom {
   final String lastMessageSender;
   final Map<String, int> unreadCount;
   final bool isActive;
+  final bool isConnectionLost;
 
   ChatRoom({
     required this.id,
@@ -28,6 +29,7 @@ class ChatRoom {
     required this.lastMessageSender,
     required this.unreadCount,
     this.isActive = true,
+    this.isConnectionLost = false,
   });
 
   factory ChatRoom.fromFirestore(DocumentSnapshot doc) {
@@ -55,6 +57,7 @@ class ChatRoom {
             ? Map<String, int>.from(data['unreadCount'])
             : {},
         isActive: data['isActive'] ?? true,
+        isConnectionLost: data['isConnectionLost'] ?? false,
       );
     } catch (e) {
       print('解析聊天室數據失敗: $e');
@@ -466,7 +469,8 @@ class ChatService {
                 try {
                   final data = doc.data();
                   final isActive = data['isActive'] ?? true;
-                  if (!isActive) continue; // 只計算活躍的聊天室
+                  final isConnectionLost = data['isConnectionLost'] ?? false;
+                  if (!isActive || isConnectionLost) continue; // 跳過不活躍或失去聯繫的聊天室
 
                   final unreadCount = Map<String, int>.from(
                     data['unreadCount'] ?? {},
@@ -505,7 +509,8 @@ class ChatService {
                 try {
                   final data = doc.data();
                   final isActive = data['isActive'] ?? true;
-                  if (!isActive) continue;
+                  final isConnectionLost = data['isConnectionLost'] ?? false;
+                  if (!isActive || isConnectionLost) continue;
 
                   final parentId = data['parentId']?.toString() ?? '';
                   // 只計算我是 Parent 的聊天室
@@ -548,7 +553,8 @@ class ChatService {
                 try {
                   final data = doc.data();
                   final isActive = data['isActive'] ?? true;
-                  if (!isActive) continue;
+                  final isConnectionLost = data['isConnectionLost'] ?? false;
+                  if (!isActive || isConnectionLost) continue;
 
                   final playerId = data['playerId']?.toString() ?? '';
                   // 只計算我是 Player 的聊天室
@@ -963,8 +969,9 @@ class ChatService {
             playerName: playerName,
           );
 
-          // 標記聊天室為已清理
+          // 標記聊天室為已清理，但保持顯示給用戶
           await _firestore.collection('chats').doc(chatId).update({
+            'isConnectionLost': true,
             'isCleanedUp': true,
             'cleanedUpAt': Timestamp.now(),
           });
@@ -983,15 +990,15 @@ class ChatService {
   static Timer? _cleanupTimer;
 
   static void startChatRoomCleanupTimer() {
-    // 每小時檢查一次
-    _cleanupTimer = Timer.periodic(const Duration(hours: 1), (timer) {
+    // 每5分鐘檢查一次，確保及時清理過期聊天室
+    _cleanupTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       checkAndCleanupExpiredChatRooms();
     });
 
     // 立即執行一次
     checkAndCleanupExpiredChatRooms();
 
-    print('✅ 聊天室清理定時器已啟動');
+    print('✅ 聊天室清理定時器已啟動（每5分鐘檢查一次）');
   }
 
   static void stopChatRoomCleanupTimer() {
