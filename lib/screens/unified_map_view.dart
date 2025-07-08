@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../styles/map_styles.dart';
+import '../styles/app_colors.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
 import '../components/create_edit_task_bottom_sheet.dart' show TaskData;
 import '../components/task_detail_sheet.dart';
@@ -739,7 +740,9 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                 right: 24.0, // 右邊 24，其餘維持 16
               ),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _userRole == UserRole.player
+                    ? AppColors.primary
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(36),
                 boxShadow: [
                   BoxShadow(
@@ -761,6 +764,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                     isVerified: _profile['isVerified'] ?? false,
                     defaultIcon: Icons.person_rounded,
                     badgeSize: 24,
+                    showWhiteBorder: _userRole == UserRole.player,
                   ),
                   const SizedBox(width: 12),
                   // 角色信息
@@ -774,7 +778,9 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                         child: Text(
                           'Hi, ${_profile['name'] ?? '未設定'}',
                           style: TextStyle(
-                            color: Colors.grey[600],
+                            color: _userRole == UserRole.player
+                                ? Colors.white
+                                : Colors.grey[600],
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
                           ),
@@ -786,8 +792,10 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                         padding: const EdgeInsets.only(left: 6),
                         child: Text(
                           _userRole == UserRole.parent ? '發布者' : '陪伴者',
-                          style: const TextStyle(
-                            color: Colors.black,
+                          style: TextStyle(
+                            color: _userRole == UserRole.player
+                                ? Colors.white
+                                : Colors.black,
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                           ),
@@ -809,14 +817,18 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: Colors.grey[300]!,
+                              color: _userRole == UserRole.player
+                                  ? Colors.white.withOpacity(0.3)
+                                  : Colors.grey[300]!,
                               width: 1,
                             ),
                           ),
-                          child: const Text(
+                          child: Text(
                             '角色切換',
                             style: TextStyle(
-                              color: Colors.grey,
+                              color: _userRole == UserRole.player
+                                  ? Colors.white
+                                  : Colors.grey,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),

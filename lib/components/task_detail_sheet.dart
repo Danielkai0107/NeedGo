@@ -21,6 +21,7 @@ class VerifiedAvatar extends StatelessWidget {
   final bool isVerified;
   final IconData? defaultIcon;
   final double? badgeSize; // 認證徽章大小參數（可選）
+  final bool showWhiteBorder; // 是否顯示白色邊框
 
   const VerifiedAvatar({
     Key? key,
@@ -29,6 +30,7 @@ class VerifiedAvatar extends StatelessWidget {
     this.isVerified = false,
     this.defaultIcon,
     this.badgeSize, // 可選參數，控制認證徽章大小
+    this.showWhiteBorder = false, // 預設不顯示白色邊框
   }) : super(key: key);
 
   @override
@@ -42,25 +44,51 @@ class VerifiedAvatar extends StatelessWidget {
 
     return Stack(
       children: [
-        CircleAvatar(
-          radius: radius,
-          backgroundImage: (avatarUrl?.isNotEmpty == true)
-              ? NetworkImage(avatarUrl!)
+        // 頭像容器（包含白色邊框）
+        Container(
+          width: (radius + (showWhiteBorder ? 2 : 0)) * 2,
+          height: (radius + (showWhiteBorder ? 2 : 0)) * 2,
+          decoration: showWhiteBorder
+              ? BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                )
               : null,
-          child: (avatarUrl?.isEmpty != false)
-              ? Icon(defaultIcon ?? Icons.person_rounded, size: avatarIconSize)
-              : null,
+          child: Center(
+            child: CircleAvatar(
+              radius: radius,
+              backgroundImage: (avatarUrl?.isNotEmpty == true)
+                  ? NetworkImage(avatarUrl!)
+                  : null,
+              child: (avatarUrl?.isEmpty != false)
+                  ? Icon(
+                      defaultIcon ?? Icons.person_rounded,
+                      size: avatarIconSize,
+                    )
+                  : null,
+            ),
+          ),
         ),
         if (isVerified)
           Positioned(
-            bottom: 0,
-            right: 0,
+            bottom: showWhiteBorder ? 2 : 0,
+            right: showWhiteBorder ? 2 : 0,
             child: Container(
               width: verifiedBadgeSize,
               height: verifiedBadgeSize,
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 shape: BoxShape.circle,
+                border: showWhiteBorder
+                    ? Border.all(color: Colors.white, width: 1.5)
+                    : null,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.2),
