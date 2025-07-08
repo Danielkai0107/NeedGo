@@ -1089,6 +1089,24 @@ class _MyTasksScreenState extends State<MyTasksScreen>
     final taskDate = _parseTaskDate(task['date']);
     final price = task['price'] ?? 0;
     final applicantCount = (task['applicants'] as List?)?.length ?? 0;
+    final address = task['address']?.toString() ?? '';
+
+    // 格式化時間
+    String timeText = '';
+    if (taskDate != null) {
+      try {
+        timeText = '${taskDate.month}/${taskDate.day}';
+
+        if (task['time'] != null && task['time'] is Map) {
+          final time = task['time'] as Map;
+          final hour = time['hour']?.toString().padLeft(2, '0') ?? '00';
+          final minute = time['minute']?.toString().padLeft(2, '0') ?? '00';
+          timeText += ' $hour:$minute';
+        }
+      } catch (e) {
+        timeText = '時間未設定';
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1107,174 +1125,157 @@ class _MyTasksScreenState extends State<MyTasksScreen>
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
           onTap: () => _showTaskDetail(task, isCreatedByMe: isCreatedByMe),
           onLongPress: () =>
               _showLongPressOptions(task, isCreatedByMe: isCreatedByMe),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-            leading: _buildTaskAvatar(status),
-            title: Row(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    task['title']?.toString() ??
-                        task['name']?.toString() ??
-                        '未命名任務',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                // 標題和狀態標籤
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        task['title']?.toString() ??
+                            task['name']?.toString() ??
+                            '未命名任務',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    _buildStatusChip(status),
+                  ],
                 ),
-                _buildStatusChip(status),
-              ],
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 日期和價格行
-                  Row(
-                    children: [
+                const SizedBox(height: 8),
+
+                // 任務詳細信息
+                Row(
+                  children: [
+                    // 時間
+                    if (timeText.isNotEmpty) ...[
                       Icon(
-                        Icons.calendar_today_rounded,
+                        Icons.access_time,
                         size: 14,
-                        color: Colors.grey[500],
+                        color: Colors.grey[600],
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        taskDate != null
-                            ? '${taskDate.month}月${taskDate.day}日'
-                            : '日期未設定',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        timeText,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 16),
+                    ],
+
+                    // 報酬
+                    Icon(Icons.payments, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      price == 0 ? '免費' : 'NT\$ $price',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // 應徵者數量（只在我的任務中顯示）
+                    if (isCreatedByMe) ...[
+                      Icon(
+                        Icons.people_rounded,
+                        size: 14,
+                        color: applicantCount > 0
+                            ? Colors.blue[600]
+                            : Colors.grey[500],
+                      ),
+                      const SizedBox(width: 4),
                       Text(
-                        '\$${price.toStringAsFixed(0)}',
+                        '$applicantCount',
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: applicantCount > 0
+                              ? Colors.blue[600]
+                              : Colors.grey[500],
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  // 任務描述
-                  if (task['content']?.toString().isNotEmpty == true)
-                    Text(
-                      task['content'],
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                        height: 1.3,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  const SizedBox(height: 12),
-                  // 應徵者數量和編輯按鈕
+                  ],
+                ),
+
+                // 地址（如果有的話）
+                if (address.isNotEmpty) ...[
+                  const SizedBox(height: 6),
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: applicantCount > 0
-                              ? Colors.blue[50]
-                              : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: applicantCount > 0
-                                ? Colors.blue[200]!
-                                : Colors.grey[300]!,
+                      Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          address,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.people_rounded,
-                              size: 14,
-                              color: applicantCount > 0
-                                  ? Colors.blue[600]
-                                  : Colors.grey[500],
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$applicantCount 位應徵者',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: applicantCount > 0
-                                    ? Colors.blue[600]
-                                    : Colors.grey[500],
-                              ),
-                            ),
-                          ],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Spacer(),
-                      if (isCreatedByMe)
-                        TextButton.icon(
-                          onPressed: () => _editTask(task),
-                          icon: const Icon(Icons.edit, size: 16),
-                          label: const Text('編輯'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.orange[600],
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        )
-                      else
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green[200]!),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.check_circle_rounded,
-                                size: 14,
-                                color: Colors.green[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '已應徵',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                     ],
                   ),
                 ],
-              ),
+
+                // 任務描述
+                if (task['content']?.toString().isNotEmpty == true) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    task['content'],
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+
+                // 底部操作區域
+                if (isCreatedByMe) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () => _editTask(task),
+                        icon: const Icon(Icons.edit, size: 16),
+                        label: const Text('編輯'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.orange[600],
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
         ),
