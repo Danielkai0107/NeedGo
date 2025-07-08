@@ -883,7 +883,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                 onPressed: _startCreatePostManually,
                 heroTag: 'create',
                 isLarge: true,
-                backgroundColor: Colors.orange[600],
+                backgroundColor: Colors.grey[900],
               ),
             ),
         ],

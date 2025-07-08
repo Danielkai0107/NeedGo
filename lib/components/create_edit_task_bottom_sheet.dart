@@ -564,7 +564,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     constraints: const BoxConstraints(maxHeight: 200),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: ListView.builder(
                       shrinkWrap: true,
@@ -600,8 +600,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(100),
+                      side: BorderSide(color: Colors.grey),
                     ),
                   ),
                   child: const Text(
@@ -620,7 +620,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     elevation: 2,
                   ),
@@ -839,6 +839,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             child: OutlinedButton(
               onPressed: _previousStep,
               style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24.0, // 文字左右內部間距
                   vertical: 16, // 文字上下內部間距
@@ -847,7 +848,10 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   fontSize: 15, // 按鈕文字大小
                   fontWeight: FontWeight.w600, // (選)字重
                 ),
-                side: BorderSide(color: AppColors.primary),
+                side: BorderSide(color: Colors.grey),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                ),
               ),
               child: const Text('上一步'),
             ),
@@ -872,6 +876,9 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               textStyle: const TextStyle(
                 fontSize: 15, // 按鈕文字大小
                 fontWeight: FontWeight.w600, // (選)字重
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(100),
               ),
             ),
             child: _isSubmitting
@@ -1247,7 +1254,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     decoration: BoxDecoration(
                       border: Border.all(
                         color: totalImageCount < 3
-                            ? AppColors.primary
+                            ? Colors.grey[400]!
                             : Colors.grey[300]!,
                         style: BorderStyle.solid,
                       ),
@@ -1260,7 +1267,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           Icons.add_photo_alternate,
                           size: 32,
                           color: totalImageCount < 3
-                              ? AppColors.primary
+                              ? Colors.grey[400]
                               : Colors.grey[400],
                         ),
                         const SizedBox(height: 4),
@@ -1269,7 +1276,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           style: TextStyle(
                             fontSize: 12,
                             color: totalImageCount < 3
-                                ? AppColors.primary
+                                ? Colors.grey[400]
                                 : Colors.grey[400],
                           ),
                         ),
@@ -1855,6 +1862,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               onPressed: () {
                 Navigator.of(context).pop(); // 取消
               },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                  side: BorderSide(color: Colors.grey),
+                ),
+              ),
               child: const Text('取消'),
             ),
             ElevatedButton(
@@ -1868,6 +1882,9 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                ),
               ),
               child: const Text('確認'),
             ),

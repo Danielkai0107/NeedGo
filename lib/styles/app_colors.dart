@@ -188,7 +188,7 @@ class AppButtonStyles {
       padding:
           padding ?? const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
+        borderRadius: borderRadius ?? BorderRadius.circular(100),
       ),
       elevation: 2,
     );
@@ -205,7 +205,7 @@ class AppButtonStyles {
       padding:
           padding ?? const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
+        borderRadius: borderRadius ?? BorderRadius.circular(100),
       ),
     );
   }
@@ -217,11 +217,11 @@ class AppButtonStyles {
   }) {
     return OutlinedButton.styleFrom(
       foregroundColor: AppColors.buttonCancelText,
-      side: BorderSide(color: AppColors.buttonCancelBorder),
+      side: BorderSide(color: AppColors.grey),
       padding:
           padding ?? const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
+        borderRadius: borderRadius ?? BorderRadius.circular(100),
       ),
     );
   }
@@ -237,7 +237,7 @@ class AppButtonStyles {
       padding:
           padding ?? const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
+        borderRadius: borderRadius ?? BorderRadius.circular(100),
       ),
       elevation: 2,
     );
@@ -254,17 +254,14 @@ class AppButtonStyles {
       padding:
           padding ?? const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
+        borderRadius: borderRadius ?? BorderRadius.circular(100),
       ),
       elevation: 2,
     );
   }
 
   /// 文字按鈕樣式
-  static ButtonStyle textButton({
-    EdgeInsets? padding,
-    Color? foregroundColor,
-  }) {
+  static ButtonStyle textButton({EdgeInsets? padding, Color? foregroundColor}) {
     return TextButton.styleFrom(
       foregroundColor: foregroundColor ?? AppColors.textSecondary,
       padding:

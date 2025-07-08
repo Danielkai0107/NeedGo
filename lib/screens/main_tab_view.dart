@@ -195,7 +195,7 @@ class _MainTabViewState extends State<MainTabView> {
     Widget iconWidget = Icon(
       displayIcon,
       size: 26,
-      color: isActive ? Colors.grey[800] : Colors.grey[400],
+      color: isActive ? Colors.grey[900] : Colors.grey[400],
     );
 
     // 如果有角標，包裝在 badges 中
@@ -234,7 +234,7 @@ class _MainTabViewState extends State<MainTabView> {
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: isActive ? Colors.grey[800] : Colors.grey[600],
+                  color: isActive ? Colors.grey[900] : Colors.grey[600],
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                 ),
                 textAlign: TextAlign.center,

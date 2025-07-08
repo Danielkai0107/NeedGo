@@ -82,7 +82,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
               color: widget.errorText != null
                   ? Colors.red.withValues(alpha: 0.5)
                   : _isFocused
-                  ? Colors.blue.withValues(alpha: 0.8)
+                  ? Colors.black.withValues(alpha: 0.8)
                   : Colors.grey.withValues(alpha: 0.3),
               width: _isFocused ? 2.0 : 1.5,
             ),
@@ -109,7 +109,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
                     color: widget.errorText != null
                         ? Colors.red
                         : _isFocused
-                        ? Colors.blue
+                        ? Colors.black
                         : Colors.grey.withValues(alpha: 0.7),
                     fontWeight: shouldFloatLabel
                         ? FontWeight.w500
