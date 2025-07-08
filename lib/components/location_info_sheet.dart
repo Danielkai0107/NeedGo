@@ -180,6 +180,47 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
     }
   }
 
+  /// 獲取任務價格
+  double _getTaskPrice(Map<String, dynamic> task) {
+    // 直接使用 TaskDetailSheet 相同的邏輯
+    final price = task['price'];
+
+    print(
+      '🔍 任務 ${task['title'] ?? task['id']} 的價格字段: $price (類型: ${price.runtimeType})',
+    );
+
+    if (price == null) {
+      print('⚠️  價格字段為 null');
+      return 0.0;
+    }
+
+    try {
+      if (price is num) {
+        final result = price.toDouble();
+        print('✅ 成功解析數字價格: $result');
+        return result;
+      } else if (price is String) {
+        final priceStr = price as String;
+        // 移除非數字字符並嘗試解析
+        final cleanedPrice = priceStr.replaceAll(RegExp(r'[^\d.]'), '');
+        if (cleanedPrice.isNotEmpty) {
+          final result = double.tryParse(cleanedPrice) ?? 0.0;
+          print('✅ 成功解析字符串價格: $priceStr -> $result');
+          return result;
+        } else {
+          print('⚠️  字符串價格清理後為空: $priceStr');
+          return 0.0;
+        }
+      } else {
+        print('⚠️  未知的價格類型: ${price.runtimeType}');
+        return 0.0;
+      }
+    } catch (e) {
+      print('❌ 解析價格失敗: ${task['title'] ?? task['id']}, 錯誤: $e');
+      return 0.0;
+    }
+  }
+
   /// 篩選有效任務（排除已過期和已完成的任務）
   List<Map<String, dynamic>> _filterValidTasks(
     List<Map<String, dynamic>> tasks,
@@ -202,7 +243,14 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
       bool isExpired = false;
 
       // 檢查多種可能的過期時間字段
-      final expiryFields = ['expiryDate', 'dueDate', 'endDate', 'expireTime'];
+      final expiryFields = [
+        'expiryDate',
+        'dueDate',
+        'endDate',
+        'expireTime',
+        'deadlineDate',
+        'endDateTime',
+      ];
 
       for (String field in expiryFields) {
         if (task[field] != null) {
@@ -241,6 +289,31 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
       if (task['isExpired'] == true) {
         isExpired = true;
         print('篩選掉標記為過期的任務: ${task['title'] ?? task['id']}');
+      }
+
+      // 檢查任務創建時間，如果是過去很久的任務也應該排除
+      if (task['createdAt'] != null) {
+        try {
+          DateTime? createdDate;
+
+          if (task['createdAt'] is Timestamp) {
+            createdDate = (task['createdAt'] as Timestamp).toDate();
+          } else if (task['createdAt'] is String) {
+            createdDate = DateTime.parse(task['createdAt'] as String);
+          } else if (task['createdAt'] is int) {
+            createdDate = DateTime.fromMillisecondsSinceEpoch(
+              task['createdAt'] as int,
+            );
+          }
+
+          // 排除超過 30 天的舊任務
+          if (createdDate != null && now.difference(createdDate).inDays > 30) {
+            print('篩選掉超過30天的舊任務: ${task['title'] ?? task['id']}');
+            return false;
+          }
+        } catch (e) {
+          print('解析任務創建時間失敗: ${task['title'] ?? task['id']}, 錯誤: $e');
+        }
       }
 
       return !isExpired;
@@ -288,14 +361,6 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                     children: [
                       // 地點標題（含交通資訊）
                       _buildLocationHeader(),
-
-                      // 地點描述
-                      if (widget.locationData['description'] != null)
-                        _buildDescriptionSection(),
-
-                      // 地點設施資訊
-                      if (widget.locationData['facilities'] != null)
-                        _buildFacilitiesSection(),
 
                       // 該地點的任務列表（僅Player視角）
                       if (!widget.isParentView) _buildTasksSection(),
@@ -476,92 +541,6 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
     );
   }
 
-  Widget _buildDescriptionSection() {
-    final description = widget.locationData['description']?.toString() ?? '';
-    if (description.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '地點介紹',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Text(
-              description,
-              style: const TextStyle(fontSize: 14, height: 1.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFacilitiesSection() {
-    final facilities = widget.locationData['facilities'];
-    if (facilities == null) return const SizedBox.shrink();
-
-    List<String> facilityList = [];
-
-    if (facilities is List) {
-      facilityList = facilities.map((f) => f.toString()).toList();
-    } else if (facilities is String) {
-      facilityList = [facilities];
-    }
-
-    if (facilityList.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '設施資訊',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: facilityList.map((facility) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.green[200]!),
-                ),
-                child: Text(
-                  facility,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.green[700],
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTasksSection() {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -616,8 +595,12 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
   Widget _buildTaskCard(Map<String, dynamic> task, int index) {
     final taskTitle =
         task['title']?.toString() ?? task['name']?.toString() ?? '未命名任務';
-    final taskPrice = task['price'] ?? 0;
-    final taskContent = task['content']?.toString() ?? '';
+
+    // 檢查多種可能的價格字段
+    final taskPrice = _getTaskPrice(task);
+
+    final taskContent =
+        task['content']?.toString() ?? task['description']?.toString() ?? '';
     final taskImages = task['images'] as List? ?? [];
     final imageUrl = taskImages.isNotEmpty ? taskImages[0].toString() : '';
 
@@ -695,7 +678,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                     // 任務報酬
                     if (taskPrice > 0)
                       Text(
-                        'NT\$ $taskPrice',
+                        'NT\$ ${taskPrice % 1 == 0 ? taskPrice.toInt().toString() : taskPrice.toStringAsFixed(1)}',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.orange[700],
@@ -704,11 +687,11 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                       )
                     else
                       Text(
-                        '價格面議',
+                        '免費',
                         style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
 

@@ -321,7 +321,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
       _showTaskDetail(task, isMyTask: true);
     } else {
-      // Player 視角：顯示新任務詳情
+      // Player 視角：顯示新任務詳情（通知中可以直接顯示任務詳情）
       final taskData = notification['taskData'];
       if (taskData != null) {
         _showTaskDetail(taskData, isMyTask: false);

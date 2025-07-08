@@ -371,7 +371,7 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
           markerId: MarkerId('task_${task['id']}'),
           position: LatLng(task['lat'], task['lng']),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          onTap: () => _showTaskDetail(task, isMyTask: false),
+          onTap: () => _showTaskLocationDetail(task),
         ),
       );
     }
@@ -395,6 +395,68 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
           if (_userRole == 'parent') {
             _showCreateTaskSheet(locationData);
           }
+        },
+      ),
+    );
+  }
+
+  /// 計算兩點之間的距離（米）
+  double _calculateDistance(LatLng pos1, LatLng pos2) {
+    return Geolocator.distanceBetween(
+      pos1.latitude,
+      pos1.longitude,
+      pos2.latitude,
+      pos2.longitude,
+    );
+  }
+
+  /// 顯示任務位置詳情（陪伴者視角）- 先顯示地點資訊和任務列表
+  void _showTaskLocationDetail(Map<String, dynamic> taskData) {
+    if (_userRole != 'player') {
+      // 如果不是陪伴者視角，直接顯示任務詳情
+      _showTaskDetail(taskData, isMyTask: false);
+      return;
+    }
+
+    // 陪伴者視角：先顯示地點資訊和任務列表
+    final taskPosition = LatLng(taskData['lat'], taskData['lng']);
+    
+    // 收集該位置附近的所有任務
+    final nearbyTasks = _allPosts.where((task) {
+      if (task['lat'] == null || task['lng'] == null) return false;
+      if (task['userId'] == FirebaseAuth.instance.currentUser?.uid) return false;
+      
+      final distance = _calculateDistance(
+        taskPosition,
+        LatLng(task['lat'], task['lng']),
+      );
+      
+      return distance <= 100; // 100米內的任務
+    }).toList();
+
+    // 創建虛擬地點資料
+    final locationData = {
+      'name': taskData['address']?.toString() ?? '任務地點',
+      'address': taskData['address']?.toString() ?? '任務地點',
+      'lat': taskData['lat'],
+      'lng': taskData['lng'],
+      'description': '此地點有 ${nearbyTasks.length} 個可用任務',
+    };
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => LocationInfoSheet(
+        locationData: locationData,
+        isParentView: false, // 陪伴者視角
+        currentLocation: _myLocation,
+        availableTasksAtLocation: nearbyTasks, // 提供該地點的任務列表
+        onTaskSelected: (task) {
+          // 從任務列表中選擇任務後的回調
+          Navigator.of(context).pop(); // 關閉地點資訊彈窗
+          _showTaskDetail(task, isMyTask: false); // 顯示任務詳情
         },
       ),
     );
