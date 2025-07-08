@@ -13,21 +13,42 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
+  DateTime? _lastCleanupCheck;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
 
     // 進入聊天分頁時自動檢查清理過期聊天室
     _checkAndCleanupExpiredChatRooms();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // 每次頁面依賴變化時檢查清理（包括從其他頁面切換回來）
+    _checkAndCleanupExpiredChatRoomsWithDebounce();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // 當應用從後台回到前台時檢查清理
+    if (state == AppLifecycleState.resumed) {
+      _checkAndCleanupExpiredChatRoomsWithDebounce();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     super.dispose();
   }
@@ -808,10 +829,25 @@ class _ChatListScreenState extends State<ChatListScreen>
     try {
       // 靜默執行，不顯示任何UI反饋
       await ChatService.triggerChatRoomCleanupNow();
+      _lastCleanupCheck = DateTime.now();
       print('✅ 聊天分頁：自動清理過期聊天室完成');
     } catch (e) {
       print('❌ 聊天分頁：自動清理過期聊天室失敗: $e');
       // 靜默失敗，不影響用戶體驗
     }
+  }
+
+  /// 帶防抖的聊天室清理檢查（避免頻繁調用）
+  Future<void> _checkAndCleanupExpiredChatRoomsWithDebounce() async {
+    final now = DateTime.now();
+
+    // 如果上次檢查在30秒內，跳過本次檢查
+    if (_lastCleanupCheck != null &&
+        now.difference(_lastCleanupCheck!).inSeconds < 30) {
+      print('⏭️ 聊天分頁：距離上次清理檢查未超過30秒，跳過本次檢查');
+      return;
+    }
+
+    await _checkAndCleanupExpiredChatRooms();
   }
 }

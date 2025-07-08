@@ -749,7 +749,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
           indicatorColor: Colors.orange[600],
           indicatorWeight: 3,
           labelStyle: const TextStyle(
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
         ),

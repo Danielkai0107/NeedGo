@@ -869,8 +869,8 @@ class MessageBubble extends StatelessWidget {
                       : MainAxisAlignment.start,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // 對方訊息的時間（顯示在氣泡左側）
-                    if (!isCurrentUser && showTime)
+                    // 自己訊息的時間（顯示在氣泡左側）
+                    if (isCurrentUser && showTime)
                       Padding(
                         padding: const EdgeInsets.only(right: 8, bottom: 4),
                         child: Text(
@@ -909,8 +909,8 @@ class MessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // 自己訊息的時間（顯示在氣泡右側）
-                    if (isCurrentUser && showTime)
+                    // 對方訊息的時間（顯示在氣泡右側）
+                    if (!isCurrentUser && showTime)
                       Padding(
                         padding: const EdgeInsets.only(left: 8, bottom: 4),
                         child: Text(
