@@ -851,6 +851,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
               onPressed: _forceReloadData,
               heroTag: 'refresh',
               isLarge: false,
+              usePlayerStyle: true,
             ),
           ),
 
@@ -873,6 +874,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                   },
                   heroTag: 'filter',
                   isLarge: true,
+                  usePlayerStyle: true,
                 ),
                 const SizedBox(height: 16),
                 // 定位按鈕
@@ -881,6 +883,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                   onPressed: _findAndRecenter,
                   heroTag: 'location',
                   isLarge: true,
+                  usePlayerStyle: true,
                 ),
               ],
             ),
@@ -912,14 +915,32 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     bool isLarge = false,
     int badgeCount = 0,
     Color? backgroundColor,
+    bool usePlayerStyle = false, // 是否使用陪伴者視角的樣式
   }) {
+    Color buttonBackgroundColor;
+    Color buttonForegroundColor;
+
+    if (backgroundColor != null) {
+      // 如果明確指定了背景色，使用指定的顏色
+      buttonBackgroundColor = backgroundColor;
+      buttonForegroundColor = Colors.white;
+    } else if (badgeCount > 0) {
+      // 如果有徽章，使用橙色
+      buttonBackgroundColor = Colors.orange[600]!;
+      buttonForegroundColor = Colors.white;
+    } else if (usePlayerStyle && _userRole == UserRole.player) {
+      // 如果是陪伴者視角且啟用了陪伴者樣式，使用主色調
+      buttonBackgroundColor = AppColors.primary;
+      buttonForegroundColor = Colors.white;
+    } else {
+      // 預設樣式
+      buttonBackgroundColor = Colors.white;
+      buttonForegroundColor = Colors.black;
+    }
+
     Widget button = FloatingActionButton(
-      backgroundColor:
-          backgroundColor ??
-          (badgeCount > 0 ? Colors.orange[600] : Colors.white),
-      foregroundColor: backgroundColor != null || badgeCount > 0
-          ? Colors.white
-          : Colors.black,
+      backgroundColor: buttonBackgroundColor,
+      foregroundColor: buttonForegroundColor,
       heroTag: heroTag,
       mini: !isLarge,
       child: Icon(icon),
