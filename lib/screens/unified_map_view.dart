@@ -64,6 +64,9 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   bool _isUploadingAvatar = false;
   StreamSubscription<DocumentSnapshot>? _userProfileSubscription;
 
+  // 角色切換Loading狀態
+  bool _isRoleSwitching = false;
+
   // 地圖相關
   Set<Marker> _markers = {};
   List<Map<String, dynamic>> _systemLocations = [];
@@ -538,45 +541,55 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
   /// 切換角色
   void _switchRole() {
-    final oldRole = _userRole;
     setState(() {
-      _userRole = _userRole == UserRole.parent
-          ? UserRole.player
-          : UserRole.parent;
+      _isRoleSwitching = true;
     });
 
-    print('🔄 角色切換: ${oldRole.name} → ${_userRole.name}');
+    // 延遲3秒後執行角色切換
+    Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
 
-    // 保存角色偏好
-    _saveRolePreference();
-
-    // 重新載入數據
-    if (_userRole == UserRole.parent) {
-      print('📥 切換到 Parent 視角，清空舊數據並載入我的任務...');
+      final oldRole = _userRole;
       setState(() {
-        _myPosts.clear(); // 清空舊數據
-        _allPosts.clear();
+        _userRole = _userRole == UserRole.parent
+            ? UserRole.player
+            : UserRole.parent;
+        _isRoleSwitching = false;
       });
 
-      _loadMyPosts().then((_) {
-        print('✅ Parent 任務載入完成，觸發標記更新');
-        _updateMarkers();
-      });
-      _startListeningForApplicants();
-    } else {
-      print('📥 切換到 Player 視角，清空舊數據並載入所有任務...');
-      setState(() {
-        _myPosts.clear(); // 清空舊數據
-        _allPosts.clear();
-      });
+      print('🔄 角色切換: ${oldRole.name} → ${_userRole.name}');
 
-      _loadAllPosts().then((_) {
-        print('✅ Player 任務載入完成，觸發標記更新');
-        _updateMarkers();
-      });
-      _initializeNotificationSystem();
-      _attachPostsListener();
-    }
+      // 保存角色偏好
+      _saveRolePreference();
+
+      // 重新載入數據
+      if (_userRole == UserRole.parent) {
+        print('📥 切換到 Parent 視角，清空舊數據並載入我的任務...');
+        setState(() {
+          _myPosts.clear(); // 清空舊數據
+          _allPosts.clear();
+        });
+
+        _loadMyPosts().then((_) {
+          print('✅ Parent 任務載入完成，觸發標記更新');
+          _updateMarkers();
+        });
+        _startListeningForApplicants();
+      } else {
+        print('📥 切換到 Player 視角，清空舊數據並載入所有任務...');
+        setState(() {
+          _myPosts.clear(); // 清空舊數據
+          _allPosts.clear();
+        });
+
+        _loadAllPosts().then((_) {
+          print('✅ Player 任務載入完成，觸發標記更新');
+          _updateMarkers();
+        });
+        _initializeNotificationSystem();
+        _attachPostsListener();
+      }
+    });
   }
 
   /// 保存角色偏好
@@ -637,10 +650,12 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _switchRole();
-                      },
+                      onPressed: _isRoleSwitching
+                          ? null
+                          : () {
+                              Navigator.of(context).pop();
+                              _switchRole();
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -713,6 +728,45 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
               // 點擊地圖時的處理
             },
           ),
+
+          // 角色切換Loading overlay
+          if (_isRoleSwitching)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: Center(
+                child: Container(
+                  width: 200,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 資料傳輸icon動畫
+                      DataTransferIcon(color: Colors.black),
+                      const SizedBox(height: 16),
+                      // 切換中文字
+                      Text(
+                        '視角切換中',
+                        style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                      ),
+                      const SizedBox(height: 8),
+                      // 三個點點動畫
+                      LoadingDots(color: Colors.grey[400]!, size: 4.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // 篩選器面板
           if (_showCategoryFilter)
@@ -791,27 +845,40 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      // 角色
+                      // 角色或Loading動畫
                       Padding(
                         padding: const EdgeInsets.only(left: 6),
-                        child: Text(
-                          _userRole == UserRole.parent ? '發布者' : '陪伴者',
-                          style: TextStyle(
-                            color: _userRole == UserRole.player
-                                ? Colors.white
-                                : Colors.black,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        child: _isRoleSwitching
+                            ? Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                                child: LoadingDots(
+                                  color: _userRole == UserRole.player
+                                      ? Colors.white
+                                      : Colors.black,
+                                ),
+                              )
+                            : Text(
+                                _userRole == UserRole.parent ? '發布者' : '陪伴者',
+                                style: TextStyle(
+                                  color: _userRole == UserRole.player
+                                      ? Colors.white
+                                      : Colors.black,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                       ),
                       const SizedBox(height: 6),
                       // 角色切換按鈕
                       InkWell(
-                        onTap: () => _showRoleSwitchDialog(
-                          context,
-                          _userRole == UserRole.parent ? '陪伴者' : '發布者',
-                        ),
+                        onTap: _isRoleSwitching
+                            ? null
+                            : () => _showRoleSwitchDialog(
+                                context,
+                                _userRole == UserRole.parent ? '陪伴者' : '發布者',
+                              ),
                         borderRadius: BorderRadius.circular(16),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -828,7 +895,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                             ),
                           ),
                           child: Text(
-                            '角色切換',
+                            _isRoleSwitching ? '切換中...' : '角色切換',
                             style: TextStyle(
                               color: _userRole == UserRole.player
                                   ? Colors.white
@@ -1804,6 +1871,242 @@ class CategoryFilterPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 三個點點Loading動畫
+class LoadingDots extends StatefulWidget {
+  final Color color;
+  final double size;
+  final Duration duration;
+
+  const LoadingDots({
+    Key? key,
+    this.color = Colors.blue,
+    this.size = 6.0,
+    this.duration = const Duration(milliseconds: 600),
+  }) : super(key: key);
+
+  @override
+  State<LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<LoadingDots>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation1;
+  late Animation<double> _animation2;
+  late Animation<double> _animation3;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: widget.duration, vsync: this);
+
+    _animation1 = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Interval(0.0, 0.6, curve: Curves.easeInOut),
+      ),
+    );
+
+    _animation2 = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Interval(0.2, 0.8, curve: Curves.easeInOut),
+      ),
+    );
+
+    _animation3 = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Interval(0.4, 1.0, curve: Curves.easeInOut),
+      ),
+    );
+
+    _controller.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDot(_animation1.value),
+            const SizedBox(width: 3),
+            _buildDot(_animation2.value),
+            const SizedBox(width: 3),
+            _buildDot(_animation3.value),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDot(double opacity) {
+    return Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        color: widget.color.withOpacity(opacity),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+/// 驗證頭像組件
+class VerifiedAvatar extends StatelessWidget {
+  final String? avatarUrl;
+  final double radius;
+  final bool isVerified;
+  final IconData defaultIcon;
+  final double badgeSize;
+  final bool showWhiteBorder;
+
+  const VerifiedAvatar({
+    Key? key,
+    this.avatarUrl,
+    this.radius = 20,
+    this.isVerified = false,
+    this.defaultIcon = Icons.person,
+    this.badgeSize = 16,
+    this.showWhiteBorder = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 頭像
+        Container(
+          width: radius * 2,
+          height: radius * 2,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: showWhiteBorder
+                ? Border.all(color: Colors.white, width: 2)
+                : null,
+          ),
+          child: CircleAvatar(
+            radius: radius,
+            backgroundColor: Colors.grey[300],
+            backgroundImage: avatarUrl != null
+                ? NetworkImage(avatarUrl!)
+                : null,
+            child: avatarUrl == null
+                ? Icon(defaultIcon, size: radius * 0.8, color: Colors.grey[600])
+                : null,
+          ),
+        ),
+        // 驗證徽章
+        if (isVerified)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: badgeSize,
+              height: badgeSize,
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1),
+              ),
+              child: Icon(
+                Icons.verified,
+                size: badgeSize * 0.7,
+                color: Colors.white,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 資料傳輸icon動畫
+class DataTransferIcon extends StatefulWidget {
+  final Color color;
+  final double size;
+  final Duration duration;
+
+  const DataTransferIcon({
+    Key? key,
+    this.color = const Color(0xFF2196F3),
+    this.size = 32.0,
+    this.duration = const Duration(milliseconds: 1000),
+  }) : super(key: key);
+
+  @override
+  State<DataTransferIcon> createState() => _DataTransferIconState();
+}
+
+class _DataTransferIconState extends State<DataTransferIcon>
+    with TickerProviderStateMixin {
+  late AnimationController _rotationController;
+  late AnimationController _scaleController;
+  late Animation<double> _rotationAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 旋轉動畫控制器
+    _rotationController = AnimationController(
+      duration: widget.duration,
+      vsync: this,
+    );
+
+    // 縮放動畫控制器
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _rotationAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _rotationController, curve: Curves.linear),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
+    );
+
+    // 開始動畫
+    _rotationController.repeat();
+    _scaleController.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    _scaleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_rotationController, _scaleController]),
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: Transform.rotate(
+            angle: _rotationAnimation.value * 2 * 3.14159,
+            child: Icon(Icons.sync, size: widget.size, color: widget.color),
+          ),
+        );
+      },
     );
   }
 }
