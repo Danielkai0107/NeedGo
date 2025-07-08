@@ -19,6 +19,12 @@ class _ChatListScreenState extends State<ChatListScreen>
   late TabController _tabController;
   DateTime? _lastCleanupCheck;
 
+  // 篩選選項
+  String _parentChatRoomsFilter = '進行中';
+  String _playerChatRoomsFilter = '進行中';
+
+  final List<String> _filterOptions = ['進行中', '已關閉'];
+
   @override
   void initState() {
     super.initState();
@@ -138,7 +144,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       ),
       backgroundColor: Colors.grey[50],
       body: Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 140), // 為導覽列預留空間
+        padding: const EdgeInsets.only(bottom: 140), // 為導覽列預留空間
         child: TabBarView(
           controller: _tabController,
           children: [
@@ -247,47 +253,60 @@ class _ChatListScreenState extends State<ChatListScreen>
         final allChatRooms = snapshot.data ?? [];
 
         // 根據當前用戶的角色篩選聊天室
-        final filteredChatRooms = allChatRooms.where((chatRoom) {
+        final roleChatRooms = allChatRooms.where((chatRoom) {
           final isCurrentUserParent = currentUser?.uid == chatRoom.parentId;
           return isParentView ? isCurrentUserParent : !isCurrentUserParent;
         }).toList();
 
-        if (filteredChatRooms.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.chat_bubble_outline,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isParentView ? '還沒有發布者聊天室' : '還沒有陪伴者聊天室',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isParentView ? '發布任務後等待陪伴者申請就會有聊天室了' : '申請任務後就可以開始聊天了',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
+        // 如果沒有聊天室，直接顯示空狀態（不顯示篩選按鈕）
+        if (roleChatRooms.isEmpty) {
+          return _buildEmptyState(isParentView, '進行中');
         }
 
-        return ListView.builder(
-          itemCount: filteredChatRooms.length,
-          itemBuilder: (context, index) {
-            final chatRoom = filteredChatRooms[index];
-            return _buildChatRoomItem(chatRoom);
-          },
+        // 根據篩選條件進一步篩選
+        final currentFilter = isParentView
+            ? _parentChatRoomsFilter
+            : _playerChatRoomsFilter;
+        final filteredChatRooms = roleChatRooms.where((chatRoom) {
+          switch (currentFilter) {
+            case '進行中':
+              return !chatRoom.isConnectionLost;
+            case '已關閉':
+              return chatRoom.isConnectionLost;
+            default:
+              return true;
+          }
+        }).toList();
+
+        return Column(
+          children: [
+            // 篩選按鈕組（只有在有聊天室時才顯示）
+            _buildFilterButtons(
+              currentFilter: currentFilter,
+              onFilterChanged: (String newFilter) {
+                setState(() {
+                  if (isParentView) {
+                    _parentChatRoomsFilter = newFilter;
+                  } else {
+                    _playerChatRoomsFilter = newFilter;
+                  }
+                });
+              },
+            ),
+
+            // 聊天室列表
+            Expanded(
+              child: filteredChatRooms.isEmpty
+                  ? _buildEmptyState(isParentView, currentFilter)
+                  : ListView.builder(
+                      itemCount: filteredChatRooms.length,
+                      itemBuilder: (context, index) {
+                        final chatRoom = filteredChatRooms[index];
+                        return _buildChatRoomItem(chatRoom);
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
@@ -457,6 +476,100 @@ class _ChatListScreenState extends State<ChatListScreen>
     final isCurrentUserSender = chatRoom.lastMessageSender == currentUser?.uid;
     final prefix = isCurrentUserSender ? '你: ' : '';
     return '$prefix${chatRoom.lastMessage}';
+  }
+
+  /// 建立篩選按鈕組
+  Widget _buildFilterButtons({
+    required String currentFilter,
+    required Function(String) onFilterChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: Row(
+        children: _filterOptions.asMap().entries.map((entry) {
+          final index = entry.key;
+          final option = entry.value;
+          final isSelected = option == currentFilter;
+          final isLast = index == _filterOptions.length - 1;
+
+          return Expanded(
+            child: Container(
+              margin: EdgeInsets.only(right: isLast ? 0 : 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(100),
+                  onTap: () => onFilterChanged(option),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.black : Colors.white,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: isSelected ? Colors.black : Colors.grey[300]!,
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      option,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.grey[800],
+                        fontSize: 14,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// 建立空狀態
+  Widget _buildEmptyState(bool isParentView, String currentFilter) {
+    String title;
+    String subtitle;
+
+    if (currentFilter == '進行中') {
+      title = isParentView ? '還沒有進行中的發布者聊天室' : '還沒有進行中的陪伴者聊天室';
+      subtitle = isParentView ? '發布任務後等待陪伴者申請就會有聊天室了' : '申請任務後就可以開始聊天了';
+    } else {
+      title = isParentView ? '沒有已關閉的發布者聊天室' : '沒有已關閉的陪伴者聊天室';
+      subtitle = '任務完成後的聊天室會出現在這裡';
+    }
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 
   /// 進入聊天室

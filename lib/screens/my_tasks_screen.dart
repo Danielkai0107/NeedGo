@@ -895,20 +895,32 @@ class _MyTasksScreenState extends State<MyTasksScreen>
   /// 建立我的應徵分頁
   Widget _buildMyApplicationsTab() {
     if (_myAppliedTasks.isEmpty) {
-      return _buildEmptyState(
-        icon: Icons.person_search_outlined,
-        title: '還沒有應徵任何任務',
-        subtitle: '前往地圖頁面尋找感興趣的任務，\n開始你的第一次應徵吧！',
-        buttonText: '前往地圖',
-        onButtonPressed: () {
-          // 簡單的反饋，用戶可以手動切換到地圖
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('請點擊底部導覽列的「地圖」標籤來尋找任務'),
-              duration: Duration(seconds: 2),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.person_search_outlined,
+              size: 64,
+              color: Colors.grey[400],
             ),
-          );
-        },
+            const SizedBox(height: 16),
+            Text(
+              '還沒有應徵任何任務',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '前往地圖頁面尋找感興趣的任務，\n開始你的第一次應徵吧！',
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       );
     }
 
