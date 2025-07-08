@@ -90,8 +90,35 @@ class _MyTasksScreenState extends State<MyTasksScreen>
         return data;
       }).toList();
 
-      // 手動排序我發布的任務
+      // 手動排序我發布的任務：先按狀態排序（進行中優先），再按時間排序
       createdTasks.sort((a, b) {
+        // 定義狀態優先級：進行中 > 已完成/已過期
+        int getStatusPriority(String status) {
+          switch (status) {
+            case 'open':
+            case 'accepted':
+              return 0; // 進行中狀態優先級最高
+            case 'completed':
+              return 1; // 已完成次之
+            case 'expired':
+              return 2; // 已過期最低
+            default:
+              return 0;
+          }
+        }
+
+        final aStatus = _getTaskStatus(a);
+        final bStatus = _getTaskStatus(b);
+
+        final aPriority = getStatusPriority(aStatus);
+        final bPriority = getStatusPriority(bStatus);
+
+        // 如果狀態優先級不同，按優先級排序
+        if (aPriority != bPriority) {
+          return aPriority.compareTo(bPriority);
+        }
+
+        // 如果狀態優先級相同，按時間排序（最新的在前）
         final aTime = a['createdAt'];
         final bTime = b['createdAt'];
         if (aTime is Timestamp && bTime is Timestamp) {
@@ -115,8 +142,35 @@ class _MyTasksScreenState extends State<MyTasksScreen>
         return data;
       }).toList();
 
-      // 手動排序我應徵的任務
+      // 手動排序我應徵的任務：先按狀態排序（進行中優先），再按時間排序
       appliedTasks.sort((a, b) {
+        // 定義狀態優先級：進行中 > 已完成/已過期
+        int getStatusPriority(String status) {
+          switch (status) {
+            case 'open':
+            case 'accepted':
+              return 0; // 進行中狀態優先級最高
+            case 'completed':
+              return 1; // 已完成次之
+            case 'expired':
+              return 2; // 已過期最低
+            default:
+              return 0;
+          }
+        }
+
+        final aStatus = _getTaskStatus(a);
+        final bStatus = _getTaskStatus(b);
+
+        final aPriority = getStatusPriority(aStatus);
+        final bPriority = getStatusPriority(bStatus);
+
+        // 如果狀態優先級不同，按優先級排序
+        if (aPriority != bPriority) {
+          return aPriority.compareTo(bPriority);
+        }
+
+        // 如果狀態優先級相同，按時間排序（最新的在前）
         final aTime = a['createdAt'];
         final bTime = b['createdAt'];
         if (aTime is Timestamp && bTime is Timestamp) {
@@ -783,64 +837,15 @@ class _MyTasksScreenState extends State<MyTasksScreen>
 
     return Column(
       children: [
-        // 篩選下拉選單
-        Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _createdTasksFilter,
-              icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-              iconSize: 24,
-              elevation: 0,
-              style: TextStyle(
-                color: Colors.grey[800],
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    _createdTasksFilter = newValue;
-                  });
-                }
-              },
-              items: _filterOptions.map<DropdownMenuItem<String>>((
-                String value,
-              ) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Row(
-                    children: [
-                      Icon(
-                        value == '全部'
-                            ? Icons.list_alt
-                            : value == '進行中'
-                            ? Icons.schedule_rounded
-                            : Icons.history_rounded,
-                        size: 20,
-                        color: Colors.blue[600],
-                      ),
-                      const SizedBox(width: 8),
-                      Text(value),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
+        // 篩選按鈕組
+        _buildFilterButtons(
+          filterOptions: _filterOptions,
+          currentFilter: _createdTasksFilter,
+          onFilterChanged: (String newFilter) {
+            setState(() {
+              _createdTasksFilter = newFilter;
+            });
+          },
         ),
 
         // 任務列表
@@ -887,64 +892,15 @@ class _MyTasksScreenState extends State<MyTasksScreen>
 
     return Column(
       children: [
-        // 篩選下拉選單
-        Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _appliedTasksFilter,
-              icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-              iconSize: 24,
-              elevation: 0,
-              style: TextStyle(
-                color: Colors.grey[800],
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    _appliedTasksFilter = newValue;
-                  });
-                }
-              },
-              items: _appliedFilterOptions.map<DropdownMenuItem<String>>((
-                String value,
-              ) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Row(
-                    children: [
-                      Icon(
-                        value == '全部'
-                            ? Icons.list_alt
-                            : value == '進行中'
-                            ? Icons.schedule_rounded
-                            : Icons.history_rounded,
-                        size: 20,
-                        color: Colors.green[600],
-                      ),
-                      const SizedBox(width: 8),
-                      Text(value),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
+        // 篩選按鈕組
+        _buildFilterButtons(
+          filterOptions: _appliedFilterOptions,
+          currentFilter: _appliedTasksFilter,
+          onFilterChanged: (String newFilter) {
+            setState(() {
+              _appliedTasksFilter = newFilter;
+            });
+          },
         ),
 
         // 任務列表
@@ -964,6 +920,63 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                 ),
         ),
       ],
+    );
+  }
+
+  /// 建立篩選按鈕組
+  Widget _buildFilterButtons({
+    required List<String> filterOptions,
+    required String currentFilter,
+    required Function(String) onFilterChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: Row(
+        children: filterOptions.asMap().entries.map((entry) {
+          final index = entry.key;
+          final option = entry.value;
+          final isSelected = option == currentFilter;
+          final isLast = index == filterOptions.length - 1;
+
+          return Expanded(
+            child: Container(
+              margin: EdgeInsets.only(right: isLast ? 0 : 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => onFilterChanged(option),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.black : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected ? Colors.black : Colors.grey[300]!,
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      option,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.grey[800],
+                        fontSize: 14,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
