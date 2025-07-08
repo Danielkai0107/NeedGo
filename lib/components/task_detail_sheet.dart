@@ -1132,8 +1132,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                           (widget.taskData['images'] as List).isNotEmpty)
                         _buildImagesSection(),
 
-                      // 申請者列表（僅Parent視角且未隱藏）
-                      if (widget.isParentView && !widget.hideApplicantsList)
+                      // 申請者列表（僅Parent視角且未隱藏，且非過去任務）
+                      if (widget.isParentView &&
+                          !widget.hideApplicantsList &&
+                          !_isPastTask())
                         _buildApplicantsSection(),
 
                       const SizedBox(height: 100), // 為按鈕留出空間

@@ -16,6 +16,7 @@ class ChatRoom {
   final Map<String, int> unreadCount;
   final bool isActive;
   final bool isConnectionLost;
+  final List<String> hiddenBy; // 記錄隱藏此聊天室的用戶ID列表
 
   ChatRoom({
     required this.id,
@@ -30,6 +31,7 @@ class ChatRoom {
     required this.unreadCount,
     this.isActive = true,
     this.isConnectionLost = false,
+    this.hiddenBy = const [], // 默認沒有被任何用戶隱藏
   });
 
   factory ChatRoom.fromFirestore(DocumentSnapshot doc) {
@@ -58,6 +60,9 @@ class ChatRoom {
             : {},
         isActive: data['isActive'] ?? true,
         isConnectionLost: data['isConnectionLost'] ?? false,
+        hiddenBy: data['hiddenBy'] != null
+            ? List<String>.from(data['hiddenBy'])
+            : [],
       );
     } catch (e) {
       print('解析聊天室數據失敗: $e');
@@ -78,6 +83,7 @@ class ChatRoom {
       'unreadCount': unreadCount,
       'isActive': isActive,
       'participants': [parentId, playerId], // 用於查詢
+      'hiddenBy': hiddenBy, // 記錄隱藏此聊天室的用戶ID列表
     };
   }
 }
@@ -276,6 +282,36 @@ class ChatService {
       await _sendSystemWelcomeMessage(chatId, taskTitle);
 
       print('✅ 聊天室創建成功: $chatId');
+    } else {
+      // 聊天室已存在，檢查是否被當前用戶隱藏
+      final currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        final chatData = doc.data()!;
+        final hiddenBy = List<String>.from(chatData['hiddenBy'] ?? []);
+
+        print('📋 聊天室 $chatId 已存在');
+        print('🔍 被隱藏的用戶列表: $hiddenBy');
+        print('👤 當前用戶: ${currentUser.uid}');
+
+        // 如果當前用戶隱藏了此聊天室，嘗試智能恢復
+        if (hiddenBy.contains(currentUser.uid)) {
+          print('🔄 檢測到聊天室被當前用戶隱藏，嘗試恢復...');
+          final restored = await smartRestoreChatRoom(chatId);
+          if (restored) {
+            print('✅ 聊天室已自動恢復: $chatId（任務進行中）');
+
+            // 為了確保 Stream 更新，觸發聊天室數據的輕微更新
+            await _firestore.collection('chats').doc(chatId).update({
+              'updatedAt': Timestamp.now(),
+            });
+            print('🔄 已觸發聊天室列表更新');
+          } else {
+            print('⚠️ 聊天室無法恢復: $chatId（任務可能已完成或過期）');
+          }
+        } else {
+          print('ℹ️ 聊天室未被當前用戶隱藏，無需恢復');
+        }
+      }
     }
 
     return chatId;
@@ -407,8 +443,9 @@ class ChatService {
             for (var doc in snapshot.docs) {
               try {
                 final chatRoom = ChatRoom.fromFirestore(doc);
-                // 在應用層過濾活躍的聊天室
-                if (chatRoom.isActive) {
+                // 在應用層過濾活躍的聊天室，並且沒有被當前用戶隱藏
+                if (chatRoom.isActive &&
+                    !chatRoom.hiddenBy.contains(currentUser.uid)) {
                   chatRooms.add(chatRoom);
                 }
               } catch (e) {
@@ -470,7 +507,13 @@ class ChatService {
                   final data = doc.data();
                   final isActive = data['isActive'] ?? true;
                   final isConnectionLost = data['isConnectionLost'] ?? false;
-                  if (!isActive || isConnectionLost) continue; // 跳過不活躍或失去聯繫的聊天室
+                  final hiddenBy = List<String>.from(data['hiddenBy'] ?? []);
+
+                  // 跳過不活躍、失去聯繫或被當前用戶隱藏的聊天室
+                  if (!isActive ||
+                      isConnectionLost ||
+                      hiddenBy.contains(currentUser.uid))
+                    continue;
 
                   final unreadCount = Map<String, int>.from(
                     data['unreadCount'] ?? {},
@@ -510,7 +553,13 @@ class ChatService {
                   final data = doc.data();
                   final isActive = data['isActive'] ?? true;
                   final isConnectionLost = data['isConnectionLost'] ?? false;
-                  if (!isActive || isConnectionLost) continue;
+                  final hiddenBy = List<String>.from(data['hiddenBy'] ?? []);
+
+                  // 跳過不活躍、失去聯繫或被當前用戶隱藏的聊天室
+                  if (!isActive ||
+                      isConnectionLost ||
+                      hiddenBy.contains(currentUser.uid))
+                    continue;
 
                   final parentId = data['parentId']?.toString() ?? '';
                   // 只計算我是 Parent 的聊天室
@@ -554,7 +603,13 @@ class ChatService {
                   final data = doc.data();
                   final isActive = data['isActive'] ?? true;
                   final isConnectionLost = data['isConnectionLost'] ?? false;
-                  if (!isActive || isConnectionLost) continue;
+                  final hiddenBy = List<String>.from(data['hiddenBy'] ?? []);
+
+                  // 跳過不活躍、失去聯繫或被當前用戶隱藏的聊天室
+                  if (!isActive ||
+                      isConnectionLost ||
+                      hiddenBy.contains(currentUser.uid))
+                    continue;
 
                   final playerId = data['playerId']?.toString() ?? '';
                   // 只計算我是 Player 的聊天室
@@ -600,36 +655,36 @@ class ChatService {
     return null;
   }
 
-  /// 刪除聊天室
+  /// 個人化隱藏聊天室
   static Future<void> deleteChatRoom(String chatId) async {
     try {
       final currentUser = _auth.currentUser;
       if (currentUser == null) throw Exception('用戶未登入');
 
-      // 軟刪除：將聊天室標記為不活躍
+      // 個人化隱藏：將當前用戶加入到 hiddenBy 列表中
       await _firestore.collection('chats').doc(chatId).update({
-        'isActive': false,
-        'deletedAt': Timestamp.now(),
-        'deletedBy': currentUser.uid,
+        'hiddenBy': FieldValue.arrayUnion([currentUser.uid]),
       });
 
-      print('✅ 聊天室已刪除: $chatId');
+      print('✅ 聊天室已隱藏: $chatId（僅對用戶 ${currentUser.uid} 隱藏）');
     } catch (e) {
-      print('刪除聊天室失敗: $e');
-      throw Exception('刪除聊天室失敗: $e');
+      print('隱藏聊天室失敗: $e');
+      throw Exception('隱藏聊天室失敗: $e');
     }
   }
 
-  /// 恢復聊天室
+  /// 恢復聊天室（從個人隱藏列表中移除）
   static Future<void> restoreChatRoom(String chatId) async {
     try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception('用戶未登入');
+
+      // 從 hiddenBy 列表中移除當前用戶
       await _firestore.collection('chats').doc(chatId).update({
-        'isActive': true,
-        'deletedAt': FieldValue.delete(),
-        'deletedBy': FieldValue.delete(),
+        'hiddenBy': FieldValue.arrayRemove([currentUser.uid]),
       });
 
-      print('✅ 聊天室已恢復: $chatId');
+      print('✅ 聊天室已恢復: $chatId（對用戶 ${currentUser.uid} 恢復顯示）');
     } catch (e) {
       print('恢復聊天室失敗: $e');
       throw Exception('恢復聊天室失敗: $e');
@@ -1047,6 +1102,222 @@ class ChatService {
       return await isTaskCompletedForConfiguredTime(taskId);
     } catch (e) {
       print('檢查聊天室清理狀態失敗: $e');
+      return false;
+    }
+  }
+
+  /// 測試聊天室恢復功能（用於調試）
+  static Future<Map<String, dynamic>> testChatRoomRestore(
+    String taskId,
+    String otherUserId,
+  ) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return {'success': false, 'message': '用戶未登入'};
+    }
+
+    try {
+      print('🧪 開始測試聊天室恢復功能');
+      print('📋 測試參數:');
+      print('   - 任務ID: $taskId');
+      print('   - 對方用戶ID: $otherUserId');
+      print('   - 當前用戶ID: ${currentUser.uid}');
+
+      // 確定 parent 和 player 角色
+      final isCurrentUserParent = true; // 假設當前用戶是發布者
+      final parentId = isCurrentUserParent ? currentUser.uid : otherUserId;
+      final playerId = isCurrentUserParent ? otherUserId : currentUser.uid;
+
+      final chatId = "${parentId}_${playerId}_$taskId";
+      print('🔍 生成的聊天室ID: $chatId');
+
+      // 檢查聊天室是否存在
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      if (!chatDoc.exists) {
+        return {'success': false, 'message': '聊天室不存在: $chatId'};
+      }
+
+      final chatData = chatDoc.data()!;
+      final hiddenBy = List<String>.from(chatData['hiddenBy'] ?? []);
+
+      print('📊 聊天室當前狀態:');
+      print('   - 是否活躍: ${chatData['isActive']}');
+      print('   - 被隱藏用戶: $hiddenBy');
+      print('   - 是否被當前用戶隱藏: ${hiddenBy.contains(currentUser.uid)}');
+
+      // 檢查任務狀態
+      final taskActive = await isTaskActive(taskId);
+      print('📊 任務狀態: ${taskActive ? "活躍" : "非活躍"}');
+
+      // 嘗試創建或恢復聊天室
+      final resultChatId = await createOrGetChatRoom(
+        parentId: parentId,
+        playerId: playerId,
+        taskId: taskId,
+        taskTitle: '測試任務',
+      );
+
+      print('✅ 測試完成，聊天室ID: $resultChatId');
+
+      return {
+        'success': true,
+        'message': '測試完成',
+        'chatId': resultChatId,
+        'wasHidden': hiddenBy.contains(currentUser.uid),
+        'taskActive': taskActive,
+      };
+    } catch (e) {
+      print('❌ 測試聊天室恢復功能失敗: $e');
+      return {'success': false, 'message': '測試失敗: $e'};
+    }
+  }
+
+  /// 檢查任務是否還在進行中（未完成且未過期）
+  static Future<bool> isTaskActive(String taskId) async {
+    try {
+      print('🔍 檢查任務是否活躍: $taskId');
+
+      final taskDoc = await _firestore.collection('posts').doc(taskId).get();
+      if (!taskDoc.exists) {
+        print('❌ 任務不存在: $taskId');
+        return false;
+      }
+
+      final taskData = taskDoc.data()!;
+      final rawStatus = taskData['status'] ?? 'open';
+      final acceptedApplicant = taskData['acceptedApplicant'];
+      final status = _getTaskStatus(taskData);
+
+      print('📊 任務詳細信息:');
+      print('   - 原始狀態: $rawStatus');
+      print('   - 已接受申請者: $acceptedApplicant');
+      print('   - 計算後狀態: $status');
+      print('   - 是否過期: ${_isTaskExpiredNow(taskData)}');
+
+      // 如果任務狀態為 open 或 accepted，則認為任務還在進行中
+      final isActive = status == 'open' || status == 'accepted';
+      print('✅ 任務活躍狀態結果: $isActive');
+
+      return isActive;
+    } catch (e) {
+      print('❌ 檢查任務狀態失敗: $e');
+      return false;
+    }
+  }
+
+  /// 獲取任務狀態（包含過期檢查）
+  static String _getTaskStatus(Map<String, dynamic> task) {
+    if (task['status'] == 'completed') return 'completed';
+    if (task['acceptedApplicant'] != null) return 'accepted';
+    if (_isTaskExpiredNow(task)) return 'expired';
+    return task['status'] ?? 'open';
+  }
+
+  /// 檢查任務是否已過期
+  static bool _isTaskExpiredNow(Map<String, dynamic> task) {
+    if (task['date'] == null) return false;
+
+    try {
+      DateTime taskDateTime;
+      final date = task['date'];
+      final time = task['time'];
+
+      // 解析日期
+      if (date is String) {
+        taskDateTime = DateTime.parse(date);
+      } else if (date is DateTime) {
+        taskDateTime = date;
+      } else if (date is Timestamp) {
+        taskDateTime = (date as Timestamp).toDate();
+      } else {
+        return false;
+      }
+
+      // 如果有時間資訊，使用精確時間
+      if (time != null && time is Map) {
+        final hour = time['hour'] ?? 0;
+        final minute = time['minute'] ?? 0;
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          hour,
+          minute,
+        );
+      } else {
+        // 如果沒有時間資訊，設定為當天 23:59
+        taskDateTime = DateTime(
+          taskDateTime.year,
+          taskDateTime.month,
+          taskDateTime.day,
+          23,
+          59,
+        );
+      }
+
+      final now = DateTime.now();
+      return now.isAfter(taskDateTime);
+    } catch (e) {
+      print('檢查任務過期時間失敗: $e');
+      return false;
+    }
+  }
+
+  /// 智能恢復聊天室（根據任務狀態決定是否可以恢復）
+  static Future<bool> smartRestoreChatRoom(String chatId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception('用戶未登入');
+
+      print('🔍 開始智能恢復聊天室: $chatId');
+
+      // 獲取聊天室資訊
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      if (!chatDoc.exists) {
+        print('❌ 聊天室不存在: $chatId');
+        return false;
+      }
+
+      final chatData = chatDoc.data()!;
+      final taskId = chatData['taskId'] as String?;
+      final hiddenBy = List<String>.from(chatData['hiddenBy'] ?? []);
+
+      print('📋 聊天室信息:');
+      print('   - 任務ID: $taskId');
+      print('   - 被隱藏用戶: $hiddenBy');
+      print('   - 當前用戶: ${currentUser.uid}');
+
+      // 檢查該用戶是否確實隱藏了此聊天室
+      if (!hiddenBy.contains(currentUser.uid)) {
+        print('⚠️ 用戶未隱藏此聊天室: $chatId');
+        return false;
+      }
+
+      if (taskId == null) {
+        print('❌ 聊天室缺少任務ID: $chatId');
+        return false;
+      }
+
+      // 檢查任務是否還在進行中
+      print('🔍 檢查任務狀態: $taskId');
+      final isActive = await isTaskActive(taskId);
+      print('📊 任務活躍狀態: $isActive');
+
+      if (!isActive) {
+        print('❌ 任務已完成或過期，無法恢復聊天室: $chatId, 任務ID: $taskId');
+        return false;
+      }
+
+      // 從 hiddenBy 列表中移除當前用戶
+      print('🔄 從隱藏列表中移除用戶...');
+      await _firestore.collection('chats').doc(chatId).update({
+        'hiddenBy': FieldValue.arrayRemove([currentUser.uid]),
+      });
+
+      print('✅ 聊天室已智能恢復: $chatId（任務進行中，對用戶 ${currentUser.uid} 恢復顯示）');
+      return true;
+    } catch (e) {
+      print('❌ 智能恢復聊天室失敗: $e');
       return false;
     }
   }

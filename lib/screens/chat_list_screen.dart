@@ -649,15 +649,24 @@ class _ChatListScreenState extends State<ChatListScreen>
   /// 恢復聊天室
   Future<void> _restoreChatRoom(ChatRoom chatRoom) async {
     try {
-      await ChatService.restoreChatRoom(chatRoom.id);
+      final success = await ChatService.smartRestoreChatRoom(chatRoom.id);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('聊天室「${chatRoom.taskTitle}」已恢復'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('聊天室「${chatRoom.taskTitle}」已恢復'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('聊天室「${chatRoom.taskTitle}」無法恢復\n任務可能已完成或過期'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
