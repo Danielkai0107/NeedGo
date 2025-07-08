@@ -7,6 +7,7 @@ import 'services/firebase_config.dart';
 import 'services/chat_service.dart';
 import 'routes.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'styles/app_colors.dart';
 
 /// 應用程式主入口
 /// AuthGate 會自動處理登入狀態判斷：
@@ -108,12 +109,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       title: 'MVP App',
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        // 優化主題配色
+        // 優化主題配色 - 使用品牌色
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
+          seedColor: AppColors.primary,
           brightness: Brightness.light,
         ),
         useMaterial3: true,
+        // 自定義按鈕主題
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: AppButtonStyles.primaryButton(),
+        ),
       ),
       // 初始路由設定為 '/', 會自動載入 AuthGate
       initialRoute: '/',

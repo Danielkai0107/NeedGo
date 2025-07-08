@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../components/task_detail_sheet.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
 import '../utils/custom_snackbar.dart';
+import '../styles/app_colors.dart';
 
 /// 我的活動頁面
 class MyTasksScreen extends StatefulWidget {
@@ -452,7 +453,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
               child: const Text('確認取消'),
             ),
           ],
@@ -590,7 +591,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                           side: BorderSide(
                             color: isDeleteAction
                                 ? Colors.red[400]!
-                                : Colors.orange[400]!,
+                                : AppColors.primary,
                           ),
                         ),
                         child: Text(
@@ -600,7 +601,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                             fontWeight: FontWeight.w500,
                             color: isDeleteAction
                                 ? Colors.red[600]
-                                : Colors.orange[600],
+                                : AppColors.primary,
                           ),
                         ),
                       ),
@@ -681,15 +682,15 @@ class _MyTasksScreenState extends State<MyTasksScreen>
   List<Color> _getStatusColors(String status) {
     switch (status) {
       case 'open':
-        return [Colors.blue[400]!, Colors.blue[600]!];
+        return [AppColors.primaryShade(400), AppColors.primaryShade(600)];
       case 'accepted':
-        return [Colors.orange[400]!, Colors.orange[600]!];
+        return [AppColors.primaryShade(400), AppColors.primaryShade(600)];
       case 'completed':
         return [Colors.green[400]!, Colors.green[600]!];
       case 'expired':
         return [Colors.grey[400]!, Colors.grey[600]!];
       default:
-        return [Colors.blue[400]!, Colors.blue[600]!];
+        return [AppColors.primaryShade(400), AppColors.primaryShade(600)];
     }
   }
 
@@ -717,13 +718,13 @@ class _MyTasksScreenState extends State<MyTasksScreen>
 
     switch (status) {
       case 'open':
-        backgroundColor = Colors.blue[50]!;
-        textColor = Colors.blue[700]!;
+        backgroundColor = AppColors.primaryShade(50);
+        textColor = AppColors.primaryShade(700);
         text = '進行中';
         break;
       case 'accepted':
-        backgroundColor = Colors.orange[50]!;
-        textColor = Colors.orange[700]!;
+        backgroundColor = AppColors.primaryShade(50);
+        textColor = AppColors.primaryShade(700);
         text = '已接受';
         break;
       case 'completed':
@@ -737,8 +738,8 @@ class _MyTasksScreenState extends State<MyTasksScreen>
         text = '已過期';
         break;
       default:
-        backgroundColor = Colors.blue[50]!;
-        textColor = Colors.blue[700]!;
+        backgroundColor = AppColors.primaryShade(50);
+        textColor = AppColors.primaryShade(700);
         text = '進行中';
     }
 
@@ -798,9 +799,9 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               ),
             ),
           ],
-          labelColor: Colors.orange[600],
+          labelColor: AppColors.primary,
           unselectedLabelColor: Colors.grey[600],
-          indicatorColor: Colors.orange[600],
+          indicatorColor: AppColors.primary,
           indicatorWeight: 3,
           labelStyle: const TextStyle(
             fontSize: 16,
@@ -1012,7 +1013,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
           ElevatedButton.icon(
             onPressed: onButtonPressed,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[600],
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               shape: RoundedRectangleBorder(
@@ -1186,7 +1187,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                         Icons.people_rounded,
                         size: 14,
                         color: applicantCount > 0
-                            ? Colors.blue[600]
+                            ? AppColors.primary
                             : Colors.grey[500],
                       ),
                       const SizedBox(width: 4),
@@ -1196,7 +1197,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: applicantCount > 0
-                              ? Colors.blue[600]
+                              ? AppColors.primary
                               : Colors.grey[500],
                         ),
                       ),
@@ -1256,7 +1257,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                         icon: const Icon(Icons.edit, size: 16),
                         label: const Text('編輯'),
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.orange[600],
+                          foregroundColor: AppColors.primary,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 4,
@@ -1341,7 +1342,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
           ElevatedButton(
             onPressed: onButtonPressed,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[600],
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(

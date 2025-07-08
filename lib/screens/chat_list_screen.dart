@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/chat_service.dart';
 import '../components/online_avatar.dart';
 import 'chat_detail_screen.dart';
+import '../styles/app_colors.dart';
 
 /// 聊天室列表頁面
 class ChatListScreen extends StatefulWidget {
@@ -84,10 +85,10 @@ class _ChatListScreenState extends State<ChatListScreen>
         bottom: TabBar(
           controller: _tabController,
           indicator: UnderlineTabIndicator(
-            borderSide: BorderSide(width: 2.0, color: Colors.blue[600]!),
+            borderSide: BorderSide(width: 2.0, color: AppColors.primary),
             insets: const EdgeInsets.symmetric(horizontal: 48.0),
           ),
-          labelColor: Colors.blue[600],
+          labelColor: AppColors.primary,
           unselectedLabelColor: Colors.grey[600],
           labelStyle: const TextStyle(
             fontSize: 16,

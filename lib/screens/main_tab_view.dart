@@ -8,6 +8,7 @@ import 'notification_screen.dart';
 import 'profile_screen.dart';
 import 'my_tasks_screen.dart';
 import '../services/chat_service.dart';
+import '../styles/app_colors.dart';
 
 /// 主要的底部導航欄容器
 class MainTabView extends StatefulWidget {
@@ -194,7 +195,7 @@ class _MainTabViewState extends State<MainTabView> {
     Widget iconWidget = Icon(
       displayIcon,
       size: 26,
-      color: isActive ? Colors.blue[600] : Colors.grey[600],
+      color: isActive ? Colors.grey[800] : Colors.grey[400],
     );
 
     // 如果有角標，包裝在 badges 中
@@ -233,7 +234,7 @@ class _MainTabViewState extends State<MainTabView> {
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: isActive ? Colors.blue[600] : Colors.grey[600],
+                  color: isActive ? Colors.grey[800] : Colors.grey[600],
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                 ),
                 textAlign: TextAlign.center,

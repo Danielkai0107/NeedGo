@@ -1,6 +1,7 @@
 // lib/screens/auth_view.dart
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../styles/app_colors.dart';
 
 class AuthView extends StatefulWidget {
   const AuthView({super.key});
@@ -61,13 +62,13 @@ class _AuthViewState extends State<AuthView> {
                         width: 160,
                         height: 80,
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade100,
+                          color: AppColors.primaryShade(50),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.app_registration,
                           size: 40,
-                          color: Colors.blue.shade600,
+                          color: AppColors.primary,
                         ),
                       );
                     },

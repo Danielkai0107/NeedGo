@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/custom_snackbar.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_date_time_field.dart';
+import '../styles/app_colors.dart';
 
 // 任務數據模型
 class TaskData {
@@ -243,7 +244,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
       _addressController.text = _taskData.address ?? ''; // 初始化地址
     } else {
       _taskData = TaskData();
-      
+
       // 如果有預填地點資料，使用它們
       if (widget.prefilledLocationData != null) {
         _taskData.address = widget.prefilledLocationData!['address'];
@@ -615,7 +616,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 child: ElevatedButton(
                   onPressed: widget.onSave,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -817,7 +818,9 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             height: 4,
             margin: EdgeInsets.only(right: index < _totalSteps - 1 ? 8 : 0),
             decoration: BoxDecoration(
-              color: isCompleted || isCurrent ? Colors.blue : Colors.grey[300],
+              color: isCompleted || isCurrent
+                  ? AppColors.primary
+                  : Colors.grey[300],
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -844,7 +847,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   fontSize: 15, // 按鈕文字大小
                   fontWeight: FontWeight.w600, // (選)字重
                 ),
-                side: const BorderSide(color: Colors.blue),
+                side: BorderSide(color: AppColors.primary),
               ),
               child: const Text('上一步'),
             ),
@@ -859,7 +862,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 ? null
                 : (_currentStep == _totalSteps - 1 ? _submitForm : _nextStep),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(
                 horizontal: 24.0, // 文字左右內部間距
@@ -1244,7 +1247,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     decoration: BoxDecoration(
                       border: Border.all(
                         color: totalImageCount < 3
-                            ? Colors.blue
+                            ? AppColors.primary
                             : Colors.grey[300]!,
                         style: BorderStyle.solid,
                       ),
@@ -1257,7 +1260,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           Icons.add_photo_alternate,
                           size: 32,
                           color: totalImageCount < 3
-                              ? Colors.blue
+                              ? AppColors.primary
                               : Colors.grey[400],
                         ),
                         const SizedBox(height: 4),
@@ -1266,7 +1269,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           style: TextStyle(
                             fontSize: 12,
                             color: totalImageCount < 3
-                                ? Colors.blue
+                                ? AppColors.primary
                                 : Colors.grey[400],
                           ),
                         ),
@@ -1347,7 +1350,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1395,9 +1398,9 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue : Colors.white,
+                    color: isSelected ? AppColors.primary : Colors.white,
                     border: Border.all(
-                      color: isSelected ? Colors.blue : Colors.grey[300]!,
+                      color: isSelected ? AppColors.primary : Colors.grey[300]!,
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -1762,7 +1765,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                                             ? FontWeight.bold
                                             : FontWeight.normal,
                                         color: selectedHour == index
-                                            ? Colors.blue
+                                            ? AppColors.primary
                                             : Colors.black,
                                       ),
                                     ),
@@ -1829,7 +1832,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                                             ? FontWeight.bold
                                             : FontWeight.normal,
                                         color: selectedMinute == minute
-                                            ? Colors.blue
+                                            ? AppColors.primary
                                             : Colors.black,
                                       ),
                                     ),
@@ -1863,7 +1866,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 Navigator.of(context).pop(selectedTime);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
               ),
               child: const Text('確認'),

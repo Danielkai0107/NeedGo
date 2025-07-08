@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../utils/custom_snackbar.dart';
 import '../services/chat_service.dart';
 import '../screens/chat_detail_screen.dart';
+import '../styles/app_colors.dart';
 
 /// 可重複使用的頭像組件，支援認證圖標
 class VerifiedAvatar extends StatelessWidget {
@@ -58,7 +59,7 @@ class VerifiedAvatar extends StatelessWidget {
               width: verifiedBadgeSize,
               height: verifiedBadgeSize,
               decoration: BoxDecoration(
-                color: Colors.blue[700],
+                color: AppColors.primary,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
@@ -792,7 +793,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                 Navigator.of(context).pop(); // 關閉任務詳情頁
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange[600],
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -1276,11 +1277,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       case 'completed':
         return [Colors.green[500]!, Colors.green[700]!];
       case 'accepted':
-        return [Colors.blue[500]!, Colors.blue[700]!];
+        return [AppColors.primaryShade(400), AppColors.primaryShade(600)];
       case 'expired':
         return [Colors.grey[500]!, Colors.grey[700]!];
       default:
-        return [Colors.orange[500]!, Colors.orange[700]!];
+        return [AppColors.primaryShade(400), AppColors.primaryShade(600)];
     }
   }
 
@@ -2078,7 +2079,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
               style: ElevatedButton.styleFrom(
                 backgroundColor: (status == 'open' || status == 'accepted')
                     ? Colors.green[600] // 任務結束用綠色
-                    : Colors.blue[700], // 編輯任務用藍色
+                    : AppColors.primary, // 編輯任務用品牌色
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24.0,
@@ -2158,7 +2159,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
               child: ElevatedButton(
                 onPressed: _isApplying ? null : _cancelApplication,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange[600],
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
@@ -3701,7 +3702,7 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
               child: ElevatedButton(
                 onPressed: () => _contactPublisher(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange[600],
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24.0,
