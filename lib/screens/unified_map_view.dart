@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../styles/map_styles.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
+import '../components/create_edit_task_bottom_sheet.dart' show TaskData;
 import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
 import '../components/map_marker_manager.dart';
@@ -1309,19 +1310,23 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         existingTask: taskData,
         onSubmit: (updatedTaskData) async {
-          Navigator.of(context).pop();
-          await _saveEditedTask(updatedTaskData.toJson());
+          // 不立即關閉彈窗，讓 CreateEditTaskBottomSheet 自己控制
+          await _saveEditedTask(updatedTaskData, taskData['id']);
         },
       ),
     );
   }
 
   /// 保存編輯的任務
-  Future<void> _saveEditedTask(Map<String, dynamic> taskData) async {
+  Future<void> _saveEditedTask(TaskData taskData, String taskId) async {
     try {
-      final taskId = taskData['id'];
+      // 上傳圖片並獲取完整任務數據
+      final taskDataWithImages = await taskData.toJsonWithUploadedImages(
+        taskId: taskId,
+      );
+
       await _firestore.collection('posts').doc(taskId).update({
-        ...taskData,
+        ...taskDataWithImages,
         'updatedAt': Timestamp.now(),
       });
 
@@ -1382,8 +1387,8 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       isDismissible: true,
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         onSubmit: (taskData) async {
-          Navigator.of(context).pop();
-          await _saveNewTask(taskData.toJson());
+          // 不立即關閉彈窗，讓 CreateEditTaskBottomSheet 自己控制
+          await _saveNewTask(taskData);
         },
       ),
     );
@@ -1410,28 +1415,34 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         prefilledLocationData: prefilledData,
         onSubmit: (taskData) async {
-          Navigator.of(context).pop();
-          await _saveNewTask(taskData.toJson());
+          // 不立即關閉彈窗，讓 CreateEditTaskBottomSheet 自己控制
+          await _saveNewTask(taskData);
         },
       ),
     );
   }
 
   /// 保存新任務
-  Future<void> _saveNewTask(Map<String, dynamic> taskData) async {
+  Future<void> _saveNewTask(TaskData taskData) async {
     print('💾 開始保存新任務到 Firestore...');
-    print('📋 原始任務數據: $taskData');
 
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         print('❌ 用戶未登入，無法保存任務');
+        if (mounted) {
+          CustomSnackBar.showError(context, '請先登入');
+        }
         return;
       }
 
+      // 上傳圖片並獲取完整任務數據
+      print('🖼️ 處理任務圖片...');
+      final taskDataWithImages = await taskData.toJsonWithUploadedImages();
+
       // 創建任務資料
       final newTaskData = {
-        ...taskData,
+        ...taskDataWithImages,
         'userId': user.uid,
         'createdAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),
@@ -1444,6 +1455,9 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       print('   - title: ${newTaskData['title']}');
       print('   - name: ${newTaskData['name']}');
       print('   - address: ${newTaskData['address']}');
+      print(
+        '   - images: ${newTaskData['images']} (${(newTaskData['images'] as List).length} 張)',
+      );
       print(
         '   - lat: ${newTaskData['lat']} (${newTaskData['lat'].runtimeType})',
       );

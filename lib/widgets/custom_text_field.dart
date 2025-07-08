@@ -199,7 +199,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
               // 字數統計
               if (widget.maxLength != null)
                 Text(
-                  '${widget.controller.text.length}個字 (最多${widget.maxLength}個字)',
+                  '${widget.controller.text.length} 個字 ( 最多 ${widget.maxLength} 個字 )',
                   style: TextStyle(
                     color: Colors.grey.withValues(alpha: 0.6),
                     fontSize: 12,

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../components/task_detail_sheet.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
+import '../components/create_edit_task_bottom_sheet.dart' show TaskData;
 import '../utils/custom_snackbar.dart';
 import '../styles/app_colors.dart';
 
@@ -362,20 +363,25 @@ class _MyTasksScreenState extends State<MyTasksScreen>
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         existingTask: taskData,
         onSubmit: (updatedTaskData) async {
-          Navigator.of(context).pop();
-          await _saveEditedTask(updatedTaskData.toJson());
+          // 不立即關閉彈窗，讓 CreateEditTaskBottomSheet 自己控制
+          await _saveEditedTask(updatedTaskData);
         },
       ),
     );
   }
 
   /// 保存編輯的任務
-  Future<void> _saveEditedTask(Map<String, dynamic> taskData) async {
+  Future<void> _saveEditedTask(TaskData taskData) async {
     if (_editingTaskId == null) return;
 
     try {
+      // 上傳圖片並獲取完整任務數據
+      final taskDataWithImages = await taskData.toJsonWithUploadedImages(
+        taskId: _editingTaskId,
+      );
+
       await _firestore.collection('posts').doc(_editingTaskId).update({
-        ...taskData,
+        ...taskDataWithImages,
         'updatedAt': Timestamp.now(),
       });
 
@@ -644,21 +650,24 @@ class _MyTasksScreenState extends State<MyTasksScreen>
       isDismissible: true,
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         onSubmit: (taskData) async {
-          Navigator.of(context).pop();
-          await _saveNewTask(taskData.toJson());
+          // 不立即關閉彈窗，讓 CreateEditTaskBottomSheet 自己控制
+          await _saveNewTask(taskData);
         },
       ),
     );
   }
 
   /// 保存新任務
-  Future<void> _saveNewTask(Map<String, dynamic> taskData) async {
+  Future<void> _saveNewTask(TaskData taskData) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // 上傳圖片並獲取完整任務數據
+      final taskDataWithImages = await taskData.toJsonWithUploadedImages();
+
       await _firestore.collection('posts').add({
-        ...taskData,
+        ...taskDataWithImages,
         'userId': user.uid,
         'createdAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),

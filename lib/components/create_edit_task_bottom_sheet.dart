@@ -6,6 +6,8 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/custom_snackbar.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_date_time_field.dart';
@@ -61,6 +63,82 @@ class TaskData {
   // 取得總圖片數量
   int get totalImageCount => images.length + existingImageUrls.length;
 
+  /// 上傳新圖片到 Firebase Storage 並返回完整的任務數據
+  Future<Map<String, dynamic>> toJsonWithUploadedImages({
+    String? taskId,
+    Function(String)? onProgressUpdate,
+  }) async {
+    print('🖼️ 開始處理任務圖片上傳...');
+    print('   - 新圖片數量: ${images.length}');
+    print('   - 現有圖片數量: ${existingImageUrls.length}');
+
+    onProgressUpdate?.call('準備上傳圖片...');
+
+    // 上傳新圖片到 Firebase Storage
+    final List<String> newImageUrls = [];
+
+    if (images.isNotEmpty) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('用戶未登入，無法上傳圖片');
+      }
+
+      // 使用任務 ID 或時間戳作為文件夾名稱
+      final folderName =
+          taskId ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+      for (int i = 0; i < images.length; i++) {
+        try {
+          onProgressUpdate?.call('上傳第 ${i + 1}/${images.length} 張圖片...');
+          print('   📤 上傳第 ${i + 1} 張圖片...');
+
+          // 創建 Storage 引用
+          final storageRef = FirebaseStorage.instance.ref().child(
+            'task_images/$folderName/image_$i.png',
+          );
+
+          // 上傳圖片
+          await storageRef.putData(
+            images[i],
+            SettableMetadata(contentType: 'image/png'),
+          );
+
+          // 獲取下載 URL
+          final downloadUrl = await storageRef.getDownloadURL();
+          newImageUrls.add(downloadUrl);
+
+          print('   ✅ 第 ${i + 1} 張圖片上傳成功: ${downloadUrl.substring(0, 50)}...');
+        } catch (e) {
+          print('   ❌ 第 ${i + 1} 張圖片上傳失敗: $e');
+          throw Exception('圖片上傳失敗: $e');
+        }
+      }
+    }
+
+    onProgressUpdate?.call('圖片上傳完成，正在保存任務...');
+
+    // 合併現有圖片 URL 和新上傳的 URL
+    final allImageUrls = [...existingImageUrls, ...newImageUrls];
+
+    print('🎯 圖片處理完成，總圖片數: ${allImageUrls.length}');
+
+    // 返回包含圖片 URL 的完整數據
+    return {
+      'title': title,
+      'name': title, // 兼容現有字段
+      'date': date?.toIso8601String(),
+      'time': time != null
+          ? {'hour': time!.hour, 'minute': time!.minute}
+          : null,
+      'content': content,
+      'price': price,
+      'address': address,
+      'lat': lat,
+      'lng': lng,
+      'images': allImageUrls, // 包含所有圖片 URL
+    };
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'title': title,
@@ -74,6 +152,7 @@ class TaskData {
       'address': address,
       'lat': lat,
       'lng': lng,
+      'images': existingImageUrls, // 只包含現有的圖片 URL
     };
   }
 }
@@ -169,6 +248,10 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   bool _isSubmitting = false;
   final ImagePicker _imagePicker = ImagePicker();
   List<Map<String, dynamic>> _locationSuggestions = []; // 地址搜尋建議
+
+  // 新增：上傳狀態追蹤
+  String _uploadStatus = '';
+  bool _showSuccessAnimation = false;
 
   // 錯誤提示狀態
   String? _titleError;
@@ -463,6 +546,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     if (mounted) {
       setState(() {
         _isSubmitting = true;
+        _uploadStatus = '準備提交...';
+        _showSuccessAnimation = false;
       });
     }
 
@@ -475,19 +560,105 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         _taskData.title = _titleController.text;
         _taskData.content = _contentController.text;
 
-        widget.onSubmit?.call(_taskData);
+        // 先處理圖片上傳並顯示進度
+        if (_taskData.images.isNotEmpty) {
+          setState(() {
+            _uploadStatus = '上傳圖片中...';
+          });
 
-        // 不在這裡執行 pop，由外部處理
+          // 如果是編輯模式，使用現有任務的ID
+          final taskId = widget.existingTask?['id'];
+
+          // 上傳圖片並獲取包含圖片 URL 的任務數據
+          final taskDataWithImages = await _taskData.toJsonWithUploadedImages(
+            taskId: taskId,
+            onProgressUpdate: (status) {
+              if (mounted) {
+                setState(() {
+                  _uploadStatus = status;
+                });
+              }
+            },
+          );
+
+          // 創建帶有圖片 URL 的 TaskData
+          final finalTaskData = TaskData(
+            title: taskDataWithImages['title'],
+            date: taskDataWithImages['date'] != null
+                ? DateTime.parse(taskDataWithImages['date'])
+                : null,
+            time: taskDataWithImages['time'] != null
+                ? TimeOfDay(
+                    hour: taskDataWithImages['time']['hour'],
+                    minute: taskDataWithImages['time']['minute'],
+                  )
+                : null,
+            content: taskDataWithImages['content'],
+            price: taskDataWithImages['price'],
+            address: taskDataWithImages['address'],
+            lat: taskDataWithImages['lat'],
+            lng: taskDataWithImages['lng'],
+            existingImageUrls: List<String>.from(taskDataWithImages['images']),
+          );
+
+          if (mounted) {
+            setState(() {
+              _uploadStatus = widget.existingTask != null
+                  ? '更新任務...'
+                  : '保存任務到資料庫...';
+            });
+          }
+
+          // 調用提交回調
+          await widget.onSubmit?.call(finalTaskData);
+        } else {
+          // 沒有新圖片需要上傳
+          if (mounted) {
+            setState(() {
+              _uploadStatus = widget.existingTask != null
+                  ? '更新任務...'
+                  : '保存任務到資料庫...';
+            });
+          }
+
+          // 直接提交現有的任務數據
+          await widget.onSubmit?.call(_taskData);
+        }
+
+        // 顯示成功狀態
+        if (mounted) {
+          setState(() {
+            _uploadStatus = widget.existingTask != null ? '任務更新成功！' : '任務創建成功！';
+            _showSuccessAnimation = true;
+          });
+
+          // 等待2秒後自動關閉彈窗
+          await Future.delayed(const Duration(seconds: 2));
+
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        }
       }
     } catch (e) {
-      // 不使用 SnackBar，避免當機，改為 print 調試
-      print('提交失敗: $e');
-    } finally {
+      // 顯示錯誤狀態
       if (mounted) {
         setState(() {
-          _isSubmitting = false;
+          _uploadStatus = '創建失敗：$e';
+          _showSuccessAnimation = false;
+        });
+
+        // 等待3秒後重置狀態
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _isSubmitting = false;
+              _uploadStatus = '';
+            });
+          }
         });
       }
+      print('提交失敗: $e');
     }
   }
 
@@ -831,6 +1002,86 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
   // 控制欄
   Widget _buildControlBar() {
+    // 如果正在提交，顯示上傳狀態
+    if (_isSubmitting) {
+      return Column(
+        children: [
+          // 上傳狀態指示器
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            decoration: BoxDecoration(
+              color: _showSuccessAnimation ? Colors.green[50] : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _showSuccessAnimation
+                    ? Colors.green[300]!
+                    : Colors.grey[300]!,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                // 圖標
+                if (_showSuccessAnimation)
+                  Icon(Icons.check_circle, color: Colors.green[600], size: 24)
+                else
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.grey[500]!,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 12),
+                // 狀態文字
+                Expanded(
+                  child: Text(
+                    _uploadStatus,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: _showSuccessAnimation
+                          ? Colors.green[700]
+                          : Colors.grey[700],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // 禁用的按鈕
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: null, // 禁用
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[300],
+                foregroundColor: Colors.grey[500],
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 16,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+              child: const Text('處理中...'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // 正常的控制按鈕
     return Row(
       children: [
         // 上一步按鈕
@@ -839,7 +1090,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             child: OutlinedButton(
               onPressed: _previousStep,
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.grey,
+                foregroundColor: Colors.grey[500],
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24.0, // 文字左右內部間距
                   vertical: 16, // 文字上下內部間距
@@ -848,7 +1099,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   fontSize: 15, // 按鈕文字大小
                   fontWeight: FontWeight.w600, // (選)字重
                 ),
-                side: BorderSide(color: Colors.grey),
+                side: BorderSide(color: Colors.grey[400]!),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(100),
                 ),
@@ -862,9 +1113,9 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         // 下一步/提交按鈕
         Expanded(
           child: ElevatedButton(
-            onPressed: _isSubmitting
-                ? null
-                : (_currentStep == _totalSteps - 1 ? _submitForm : _nextStep),
+            onPressed: _currentStep == _totalSteps - 1
+                ? _submitForm
+                : _nextStep,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -872,7 +1123,6 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 horizontal: 24.0, // 文字左右內部間距
                 vertical: 16, // 文字上下內部間距
               ),
-              disabledBackgroundColor: Colors.grey[300],
               textStyle: const TextStyle(
                 fontSize: 15, // 按鈕文字大小
                 fontWeight: FontWeight.w600, // (選)字重
@@ -881,16 +1131,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                 borderRadius: BorderRadius.circular(100),
               ),
             ),
-            child: _isSubmitting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Text(_currentStep == _totalSteps - 1 ? '送出' : '下一步'),
+            child: Text(_currentStep == _totalSteps - 1 ? '送出' : '下一步'),
           ),
         ),
       ],
@@ -972,8 +1213,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 2/6: 任務內容',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            '請填寫任務內容',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
 
@@ -1013,8 +1254,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 3/6: 地址選擇',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            '請選擇任務地址',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
 
@@ -1083,7 +1324,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.green[200]!),
               ),
               child: Row(
@@ -1122,8 +1363,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 4/6: 圖片上傳',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            '請上傳任務圖片 (選填)',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
@@ -1154,7 +1395,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     children: [
                       Container(
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
+                          border: Border.all(color: Colors.grey[400]!),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: ClipRRect(
@@ -1183,21 +1424,39 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           ),
                         ),
                       ),
+                      // 優化的刪除按鈕
                       Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => _removeExistingImage(index),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 16,
-                              color: Colors.white,
+                        top: 0,
+                        right: 0,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _removeExistingImage(index),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              width: 32, // 增加觸摸區域
+                              height: 32,
+                              alignment: Alignment.center,
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: Colors.red[600],
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black26,
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -1224,21 +1483,39 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           ),
                         ),
                       ),
+                      // 優化的刪除按鈕
                       Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => _removeNewImage(newImageIndex),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 16,
-                              color: Colors.white,
+                        top: 0,
+                        right: 0,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _removeNewImage(newImageIndex),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              width: 32, // 增加觸摸區域
+                              height: 32,
+                              alignment: Alignment.center,
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: Colors.red[600],
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black26,
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -1276,8 +1553,8 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                           style: TextStyle(
                             fontSize: 12,
                             color: totalImageCount < 3
-                                ? Colors.grey[400]
-                                : Colors.grey[400],
+                                ? Colors.grey[600]
+                                : Colors.grey[600],
                           ),
                         ),
                       ],
@@ -1336,18 +1613,16 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 5/6: 報價選項',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            '請填寫任務酬勞',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 24),
 
-          const Text('任務報酬', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Text(
-            '設定您願意支付的報酬金額（以 100 為單位）',
+            '設定你願意支付的報酬金額（以 100 為單位）',
             style: TextStyle(color: Colors.grey[600], fontSize: 14),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 40),
 
           // 報酬滑桿
           Column(
@@ -1360,12 +1635,13 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   color: AppColors.primary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 4),
               Slider(
                 value: _taskData.price.toDouble(),
                 min: 0,
                 max: 1000,
                 divisions: 10,
+                activeColor: AppColors.primary,
                 label: _taskData.price == 0 ? '免費' : 'NT\$ ${_taskData.price}',
                 onChanged: (value) {
                   setState(() {
@@ -1376,18 +1652,33 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('免費', style: TextStyle(color: Colors.grey[600])),
-                  Text('NT\$ 1000', style: TextStyle(color: Colors.grey[600])),
+                  Container(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Text(
+                      '免費',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Text(
+                      '\$ 1000',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 48),
 
           // 快速選擇按鈕
-          const Text('快速選擇', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
+          const Text(
+            '快速選擇',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -1443,16 +1734,18 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '步驟 6/6: 預覽與送出',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            '預覽任務內容',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
 
           // 預覽卡片
           Card(
-            elevation: 2,
+            elevation: 0,
+            color: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey[300]!),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -1463,7 +1756,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                   Text(
                     _taskData.title,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1478,31 +1771,34 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                         _taskData.date != null && _taskData.time != null
                             ? '${_taskData.date!.year}/${_taskData.date!.month}/${_taskData.date!.day} ${_taskData.time!.format(context)}'
                             : '未設定時間',
-                        style: TextStyle(color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 15, color: Colors.grey[600]),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
 
                   // 內容
                   const Text(
                     '任務內容',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                   Text(
                     _taskData.content,
-                    style: TextStyle(color: Colors.grey[700]),
+                    style: TextStyle(fontSize: 15, color: Colors.grey[700]),
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
 
                   // 圖片
                   if (_taskData.totalImageCount > 0) ...[
                     const Text(
                       '任務圖片',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
@@ -1513,8 +1809,12 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                         itemBuilder: (context, index) {
                           return Container(
                             margin: const EdgeInsets.only(right: 8),
-                            child: ClipRRect(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
                               borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(7),
                               child: index < _taskData.existingImageUrls.length
                                   ? Image.network(
                                       _taskData.existingImageUrls[index],
@@ -1559,7 +1859,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                         },
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 24),
                   ],
 
                   // 報酬
@@ -1737,6 +2037,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     Expanded(
                       child: Column(
                         children: [
+                          const SizedBox(height: 12),
                           const Text(
                             '時',
                             style: TextStyle(
@@ -1788,7 +2089,12 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
 
                     // 分隔符
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.only(
+                        left: 16,
+                        right: 16,
+                        top: 36,
+                      ),
+                      alignment: Alignment.center,
                       child: const Text(
                         ':',
                         style: TextStyle(
@@ -1802,6 +2108,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
                     Expanded(
                       child: Column(
                         children: [
+                          const SizedBox(height: 12),
                           const Text(
                             '分',
                             style: TextStyle(
@@ -1864,6 +2171,10 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               },
               style: TextButton.styleFrom(
                 foregroundColor: Colors.grey,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(100),
                   side: BorderSide(color: Colors.grey),
@@ -1871,6 +2182,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               ),
               child: const Text('取消'),
             ),
+
             ElevatedButton(
               onPressed: () {
                 final selectedTime = TimeOfDay(
@@ -1882,6 +2194,11 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(100),
                 ),

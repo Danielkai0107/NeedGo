@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
+import '../components/create_edit_task_bottom_sheet.dart' show TaskData;
 import '../styles/map_styles.dart';
 import '../utils/custom_snackbar.dart';
 
@@ -420,17 +421,18 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
 
     // 陪伴者視角：先顯示地點資訊和任務列表
     final taskPosition = LatLng(taskData['lat'], taskData['lng']);
-    
+
     // 收集該位置附近的所有任務
     final nearbyTasks = _allPosts.where((task) {
       if (task['lat'] == null || task['lng'] == null) return false;
-      if (task['userId'] == FirebaseAuth.instance.currentUser?.uid) return false;
-      
+      if (task['userId'] == FirebaseAuth.instance.currentUser?.uid)
+        return false;
+
       final distance = _calculateDistance(
         taskPosition,
         LatLng(task['lat'], task['lng']),
       );
-      
+
       return distance <= 100; // 100米內的任務
     }).toList();
 
@@ -513,8 +515,8 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
       isDismissible: true,
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         onSubmit: (taskData) async {
-          Navigator.of(context).pop();
-          await _saveNewTask(taskData.toJson());
+          // 不立即關閉彈窗，讓 CreateEditTaskBottomSheet 自己控制
+          await _saveNewTask(taskData);
         },
       ),
     );
@@ -534,21 +536,24 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
       builder: (context) => new_task_sheet.CreateEditTaskBottomSheet(
         existingTask: taskData,
         onSubmit: (updatedTaskData) async {
-          Navigator.of(context).pop();
-          await _saveEditedTask(updatedTaskData.toJson());
+          // 不立即關閉彈窗，讓 CreateEditTaskBottomSheet 自己控制
+          await _saveEditedTask(updatedTaskData, taskData['id']);
         },
       ),
     );
   }
 
   /// 保存新任務
-  Future<void> _saveNewTask(Map<String, dynamic> taskData) async {
+  Future<void> _saveNewTask(TaskData taskData) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // 上傳圖片並獲取完整任務數據
+      final taskDataWithImages = await taskData.toJsonWithUploadedImages();
+
       await _firestore.collection('posts').add({
-        ...taskData,
+        ...taskDataWithImages,
         'userId': user.uid,
         'createdAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),
@@ -569,11 +574,15 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
   }
 
   /// 保存編輯的任務
-  Future<void> _saveEditedTask(Map<String, dynamic> taskData) async {
+  Future<void> _saveEditedTask(TaskData taskData, String taskId) async {
     try {
-      final taskId = taskData['id'];
+      // 上傳圖片並獲取完整任務數據
+      final taskDataWithImages = await taskData.toJsonWithUploadedImages(
+        taskId: taskId,
+      );
+
       await _firestore.collection('posts').doc(taskId).update({
-        ...taskData,
+        ...taskDataWithImages,
         'updatedAt': Timestamp.now(),
       });
 
