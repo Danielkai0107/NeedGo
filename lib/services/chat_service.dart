@@ -391,6 +391,8 @@ class ChatService {
     if (chatDoc.exists) {
       final data = chatDoc.data()!;
       final unreadCount = Map<String, int>.from(data['unreadCount'] ?? {});
+      final hiddenBy = List<String>.from(data['hiddenBy'] ?? []);
+      final taskId = data['taskId'] as String?;
 
       // 更新對方的未讀數量
       for (String userId in unreadCount.keys) {
@@ -399,12 +401,43 @@ class ChatService {
         }
       }
 
+      // 檢查是否有用戶隱藏了此聊天室，如果有新訊息且任務仍在進行中，自動恢復聊天室
+      List<String> updatedHiddenBy = List.from(hiddenBy);
+      if (hiddenBy.isNotEmpty && taskId != null) {
+        print('🔍 檢測到聊天室 $chatId 被 ${hiddenBy.length} 個用戶隱藏，檢查是否需要恢復...');
+
+        // 檢查任務是否仍在進行中
+        final isActive = await isTaskActive(taskId);
+        print('📊 任務 $taskId 活躍狀態: $isActive');
+
+        if (isActive) {
+          // 任務仍在進行中，將所有隱藏用戶從列表中移除（恢復聊天室）
+          for (String hiddenUserId in hiddenBy) {
+            if (hiddenUserId != senderId) {
+              // 不是發送者的用戶才需要恢復
+              updatedHiddenBy.remove(hiddenUserId);
+              print('🔄 自動恢復聊天室給用戶: $hiddenUserId');
+            }
+          }
+        } else {
+          print('⚠️ 任務已完成或過期，不恢復聊天室');
+        }
+      }
+
+      // 更新聊天室資訊
       await chatRef.update({
         'lastMessage': lastMessage,
         'lastMessageSender': senderId,
         'updatedAt': Timestamp.now(),
         'unreadCount': unreadCount,
+        'hiddenBy': updatedHiddenBy,
       });
+
+      // 如果有聊天室被恢復，記錄日誌
+      if (hiddenBy.length > updatedHiddenBy.length) {
+        final restoredCount = hiddenBy.length - updatedHiddenBy.length;
+        print('✅ 因新訊息自動恢復 $restoredCount 個用戶的聊天室: $chatId');
+      }
     }
   }
 
