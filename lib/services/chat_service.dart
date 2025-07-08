@@ -485,8 +485,18 @@ class ChatService {
                 print('跳過無效的聊天室數據: ${doc.id}, 錯誤: $e');
               }
             }
-            // 在應用層排序
-            chatRooms.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+            // 在應用層排序：已失去聯繫的聊天室排在最後
+            chatRooms.sort((a, b) {
+              // 首先按是否失去聯繫分組
+              if (a.isConnectionLost && !b.isConnectionLost) {
+                return 1; // a排在後面
+              } else if (!a.isConnectionLost && b.isConnectionLost) {
+                return -1; // a排在前面
+              } else {
+                // 同組內按更新時間排序（最新的在前）
+                return b.updatedAt.compareTo(a.updatedAt);
+              }
+            });
             return chatRooms;
           });
     } catch (e) {
@@ -1027,6 +1037,12 @@ class ChatService {
         final taskId = chatData['taskId'] as String?;
         final parentId = chatData['parentId'] as String?;
         final playerId = chatData['playerId'] as String?;
+        final isConnectionLost = chatData['isConnectionLost'] ?? false;
+
+        // 跳過已經失去聯繫的聊天室，避免重複處理
+        if (isConnectionLost) {
+          continue;
+        }
 
         if (taskId == null || parentId == null || playerId == null) {
           continue;
@@ -1041,27 +1057,17 @@ class ChatService {
           // 清空聊天室訊息
           await clearChatRoomMessages(chatId);
 
-          // 獲取用戶名稱
-          final parentInfo = await getUserInfo(parentId);
-          final playerInfo = await getUserInfo(playerId);
+          // 發送一條簡潔的失去聯繫訊息
+          await _sendConnectionLostMessage(chatId);
 
-          final parentName = parentInfo?['name'] ?? '用戶';
-          final playerName = playerInfo?['name'] ?? '用戶';
-
-          // 為每個用戶發送個人化的系統訊息
-          await _sendPersonalizedSystemMessage(
-            chatId: chatId,
-            parentId: parentId,
-            playerId: playerId,
-            parentName: parentName,
-            playerName: playerName,
-          );
-
-          // 標記聊天室為已清理，但保持顯示給用戶
+          // 標記聊天室為已清理
           await _firestore.collection('chats').doc(chatId).update({
             'isConnectionLost': true,
             'isCleanedUp': true,
             'cleanedUpAt': Timestamp.now(),
+            'lastMessage': '聯繫已失去',
+            'lastMessageSender': 'system',
+            'updatedAt': Timestamp.now(),
           });
 
           cleanedCount++;
@@ -1071,6 +1077,33 @@ class ChatService {
       print('✅ 聊天室清理完成，共清理 $cleanedCount 個聊天室');
     } catch (e) {
       print('❌ 清理過期聊天室失敗: $e');
+    }
+  }
+
+  /// 發送失去聯繫訊息（簡化版本，避免重複）
+  static Future<void> _sendConnectionLostMessage(String chatId) async {
+    try {
+      final systemMessage = ChatMessage(
+        id: '',
+        senderId: 'system',
+        senderName: '系統',
+        senderAvatar: '',
+        content: '任務已結束，聊天室已關閉。',
+        timestamp: DateTime.now(),
+        type: 'system',
+        isRead: true,
+      );
+
+      await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .add(systemMessage.toFirestore());
+
+      print('✅ 失去聯繫訊息發送成功: $chatId');
+    } catch (e) {
+      print('發送失去聯繫訊息失敗: $e');
+      throw Exception('發送失去聯繫訊息失敗: $e');
     }
   }
 

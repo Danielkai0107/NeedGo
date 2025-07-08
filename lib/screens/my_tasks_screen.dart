@@ -26,11 +26,11 @@ class _MyTasksScreenState extends State<MyTasksScreen>
   String? _editingTaskId;
 
   // 篩選選項
-  String _createdTasksFilter = '全部';
-  String _appliedTasksFilter = '全部';
+  String _createdTasksFilter = '進行中';
+  String _appliedTasksFilter = '進行中';
 
-  final List<String> _filterOptions = ['全部', '進行中', '過去發布'];
-  final List<String> _appliedFilterOptions = ['全部', '進行中', '過去應徵'];
+  final List<String> _filterOptions = ['進行中', '過去發布'];
+  final List<String> _appliedFilterOptions = ['進行中', '過去應徵'];
 
   @override
   void initState() {
@@ -279,9 +279,8 @@ class _MyTasksScreenState extends State<MyTasksScreen>
         return _activeCreatedTasks;
       case '過去發布':
         return _pastCreatedTasks;
-      case '全部':
       default:
-        return _myCreatedTasks;
+        return _activeCreatedTasks;
     }
   }
 
@@ -292,9 +291,8 @@ class _MyTasksScreenState extends State<MyTasksScreen>
         return _activeAppliedTasks;
       case '過去應徵':
         return _pastAppliedTasks;
-      case '全部':
       default:
-        return _myAppliedTasks;
+        return _activeAppliedTasks;
     }
   }
 
@@ -970,7 +968,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(100),
                   onTap: () => onFilterChanged(option),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -979,7 +977,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                     ),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.black : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(100),
                       border: Border.all(
                         color: isSelected ? Colors.black : Colors.grey[300]!,
                         width: 1,
@@ -1270,8 +1268,6 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-
-
               ],
             ),
           ),

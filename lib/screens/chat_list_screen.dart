@@ -111,7 +111,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   child: _buildTabContent(
                     icon: Icons.business_rounded,
                     text: '我是發布者',
-                    unreadCount: parentUnreadCount,
+                    itemCount: _getChatRoomCountForRole(snapshot.data, true),
                   ),
                 );
               },
@@ -128,7 +128,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   child: _buildTabContent(
                     icon: Icons.person_rounded,
                     text: '我是陪伴者',
-                    unreadCount: playerUnreadCount,
+                    itemCount: _getChatRoomCountForRole(snapshot.data, false),
                   ),
                 );
               },
@@ -169,18 +169,35 @@ class _ChatListScreenState extends State<ChatListScreen>
     return totalUnread;
   }
 
-  /// 建立 Tab 內容（包含圖標、文字和未讀計數）
+  /// 計算指定角色的聊天室數量
+  int _getChatRoomCountForRole(List<ChatRoom>? chatRooms, bool isParentRole) {
+    if (chatRooms == null) return 0;
+
+    int count = 0;
+    for (final chatRoom in chatRooms) {
+      final isCurrentUserParent = currentUser?.uid == chatRoom.parentId;
+
+      // 如果是當前需要計算的角色，計數
+      if (isParentRole == isCurrentUserParent) {
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  /// 建立 Tab 內容（包含圖標、文字和項目數量）
   Widget _buildTabContent({
     required IconData icon,
     required String text,
-    required int unreadCount,
+    required int itemCount,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(icon, size: 18),
         const SizedBox(width: 6),
-        Text(unreadCount > 0 ? '$text ($unreadCount)' : text),
+        Text(itemCount > 0 ? '$text ($itemCount)' : text),
       ],
     );
   }
@@ -430,7 +447,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   String _formatLastMessage(ChatRoom chatRoom) {
     // 如果聊天室已失去聯繫，顯示失去聯繫狀態
     if (chatRoom.isConnectionLost) {
-      return '已失去聯繫';
+      return '系統已關閉聊天室';
     }
 
     if (chatRoom.lastMessageSender == 'system') {
