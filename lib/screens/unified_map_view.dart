@@ -66,6 +66,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
   // 角色切換Loading狀態
   bool _isRoleSwitching = false;
+  bool _isDataLoading = false;
 
   // 地圖相關
   Set<Marker> _markers = {};
@@ -543,6 +544,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   void _switchRole() {
     setState(() {
       _isRoleSwitching = true;
+      _isDataLoading = true;
     });
 
     // 立即執行角色切換邏輯
@@ -566,10 +568,20 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         _allPosts.clear();
       });
 
-      _loadMyPosts().then((_) {
-        print('✅ Parent 任務載入完成，觸發標記更新');
-        _updateMarkers();
-      });
+      _loadMyPosts()
+          .then((_) {
+            print('✅ Parent 任務載入完成，觸發標記更新');
+            _updateMarkers();
+            setState(() {
+              _isDataLoading = false;
+            });
+          })
+          .catchError((error) {
+            print('❌ Parent 任務載入失敗: $error');
+            setState(() {
+              _isDataLoading = false;
+            });
+          });
       _startListeningForApplicants();
     } else {
       print('📥 切換到 Player 視角，清空舊數據並載入所有任務...');
@@ -578,20 +590,76 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         _allPosts.clear();
       });
 
-      _loadAllPosts().then((_) {
-        print('✅ Player 任務載入完成，觸發標記更新');
-        _updateMarkers();
-      });
+      _loadAllPosts()
+          .then((_) {
+            print('✅ Player 任務載入完成，觸發標記更新');
+            _updateMarkers();
+            setState(() {
+              _isDataLoading = false;
+            });
+          })
+          .catchError((error) {
+            print('❌ Player 任務載入失敗: $error');
+            setState(() {
+              _isDataLoading = false;
+            });
+          });
       _initializeNotificationSystem();
       _attachPostsListener();
     }
 
-    // 3秒後結束Loading動畫
+    // 3秒後檢查資料載入狀態
+    _checkAndEndLoading();
+  }
+
+  /// 檢查並結束Loading動畫
+  void _checkAndEndLoading() {
     Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
-      setState(() {
-        _isRoleSwitching = false;
-      });
+
+      if (!_isDataLoading) {
+        // 資料已載入完成，結束Loading動畫
+        setState(() {
+          _isRoleSwitching = false;
+        });
+        print('✅ 資料載入完成，結束Loading動畫');
+      } else {
+        // 資料還在載入中，繼續等待
+        print('⏳ 資料還在載入中，繼續顯示Loading動畫');
+        _waitForDataLoading();
+      }
+    });
+  }
+
+  /// 等待資料載入完成
+  void _waitForDataLoading() {
+    int checkCount = 0;
+    const maxWaitTime = 30; // 最大等待30秒
+
+    Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      checkCount++;
+
+      if (!_isDataLoading) {
+        // 資料載入完成，結束Loading動畫
+        timer.cancel();
+        setState(() {
+          _isRoleSwitching = false;
+        });
+        print('✅ 資料載入完成，結束Loading動畫');
+      } else if (checkCount >= maxWaitTime * 2) {
+        // 超過最大等待時間，強制結束Loading動畫
+        timer.cancel();
+        setState(() {
+          _isRoleSwitching = false;
+          _isDataLoading = false;
+        });
+        print('⚠️ 資料載入超時，強制結束Loading動畫');
+      }
     });
   }
 
@@ -615,7 +683,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(40)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -742,7 +810,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                   height: 120,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(34),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.2),
@@ -804,7 +872,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
                 color: _userRole == UserRole.player
                     ? AppColors.primary
                     : Colors.white,
-                borderRadius: BorderRadius.circular(36),
+                borderRadius: BorderRadius.circular(34),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
