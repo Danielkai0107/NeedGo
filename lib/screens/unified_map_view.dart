@@ -608,13 +608,13 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       _attachPostsListener();
     }
 
-    // 3秒後檢查資料載入狀態
+    // 2秒後檢查資料載入狀態
     _checkAndEndLoading();
   }
 
   /// 檢查並結束Loading動畫
   void _checkAndEndLoading() {
-    Timer(const Duration(seconds: 3), () {
+    Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
 
       if (!_isDataLoading) {
@@ -785,7 +785,11 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         children: [
           // 地圖
           GoogleMap(
-            initialCameraPosition: CameraPosition(target: _center, zoom: _zoom),
+            initialCameraPosition: CameraPosition(
+              target: _center,
+              zoom: _zoom,
+              tilt: 60.0,
+            ),
             style: MapStyles.customStyle,
             onMapCreated: (controller) {
               _mapCtrl = controller;
@@ -795,6 +799,11 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
+            compassEnabled: false,
+            minMaxZoomPreference: const MinMaxZoomPreference(
+              12,
+              double.infinity,
+            ),
             onTap: (LatLng position) {
               // 點擊地圖時的處理
             },
