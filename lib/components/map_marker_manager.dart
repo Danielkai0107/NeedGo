@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'avatar_map_marker.dart';
+import 'location_marker.dart';
 
 /// Marker 類型枚舉
 enum MarkerType {
@@ -48,6 +50,27 @@ class MarkerData {
       position: LatLng(taskData['lat'], taskData['lng']),
       type: MarkerType.custom,
       data: taskData,
+    );
+  }
+
+  /// 從任務聚合創建 MarkerData
+  factory MarkerData.fromTaskCluster(List<Map<String, dynamic>> tasks) {
+    if (tasks.isEmpty) {
+      throw ArgumentError('任務聚合不能為空');
+    }
+
+    final firstTask = tasks.first;
+    final taskCount = tasks.length;
+
+    return MarkerData(
+      id: 'task_cluster_${tasks.hashCode}',
+      name: taskCount > 1
+          ? '$taskCount 個任務'
+          : (firstTask['title'] ?? firstTask['name'] ?? '未命名任務'),
+      position: LatLng(firstTask['lat'], firstTask['lng']),
+      type: MarkerType.custom,
+      data: firstTask,
+      tasksAtLocation: tasks,
     );
   }
 
@@ -134,36 +157,31 @@ class MapMarkerManager {
     final markers = <Marker>{};
     final currentUser = FirebaseAuth.instance.currentUser;
 
-    // 加入用戶當前位置標記
+    // 加入用戶當前位置標記（Google Maps風格）
     if (currentLocation != null) {
+      final locationIcon = await LocationMarker.generateCurrentLocationMarker(
+        size: 20.0,
+        bearing: 0.0, // 如果需要方向指示，可以從GPS獲取
+      );
+
       markers.add(
         Marker(
           markerId: const MarkerId('my_location'),
           position: currentLocation,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          icon: locationIcon,
+          zIndex: 1000, // 設置高zIndex確保在所有標記之上
         ),
       );
     }
 
-    // 處理用戶任務 markers
-    for (var task in userTasks) {
-      // 在 Parent 視角只顯示自己的任務，在 Player 視角排除自己的任務
-      if (isParentView) {
-        if (task['userId'] == currentUser?.uid) {
-          final markerData = MarkerData.fromTask(task);
-          markers.add(
-            createMarker(markerData, onTap: () => onMarkerTap(markerData)),
-          );
-        }
-      } else {
-        if (task['userId'] != currentUser?.uid) {
-          final markerData = MarkerData.fromTask(task);
-          markers.add(
-            createMarker(markerData, onTap: () => onMarkerTap(markerData)),
-          );
-        }
-      }
-    }
+    // 處理用戶任務 markers - 使用頭像標記
+    final taskMarkers = await _generateTaskMarkers(
+      userTasks: userTasks,
+      isParentView: isParentView,
+      onMarkerTap: onMarkerTap,
+      currentUser: currentUser,
+    );
+    markers.addAll(taskMarkers);
 
     // 處理系統地點 markers
     final systemMarkers = await _processSystemLocations(
@@ -176,6 +194,101 @@ class MapMarkerManager {
 
     markers.addAll(systemMarkers);
     return markers;
+  }
+
+  /// 生成任務標記 - 使用頭像標記
+  static Future<Set<Marker>> _generateTaskMarkers({
+    required List<Map<String, dynamic>> userTasks,
+    required bool isParentView,
+    required Function(MarkerData) onMarkerTap,
+    User? currentUser,
+  }) async {
+    final markers = <Marker>{};
+
+    // 過濾任務
+    final filteredTasks = userTasks.where((task) {
+      if (task['lat'] == null || task['lng'] == null) return false;
+
+      // 在 Parent 視角只顯示自己的任務，在 Player 視角排除自己的任務
+      if (isParentView) {
+        return task['userId'] == currentUser?.uid;
+      } else {
+        return task['userId'] != currentUser?.uid;
+      }
+    }).toList();
+
+    // 按位置聚合任務
+    final clusteredTasks = _clusterTasksByProximity(filteredTasks);
+
+    // 為每個聚合生成標記
+    for (final cluster in clusteredTasks) {
+      try {
+        final icon = await AvatarMapMarker.generateTasksMarker(
+          tasks: cluster,
+          size: 40.0, // 更合理的地圖標記大小
+        );
+
+        // 使用第一個任務的位置作為標記位置
+        final markerData = MarkerData.fromTaskCluster(cluster);
+
+        markers.add(
+          Marker(
+            markerId: MarkerId('task_cluster_${cluster.hashCode}'),
+            position: LatLng(cluster.first['lat'], cluster.first['lng']),
+            icon: icon,
+            onTap: () => onMarkerTap(markerData),
+          ),
+        );
+      } catch (e) {
+        print('生成任務標記失敗: $e');
+        // 回退到傳統標記
+        for (final task in cluster) {
+          final markerData = MarkerData.fromTask(task);
+          markers.add(
+            createMarker(markerData, onTap: () => onMarkerTap(markerData)),
+          );
+        }
+      }
+    }
+
+    return markers;
+  }
+
+  /// 按距離聚合任務
+  static List<List<Map<String, dynamic>>> _clusterTasksByProximity(
+    List<Map<String, dynamic>> tasks, {
+    double clusterRadius = 100.0, // 聚合半徑（米）
+  }) {
+    final clusters = <List<Map<String, dynamic>>>[];
+    final processedTasks = <Map<String, dynamic>>{};
+
+    for (final task in tasks) {
+      if (processedTasks.contains(task)) continue;
+
+      final cluster = <Map<String, dynamic>>[task];
+      processedTasks.add(task);
+
+      // 尋找附近的其他任務
+      for (final otherTask in tasks) {
+        if (processedTasks.contains(otherTask)) continue;
+
+        final distance = Geolocator.distanceBetween(
+          task['lat'],
+          task['lng'],
+          otherTask['lat'],
+          otherTask['lng'],
+        );
+
+        if (distance <= clusterRadius) {
+          cluster.add(otherTask);
+          processedTasks.add(otherTask);
+        }
+      }
+
+      clusters.add(cluster);
+    }
+
+    return clusters;
   }
 
   /// 處理系統地點標記

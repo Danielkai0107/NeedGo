@@ -12,6 +12,7 @@ import '../components/create_edit_task_bottom_sheet.dart' show TaskData;
 import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
 import '../components/map_marker_manager.dart';
+import '../components/location_marker.dart';
 import '../utils/custom_snackbar.dart';
 import '../services/chat_service.dart';
 
@@ -1211,13 +1212,10 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   }
 
   /// 更新地圖標記
-  void _updateMarkers() {
+  void _updateMarkers() async {
     if (!mounted) return;
 
-    final allMarkers = <Marker>{};
     final currentUser = FirebaseAuth.instance.currentUser;
-
-    // 取得要檢查的任務列表（根據角色決定）
     final tasksToCheck = _userRole == UserRole.parent ? _myPosts : _allPosts;
 
     print('🗺️ 更新地圖標記 - 角色: ${_userRole.name}, 任務數量: ${tasksToCheck.length}');
@@ -1227,6 +1225,73 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         .where((task) => _isTaskActive(task))
         .toList();
     print('🔍 過濾後的活躍任務數量: ${activeTasks.length}');
+
+    try {
+      // 使用新的標記管理器生成所有標記
+      final markers = await MapMarkerManager.generateMarkers(
+        systemLocations: _systemLocations
+            .where(
+              (location) => _selectedCategories.contains(location['category']),
+            )
+            .toList(),
+        userTasks: activeTasks,
+        isParentView: _userRole == UserRole.parent,
+        onMarkerTap: _handleMarkerTap,
+        currentLocation: _myLocation,
+      );
+
+      if (mounted) {
+        setState(() {
+          _markers = markers;
+        });
+      }
+
+      print('🗺️ 總共添加 ${markers.length} 個標記到地圖');
+    } catch (e) {
+      print('❌ 更新地圖標記失敗: $e');
+
+      // 回退到原始標記邏輯
+      await _updateMarkersLegacy();
+    }
+  }
+
+  /// 處理標記點擊事件
+  void _handleMarkerTap(MarkerData markerData) {
+    print('🔍 點擊標記: ${markerData.name} (類型: ${markerData.type})');
+
+    if (markerData.type == MarkerType.custom) {
+      // 任務標記
+      if (markerData.tasksAtLocation != null &&
+          markerData.tasksAtLocation!.length > 1) {
+        // 多任務標記 - 顯示任務列表
+        _showMultiTaskLocationDetail(
+          markerData.data,
+          markerData.tasksAtLocation!,
+        );
+      } else {
+        // 單任務標記 - 直接顯示任務詳情
+        _showTaskDetail(
+          markerData.data,
+          isMyTask: _userRole == UserRole.parent,
+        );
+      }
+    } else if (markerData.type == MarkerType.preset ||
+        markerData.type == MarkerType.activePreset) {
+      // 系統地點標記
+      _showLocationDetail(markerData.data);
+    }
+  }
+
+  /// 原始標記邏輯（作為備用）
+  Future<void> _updateMarkersLegacy() async {
+    if (!mounted) return;
+
+    final allMarkers = <Marker>{};
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final tasksToCheck = _userRole == UserRole.parent ? _myPosts : _allPosts;
+    final activeTasks = tasksToCheck
+        .where((task) => _isTaskActive(task))
+        .toList();
 
     // 添加系統地點標記
     for (var location in _systemLocations) {
@@ -1240,7 +1305,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       for (var task in activeTasks) {
         if (task['lat'] == null || task['lng'] == null) continue;
 
-        // 在 Player 視角下，跳過自己的任務
         if (_userRole == UserRole.player &&
             task['userId'] == currentUser?.uid) {
           continue;
@@ -1249,7 +1313,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         final taskPosition = LatLng(task['lat'], task['lng']);
         final distance = _calculateDistance(locationPosition, taskPosition);
 
-        // 如果距離小於100米，認為任務在這個地點附近
         if (distance <= 100) {
           hasTaskNearby = true;
           break;
@@ -1258,7 +1321,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       // 根據是否有任務決定標記樣式和顯示邏輯
       if (_userRole == UserRole.parent) {
-        // Parent 視角：如果附近有我的任務，隱藏系統地點標記
         if (!hasTaskNearby) {
           markerIcon = BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueGreen,
@@ -1273,14 +1335,11 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           );
         }
       } else {
-        // Player 視角：顯示所有系統地點，但有任務的地點用不同顏色
         if (hasTaskNearby) {
-          // 有任務的地點用橙色標記
           markerIcon = BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueOrange,
           );
         } else {
-          // 沒有任務的地點用綠色標記
           markerIcon = BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueGreen,
           );
@@ -1299,18 +1358,8 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
     // 根據角色添加不同的任務標記
     if (_userRole == UserRole.parent) {
-      // Parent 視角 - 顯示我的活躍任務
-      print('📍 Parent 視角 - 檢查 ${activeTasks.length} 個活躍任務');
-      int addedTaskMarkers = 0;
-
       for (var task in activeTasks) {
-        print('🔍 檢查任務 ${task['id']}: lat=${task['lat']}, lng=${task['lng']}');
-        print('   狀態: ${_getTaskStatus(task)}');
-
-        if (task['lat'] == null || task['lng'] == null) {
-          print('⚠️  跳過任務 ${task['id']} - 缺少地理位置');
-          continue;
-        }
+        if (task['lat'] == null || task['lng'] == null) continue;
 
         final marker = Marker(
           markerId: MarkerId('my_task_${task['id']}'),
@@ -1322,21 +1371,12 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         );
 
         allMarkers.add(marker);
-        addedTaskMarkers++;
-        print('✅ 添加任務標記: ${task['id']} at (${task['lat']}, ${task['lng']})');
       }
-
-      print('📍 Parent 視角 - 實際添加了 $addedTaskMarkers 個活躍任務標記');
     } else {
-      // Player 視角 - 顯示所有可應徵的活躍任務
-      int taskCount = 0;
       for (var task in activeTasks) {
         if (task['lat'] == null || task['lng'] == null) continue;
         if (task['userId'] == currentUser?.uid) continue;
 
-        print('🔍 檢查他人任務 ${task['id']}: 狀態=${_getTaskStatus(task)}');
-
-        taskCount++;
         allMarkers.add(
           Marker(
             markerId: MarkerId('task_${task['id']}'),
@@ -1348,22 +1388,26 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           ),
         );
       }
-      print('📍 Player 視角 - 添加 $taskCount 個可應徵活躍任務標記');
     }
 
-    // 添加我的位置標記
+    // 添加我的位置標記（Google Maps風格）
     if (_myLocation != null) {
+      final locationIcon = await LocationMarker.generateCurrentLocationMarker(
+        size: 20.0,
+        bearing: 0.0, // 如果需要方向指示，可以從GPS獲取
+      );
+
       allMarkers.add(
         Marker(
           markerId: const MarkerId('my_location'),
           position: _myLocation!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          icon: locationIcon,
           infoWindow: const InfoWindow(title: '我的位置'),
+          zIndex: 1000, // 設置高zIndex確保在所有標記之上
         ),
       );
     }
 
-    print('🗺️ 總共添加 ${allMarkers.length} 個標記到地圖');
     setState(() {
       _markers = allMarkers;
     });
@@ -1385,6 +1429,42 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           if (_userRole == UserRole.parent) {
             _startCreatePostAtLocation(locationData);
           }
+        },
+      ),
+    );
+  }
+
+  /// 顯示多任務位置詳情
+  void _showMultiTaskLocationDetail(
+    Map<String, dynamic> taskData,
+    List<Map<String, dynamic>> tasksAtLocation,
+  ) {
+    // 創建虛擬地點資料
+    final locationData = {
+      'name': taskData['address']?.toString() ?? '任務地點',
+      'address': taskData['address']?.toString() ?? '任務地點',
+      'lat': taskData['lat'],
+      'lng': taskData['lng'],
+      'description': '此地點有 ${tasksAtLocation.length} 個可用任務',
+    };
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => LocationInfoSheet(
+        locationData: locationData,
+        isParentView: _userRole == UserRole.parent,
+        currentLocation: _myLocation,
+        availableTasksAtLocation: tasksAtLocation,
+        onTaskSelected: (task) {
+          // 從任務列表中選擇任務後的回調
+          Navigator.of(context).pop(); // 關閉地點資訊彈窗
+          _showTaskDetail(
+            task,
+            isMyTask: _userRole == UserRole.parent,
+          ); // 顯示任務詳情
         },
       ),
     );

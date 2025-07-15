@@ -8,6 +8,7 @@ import '../components/task_detail_sheet.dart';
 import '../components/location_info_sheet.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
 import '../components/create_edit_task_bottom_sheet.dart' show TaskData;
+import '../components/location_marker.dart';
 import '../styles/map_styles.dart';
 import '../utils/custom_snackbar.dart';
 
@@ -60,7 +61,7 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
         await _loadAllPosts();
       }
 
-      _updateMarkers();
+      await _updateMarkers();
     } catch (e) {
       print('初始化地圖數據失敗: $e');
     }
@@ -282,7 +283,7 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
   }
 
   /// 更新地圖標記
-  void _updateMarkers() {
+  Future<void> _updateMarkers() async {
     if (!mounted) return;
 
     final allMarkers = <Marker>{};
@@ -297,14 +298,20 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
       allMarkers.addAll(_buildAllTaskMarkers());
     }
 
-    // 添加我的位置標記
+    // 添加我的位置標記（Google Maps風格）
     if (_myLocation != null) {
+      final locationIcon = await LocationMarker.generateCurrentLocationMarker(
+        size: 20.0,
+        bearing: 0.0, // 如果需要方向指示，可以從GPS獲取
+      );
+
       allMarkers.add(
         Marker(
           markerId: const MarkerId('my_location'),
           position: _myLocation!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          icon: locationIcon,
           infoWindow: const InfoWindow(title: '我的位置'),
+          zIndex: 1000, // 設置高zIndex確保在所有標記之上
         ),
       );
     }
