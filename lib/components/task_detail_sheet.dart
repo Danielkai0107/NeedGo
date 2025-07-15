@@ -2260,11 +2260,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
           ),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
+            child: OutlinedButton(
               onPressed: () => _completeTask(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[600],
-                foregroundColor: Colors.white,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red[600],
+                side: BorderSide(color: Colors.red[600]!),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 textStyle: const TextStyle(
                   fontSize: 16,
