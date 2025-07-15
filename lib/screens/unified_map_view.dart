@@ -1293,66 +1293,43 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         .where((task) => _isTaskActive(task))
         .toList();
 
-    // 添加系統地點標記
-    for (var location in _systemLocations) {
-      if (!_selectedCategories.contains(location['category'])) continue;
+    // 添加系統地點標記 - 僅在 Parent 視角下顯示
+    if (_userRole == UserRole.parent) {
+      for (var location in _systemLocations) {
+        if (!_selectedCategories.contains(location['category'])) continue;
 
-      final locationPosition = LatLng(location['lat'], location['lng']);
-      bool hasTaskNearby = false;
-      BitmapDescriptor markerIcon;
+        final locationPosition = LatLng(location['lat'], location['lng']);
+        bool hasOwnTaskNearby = false;
 
-      // 檢查這個系統地點附近是否有活躍任務
-      for (var task in activeTasks) {
-        if (task['lat'] == null || task['lng'] == null) continue;
+        // 檢查這個系統地點附近是否有自己的任務
+        for (var task in activeTasks) {
+          if (task['lat'] == null || task['lng'] == null) continue;
+          if (task['userId'] != currentUser?.uid) continue;
 
-        if (_userRole == UserRole.player &&
-            task['userId'] == currentUser?.uid) {
-          continue;
+          final taskPosition = LatLng(task['lat'], task['lng']);
+          final distance = _calculateDistance(locationPosition, taskPosition);
+
+          if (distance <= 100) {
+            hasOwnTaskNearby = true;
+            break;
+          }
         }
 
-        final taskPosition = LatLng(task['lat'], task['lng']);
-        final distance = _calculateDistance(locationPosition, taskPosition);
+        // 如果附近沒有自己的任務，則顯示系統地點標記
+        if (!hasOwnTaskNearby) {
+          // 使用新的白色圓圈+加號標記
+          final systemLocationIcon =
+              await MapMarkerManager.generateSystemLocationMarker();
 
-        if (distance <= 100) {
-          hasTaskNearby = true;
-          break;
-        }
-      }
-
-      // 根據是否有任務決定標記樣式和顯示邏輯
-      if (_userRole == UserRole.parent) {
-        if (!hasTaskNearby) {
-          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          );
           allMarkers.add(
             Marker(
               markerId: MarkerId('system_${location['id']}'),
               position: locationPosition,
-              icon: markerIcon,
+              icon: systemLocationIcon,
               onTap: () => _showLocationDetail(location),
             ),
           );
         }
-      } else {
-        if (hasTaskNearby) {
-          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueOrange,
-          );
-        } else {
-          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          );
-        }
-
-        allMarkers.add(
-          Marker(
-            markerId: MarkerId('system_${location['id']}'),
-            position: locationPosition,
-            icon: markerIcon,
-            onTap: () => _showLocationDetail(location),
-          ),
-        );
       }
     }
 

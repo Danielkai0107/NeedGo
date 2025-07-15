@@ -9,6 +9,7 @@ import '../components/location_info_sheet.dart';
 import '../components/create_edit_task_bottom_sheet.dart' as new_task_sheet;
 import '../components/create_edit_task_bottom_sheet.dart' show TaskData;
 import '../components/location_marker.dart';
+import '../components/map_marker_manager.dart';
 import '../styles/map_styles.dart';
 import '../utils/custom_snackbar.dart';
 
@@ -289,7 +290,8 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
     final allMarkers = <Marker>{};
 
     // 添加系統地點標記
-    allMarkers.addAll(_buildSystemLocationMarkers());
+    final systemMarkers = await _buildSystemLocationMarkers();
+    allMarkers.addAll(systemMarkers);
 
     // 根據角色添加任務標記
     if (_userRole == 'parent') {
@@ -322,22 +324,51 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
   }
 
   /// 建立系統地點標記
-  Set<Marker> _buildSystemLocationMarkers() {
+  Future<Set<Marker>> _buildSystemLocationMarkers() async {
     final markers = <Marker>{};
+
+    // 僅在 Parent 視角顯示系統地點標記
+    if (_userRole != 'parent') {
+      return markers;
+    }
+
+    final currentUser = FirebaseAuth.instance.currentUser;
 
     for (var location in _systemLocations) {
       if (!_selectedCategories.contains(location['category'])) continue;
 
-      markers.add(
-        Marker(
-          markerId: MarkerId('system_${location['id']}'),
-          position: LatLng(location['lat'], location['lng']),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
+      final locationPosition = LatLng(location['lat'], location['lng']);
+      bool hasOwnTaskNearby = false;
+
+      // 檢查這個系統地點附近是否有自己的任務
+      for (var task in _myPosts) {
+        if (task['lat'] == null || task['lng'] == null) continue;
+        if (task['userId'] != currentUser?.uid) continue;
+
+        final taskPosition = LatLng(task['lat'], task['lng']);
+        final distance = _calculateDistance(locationPosition, taskPosition);
+
+        if (distance <= 100) {
+          hasOwnTaskNearby = true;
+          break;
+        }
+      }
+
+      // 如果附近沒有自己的任務，則顯示系統地點標記
+      if (!hasOwnTaskNearby) {
+        // 使用新的白色圓圈+加號標記
+        final systemLocationIcon =
+            await MapMarkerManager.generateSystemLocationMarker();
+
+        markers.add(
+          Marker(
+            markerId: MarkerId('system_${location['id']}'),
+            position: LatLng(location['lat'], location['lng']),
+            icon: systemLocationIcon,
+            onTap: () => _showLocationDetail(location),
           ),
-          onTap: () => _showLocationDetail(location),
-        ),
-      );
+        );
+      }
     }
 
     return markers;

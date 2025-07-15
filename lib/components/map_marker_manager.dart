@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'avatar_map_marker.dart';
 import 'location_marker.dart';
+import 'dart:ui' as ui;
 
 /// Marker 類型枚舉
 enum MarkerType {
@@ -301,6 +302,11 @@ class MapMarkerManager {
   }) async {
     final markers = <Marker>{};
 
+    // 如果是 Player 視角，不顯示系統地點標記
+    if (!isParentView) {
+      return markers;
+    }
+
     for (var location in systemLocations) {
       final locationCoord = LatLng(location['lat'], location['lng']);
 
@@ -327,28 +333,99 @@ class MapMarkerManager {
       }
 
       // Parent 視角：如果該地點附近有自己的任務，隱藏系統地點標記
-      if (isParentView && hasOwnTaskNearby) {
+      if (hasOwnTaskNearby) {
         continue; // 跳過這個系統地點標記
       }
 
-      MarkerData markerData;
-
-      if (nearbyTasks.isNotEmpty && !isParentView) {
-        // Player 視角：如果有其他任務則顯示為 activePreset（橙色）
-        markerData = MarkerData.fromSystemLocation(
-          location,
-        ).copyWithActiveTasks(nearbyTasks);
-      } else {
-        // Parent 視角或沒有任務：顯示為普通 preset（藍色）
-        markerData = MarkerData.fromSystemLocation(location);
-      }
+      // 使用新的白色圓圈+加號標記
+      final systemLocationIcon = await generateSystemLocationMarker();
+      final markerData = MarkerData.fromSystemLocation(location);
 
       markers.add(
-        createMarker(markerData, onTap: () => onMarkerTap(markerData)),
+        Marker(
+          markerId: MarkerId('system_${location['id']}'),
+          position: locationCoord,
+          icon: systemLocationIcon,
+          onTap: () => onMarkerTap(markerData),
+        ),
       );
     }
 
     return markers;
+  }
+
+  /// 生成系統地點標記（白色圓圈+加號）
+  static Future<BitmapDescriptor> generateSystemLocationMarker({
+    double size = 20.0,
+    double iconSize = 8.0,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    // 提高解析度
+    final scaleFactor = 2.0;
+    final shadowOffset = 2.0 * scaleFactor;
+    final circleRadius = (size / 2) * scaleFactor;
+
+    // 計算畫布大小，需要容納陰影
+    final canvasSize = (size + shadowOffset) * scaleFactor;
+    final circleCenter = Offset(
+      canvasSize / 2 - shadowOffset / 2,
+      canvasSize / 2 - shadowOffset / 2,
+    );
+
+    final paint = Paint()..isAntiAlias = true;
+
+    // 繪製陰影
+    paint.color = Colors.black.withOpacity(0.2);
+    canvas.drawCircle(
+      circleCenter + Offset(shadowOffset, shadowOffset),
+      circleRadius,
+      paint,
+    );
+
+    // 繪製白色圓圈
+    paint.color = Colors.white;
+    canvas.drawCircle(circleCenter, circleRadius, paint);
+
+    // 繪製灰色邊框
+    paint.color = Colors.grey[300]!;
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1.0 * scaleFactor;
+    canvas.drawCircle(
+      circleCenter,
+      circleRadius - paint.strokeWidth / 2,
+      paint,
+    );
+
+    // 繪製加號
+    paint.color = Colors.grey[600]!;
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1.0 * scaleFactor;
+    paint.strokeCap = StrokeCap.round;
+
+    final scaledIconSize = iconSize * scaleFactor;
+    final halfIcon = scaledIconSize / 2;
+
+    // 水平線
+    canvas.drawLine(
+      Offset(circleCenter.dx - halfIcon, circleCenter.dy),
+      Offset(circleCenter.dx + halfIcon, circleCenter.dy),
+      paint,
+    );
+
+    // 垂直線
+    canvas.drawLine(
+      Offset(circleCenter.dx, circleCenter.dy - halfIcon),
+      Offset(circleCenter.dx, circleCenter.dy + halfIcon),
+      paint,
+    );
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(canvasSize.toInt(), canvasSize.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+    return BitmapDescriptor.bytes(byteData!.buffer.asUint8List());
   }
 
   /// 更新指定地點的標記類型（當新增任務後調用）
