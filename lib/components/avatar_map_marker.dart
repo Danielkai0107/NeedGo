@@ -11,7 +11,7 @@ class AvatarMapMarker {
   static Future<BitmapDescriptor> generateSingleAvatarMarker({
     required String? avatarUrl,
     required double size,
-    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
+    double borderWidth = 2, // 固定1px邊框 (2 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
   }) async {
@@ -88,10 +88,10 @@ class AvatarMapMarker {
   static Future<BitmapDescriptor> generateOverlappingAvatarsMarker({
     required List<Map<String, dynamic>> tasks,
     required double size,
-    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
+    double borderWidth = 2, // 固定1px邊框 (2 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
-    double overlapPercentage = 0.85,
+    double overlapPercentage = 0.65,
   }) async {
     if (tasks.isEmpty) {
       throw ArgumentError('至少需要一個任務');
@@ -156,12 +156,12 @@ class AvatarMapMarker {
   static Future<BitmapDescriptor> generateMultipleTasksMarker({
     required List<Map<String, dynamic>> tasks,
     required double size,
-    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
+    double borderWidth = 2, // 固定1px邊框 (2 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
     Color badgeColor = Colors.red,
     Color textColor = Colors.white,
-    double overlapPercentage = 0.85,
+    double overlapPercentage = 0.65,
   }) async {
     if (tasks.length < 3) {
       return generateOverlappingAvatarsMarker(
@@ -271,12 +271,12 @@ class AvatarMapMarker {
   static Future<BitmapDescriptor> generateTasksMarker({
     required List<Map<String, dynamic>> tasks,
     double size = 90.0, // 合理的地圖標記大小
-    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
+    double borderWidth = 2, // 固定1px邊框 (2 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
     Color badgeColor = Colors.red,
     Color textColor = Colors.white,
-    double overlapPercentage = 0.85,
+    double overlapPercentage = 0.65,
   }) async {
     if (tasks.isEmpty) {
       throw ArgumentError('任務列表不能為空');

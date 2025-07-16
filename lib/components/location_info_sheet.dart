@@ -221,6 +221,21 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
     }
   }
 
+  /// 獲取發布者頭像URL
+  Future<String?> _getPublisherAvatarUrl(String userId) async {
+    try {
+      final doc = await _firestore.collection('user').doc(userId).get();
+      if (doc.exists) {
+        final data = doc.data();
+        return data?['avatarUrl']?.toString();
+      }
+      return null;
+    } catch (e) {
+      print('獲取發布者頭像失敗: $e');
+      return null;
+    }
+  }
+
   /// 篩選有效任務（排除已過期和已完成的任務）
   List<Map<String, dynamic>> _filterValidTasks(
     List<Map<String, dynamic>> tasks,
@@ -601,8 +616,9 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
 
     final taskContent =
         task['content']?.toString() ?? task['description']?.toString() ?? '';
-    final taskImages = task['images'] as List? ?? [];
-    final imageUrl = taskImages.isNotEmpty ? taskImages[0].toString() : '';
+
+    // 獲取發布者ID
+    final publisherId = task['userId']?.toString() ?? '';
 
     return GestureDetector(
       onTap: () => _showTaskDetail(task),
@@ -625,7 +641,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
           padding: const EdgeInsets.all(20),
           child: Row(
             children: [
-              // 左側：任務圖片或圖標
+              // 左側：發布者頭像
               Container(
                 width: 60,
                 height: 60,
@@ -636,20 +652,35 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(30),
-                  child: imageUrl.isNotEmpty
-                      ? Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.task_rounded,
-                              size: 30,
-                              color: Colors.grey[400],
-                            );
+                  child: publisherId.isNotEmpty
+                      ? FutureBuilder<String?>(
+                          future: _getPublisherAvatarUrl(publisherId),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData &&
+                                snapshot.data != null &&
+                                snapshot.data!.isNotEmpty) {
+                              return Image.network(
+                                snapshot.data!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    Icons.person_rounded,
+                                    size: 30,
+                                    color: Colors.grey[400],
+                                  );
+                                },
+                              );
+                            } else {
+                              return Icon(
+                                Icons.person_rounded,
+                                size: 30,
+                                color: Colors.grey[400],
+                              );
+                            }
                           },
                         )
                       : Icon(
-                          Icons.task_rounded,
+                          Icons.person_rounded,
                           size: 30,
                           color: Colors.grey[400],
                         ),
