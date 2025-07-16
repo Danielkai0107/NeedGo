@@ -688,14 +688,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
         scrolledUnderElevation: 1,
-        shadowColor: Colors.grey[300],
+        shadowColor: Colors.grey[400],
         actions: [
-          // 調試按鈕
-          IconButton(
-            icon: const Text('🔄'),
-            onPressed: _testNotificationGeneration,
-            tooltip: '重新載入通知',
-          ),
           if (_notifications.isNotEmpty)
             TextButton(
               onPressed: _clearAllNotifications,
