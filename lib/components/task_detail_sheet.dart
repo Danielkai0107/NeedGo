@@ -876,9 +876,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
 
         widget.onTaskUpdated?.call();
 
-        // 自動創建聊天室
-        await _createChatRoomAfterApplication();
-
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('申請成功！')));
@@ -1079,27 +1076,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
     }
   }
 
-  /// 申請任務後自動創建聊天室
-  Future<void> _createChatRoomAfterApplication() async {
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      final publisherId = widget.taskData['userId'];
 
-      if (currentUser != null && publisherId != null) {
-        await ChatService.createOrGetChatRoom(
-          parentId: publisherId,
-          playerId: currentUser.uid,
-          taskId: widget.taskData['id'],
-          taskTitle:
-              widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務',
-        );
-        print('✅ 聊天室創建成功');
-      }
-    } catch (e) {
-      print('❌ 自動創建聊天室失敗: $e');
-      // 不顯示錯誤訊息，因為這是背景操作
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

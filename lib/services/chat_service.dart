@@ -17,6 +17,7 @@ class ChatRoom {
   final bool isActive;
   final bool isConnectionLost;
   final List<String> hiddenBy; // 記錄隱藏此聊天室的用戶ID列表
+  final List<String> visibleTo; // 記錄可以看到此聊天室的用戶ID列表
 
   ChatRoom({
     required this.id,
@@ -32,6 +33,7 @@ class ChatRoom {
     this.isActive = true,
     this.isConnectionLost = false,
     this.hiddenBy = const [], // 默認沒有被任何用戶隱藏
+    this.visibleTo = const [], // 默認沒有對任何用戶可見（需要在創建時指定）
   });
 
   factory ChatRoom.fromFirestore(DocumentSnapshot doc) {
@@ -63,6 +65,12 @@ class ChatRoom {
         hiddenBy: data['hiddenBy'] != null
             ? List<String>.from(data['hiddenBy'])
             : [],
+        visibleTo: data['visibleTo'] != null
+            ? List<String>.from(data['visibleTo'])
+            : [
+                data['parentId']?.toString() ?? '',
+                data['playerId']?.toString() ?? '',
+              ].where((id) => id.isNotEmpty).toList(),
       );
     } catch (e) {
       print('解析聊天室數據失敗: $e');
@@ -84,6 +92,7 @@ class ChatRoom {
       'isActive': isActive,
       'participants': [parentId, playerId], // 用於查詢
       'hiddenBy': hiddenBy, // 記錄隱藏此聊天室的用戶ID列表
+      'visibleTo': visibleTo, // 記錄可以看到此聊天室的用戶ID列表
     };
   }
 }
@@ -263,6 +272,9 @@ class ChatService {
 
     if (!doc.exists) {
       // 創建新聊天室
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception('用戶未登入');
+
       final chatRoom = ChatRoom(
         id: chatId,
         parentId: parentId,
@@ -274,14 +286,15 @@ class ChatService {
         lastMessage: '聊天室已建立',
         lastMessageSender: 'system',
         unreadCount: {parentId: 0, playerId: 0},
+        visibleTo: [currentUser.uid], // 只對創建者可見
       );
 
       await chatRef.set(chatRoom.toFirestore());
 
-      // 發送系統歡迎訊息
+      // 創建時就發送系統歡迎訊息
       await _sendSystemWelcomeMessage(chatId, taskTitle);
 
-      print('✅ 聊天室創建成功: $chatId');
+      print('✅ 聊天室創建成功: $chatId (只對創建者 ${currentUser.uid} 可見)');
     } else {
       // 聊天室已存在，檢查是否被當前用戶隱藏
       final currentUser = _auth.currentUser;
@@ -366,6 +379,9 @@ class ChatService {
       isRead: false,
     );
 
+    // 檢查是否是第一則真實訊息，如果是則讓聊天室對所有人可見
+    await _checkAndUpdateChatRoomVisibility(chatId);
+
     // 添加訊息到子集合
     await _firestore
         .collection('chats')
@@ -377,6 +393,37 @@ class ChatService {
     await _updateChatRoomLastMessage(chatId, content, currentUser.uid);
 
     print('✅ 訊息發送成功');
+  }
+
+  /// 檢查並更新聊天室可見性（在發送第一則真實訊息時）
+  static Future<void> _checkAndUpdateChatRoomVisibility(String chatId) async {
+    try {
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      if (!chatDoc.exists) return;
+
+      final chatData = chatDoc.data()!;
+      final visibleTo = List<String>.from(chatData['visibleTo'] ?? []);
+      final parentId = chatData['parentId'] as String?;
+      final playerId = chatData['playerId'] as String?;
+      final taskTitle = chatData['taskTitle'] as String?;
+
+      if (parentId == null || playerId == null) return;
+
+      // 檢查是否只有一個用戶可見（創建者可見）
+      if (visibleTo.length == 1) {
+        print('🔍 檢測到聊天室只對創建者可見，準備讓所有參與者可見: $chatId');
+
+        // 更新聊天室為所有參與者可見
+        await _firestore.collection('chats').doc(chatId).update({
+          'visibleTo': [parentId, playerId],
+          'updatedAt': Timestamp.now(),
+        });
+
+        print('✅ 聊天室已設置為對所有參與者可見: $chatId');
+      }
+    } catch (e) {
+      print('❌ 更新聊天室可見性失敗: $e');
+    }
   }
 
   /// 更新聊天室最後訊息
@@ -476,9 +523,10 @@ class ChatService {
             for (var doc in snapshot.docs) {
               try {
                 final chatRoom = ChatRoom.fromFirestore(doc);
-                // 在應用層過濾活躍的聊天室，並且沒有被當前用戶隱藏
+                // 在應用層過濾活躍的聊天室，並且沒有被當前用戶隱藏，且對當前用戶可見
                 if (chatRoom.isActive &&
-                    !chatRoom.hiddenBy.contains(currentUser.uid)) {
+                    !chatRoom.hiddenBy.contains(currentUser.uid) &&
+                    chatRoom.visibleTo.contains(currentUser.uid)) {
                   chatRooms.add(chatRoom);
                 }
               } catch (e) {
