@@ -118,6 +118,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     icon: Icons.business_rounded,
                     text: '我是發布者',
                     itemCount: _getChatRoomCountForRole(snapshot.data, true),
+                    unreadCount: parentUnreadCount,
                   ),
                 );
               },
@@ -135,6 +136,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     icon: Icons.person_rounded,
                     text: '我是陪伴者',
                     itemCount: _getChatRoomCountForRole(snapshot.data, false),
+                    unreadCount: playerUnreadCount,
                   ),
                 );
               },
@@ -166,8 +168,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     for (final chatRoom in chatRooms) {
       final isCurrentUserParent = currentUser?.uid == chatRoom.parentId;
 
-      // 如果是當前需要計算的角色，累加未讀數量
-      if (isParentRole == isCurrentUserParent) {
+      // 如果是當前需要計算的角色，且聊天室未關閉，累加未讀數量
+      if (isParentRole == isCurrentUserParent && !chatRoom.isConnectionLost) {
         totalUnread += chatRoom.unreadCount[currentUser?.uid] ?? 0;
       }
     }
@@ -197,11 +199,30 @@ class _ChatListScreenState extends State<ChatListScreen>
     required IconData icon,
     required String text,
     required int itemCount,
+    int unreadCount = 0,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 18),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon, size: 18),
+            if (unreadCount > 0)
+              Positioned(
+                right: -3,
+                top: -1,
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
         const SizedBox(width: 6),
         Text(itemCount > 0 ? '$text ($itemCount)' : text),
       ],
