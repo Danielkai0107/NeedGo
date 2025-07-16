@@ -33,6 +33,7 @@ class _MainTabViewState extends State<MainTabView> {
     super.initState();
     _loadUserProfile();
     _setupChatUnreadListener();
+    print('🚀 MainTabView 初始化完成');
   }
 
   @override
@@ -101,7 +102,17 @@ class _MainTabViewState extends State<MainTabView> {
       UnifiedMapView(key: ValueKey(_mapPageKey)), // 使用統一地圖視角，支持刷新
       _getCurrentRoleTasksPage(), // 我的任務/應徵
       const ChatListScreen(), // 訊息
-      const NotificationScreen(), // 通知
+      NotificationScreen(
+        onNotificationCountChanged: (count) {
+          print('📢 MainTabView 收到通知計數更新: $count');
+          if (mounted) {
+            setState(() {
+              _notificationCount = count;
+            });
+            print('🔴 MainTabView 通知計數設置為: $_notificationCount');
+          }
+        },
+      ), // 通知
       const ProfileScreen(), // 個人資料
     ];
 

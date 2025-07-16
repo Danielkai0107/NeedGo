@@ -862,6 +862,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       final taskRef = _firestore.doc('posts/${widget.taskData['id']}');
       await taskRef.update({
         'applicants': FieldValue.arrayUnion([user.uid]),
+        'updatedAt': Timestamp.now(), // 更新時間戳以觸發通知
       });
 
       if (mounted) {
@@ -871,6 +872,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         );
         currentApplicants.add(user.uid);
         widget.taskData['applicants'] = currentApplicants;
+        widget.taskData['updatedAt'] = Timestamp.now(); // 同步更新本地狀態
 
         widget.onTaskUpdated?.call();
 
@@ -910,6 +912,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       final taskRef = _firestore.doc('posts/${widget.taskData['id']}');
       await taskRef.update({
         'applicants': FieldValue.arrayRemove([user.uid]),
+        'updatedAt': Timestamp.now(), // 更新時間戳以觸發通知
       });
 
       if (mounted) {
@@ -919,6 +922,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         );
         currentApplicants.remove(user.uid);
         widget.taskData['applicants'] = currentApplicants;
+        widget.taskData['updatedAt'] = Timestamp.now(); // 同步更新本地狀態
 
         widget.onTaskUpdated?.call();
 
