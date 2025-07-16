@@ -67,7 +67,9 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
   // 角色切換Loading狀態
   bool _isRoleSwitching = false;
-  bool _isDataLoading = false;
+
+  // 地圖標籤載入狀態
+  bool _isMarkersLoading = false;
 
   // 地圖相關
   Set<Marker> _markers = {};
@@ -119,6 +121,8 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   @override
   void initState() {
     super.initState();
+    // 立即設置載入狀態，避免用戶在資料載入前操作地圖
+    _isMarkersLoading = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
     });
@@ -178,6 +182,12 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       print('✅ 統一地圖視角初始化完成');
     } catch (e) {
       print('❌ 初始化失敗: $e');
+      // 確保在錯誤時也清除載入狀態
+      if (mounted) {
+        setState(() {
+          _isMarkersLoading = false;
+        });
+      }
     }
   }
 
@@ -545,7 +555,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   void _switchRole() {
     setState(() {
       _isRoleSwitching = true;
-      _isDataLoading = true;
     });
 
     // 立即執行角色切換邏輯
@@ -572,16 +581,15 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       _loadMyPosts()
           .then((_) {
             print('✅ Parent 任務載入完成，觸發標記更新');
-            _updateMarkers();
-            setState(() {
-              _isDataLoading = false;
-            });
+            _updateMarkers(); // 這裡會自動結束 _isRoleSwitching 狀態
           })
           .catchError((error) {
             print('❌ Parent 任務載入失敗: $error');
-            setState(() {
-              _isDataLoading = false;
-            });
+            if (mounted) {
+              setState(() {
+                _isRoleSwitching = false;
+              });
+            }
           });
       _startListeningForApplicants();
     } else {
@@ -594,74 +602,19 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       _loadAllPosts()
           .then((_) {
             print('✅ Player 任務載入完成，觸發標記更新');
-            _updateMarkers();
-            setState(() {
-              _isDataLoading = false;
-            });
+            _updateMarkers(); // 這裡會自動結束 _isRoleSwitching 狀態
           })
           .catchError((error) {
             print('❌ Player 任務載入失敗: $error');
-            setState(() {
-              _isDataLoading = false;
-            });
+            if (mounted) {
+              setState(() {
+                _isRoleSwitching = false;
+              });
+            }
           });
       _initializeNotificationSystem();
       _attachPostsListener();
     }
-
-    // 2秒後檢查資料載入狀態
-    _checkAndEndLoading();
-  }
-
-  /// 檢查並結束Loading動畫
-  void _checkAndEndLoading() {
-    Timer(const Duration(seconds: 2), () {
-      if (!mounted) return;
-
-      if (!_isDataLoading) {
-        // 資料已載入完成，結束Loading動畫
-        setState(() {
-          _isRoleSwitching = false;
-        });
-        print('✅ 資料載入完成，結束Loading動畫');
-      } else {
-        // 資料還在載入中，繼續等待
-        print('⏳ 資料還在載入中，繼續顯示Loading動畫');
-        _waitForDataLoading();
-      }
-    });
-  }
-
-  /// 等待資料載入完成
-  void _waitForDataLoading() {
-    int checkCount = 0;
-    const maxWaitTime = 30; // 最大等待30秒
-
-    Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      checkCount++;
-
-      if (!_isDataLoading) {
-        // 資料載入完成，結束Loading動畫
-        timer.cancel();
-        setState(() {
-          _isRoleSwitching = false;
-        });
-        print('✅ 資料載入完成，結束Loading動畫');
-      } else if (checkCount >= maxWaitTime * 2) {
-        // 超過最大等待時間，強制結束Loading動畫
-        timer.cancel();
-        setState(() {
-          _isRoleSwitching = false;
-          _isDataLoading = false;
-        });
-        print('⚠️ 資料載入超時，強制結束Loading動畫');
-      }
-    });
   }
 
   /// 保存角色偏好
@@ -805,44 +758,73 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
               12,
               double.infinity,
             ),
-            onTap: (LatLng position) {
-              // 點擊地圖時的處理
-            },
+            onTap: (_isMarkersLoading || _isRoleSwitching)
+                ? null
+                : (LatLng position) {
+                    // 點擊地圖時的處理
+                  },
           ),
 
-          // 角色切換Loading overlay
-          if (_isRoleSwitching)
+          // 地圖操作阻止overlay（當標籤載入或角色切換時）
+          if (_isMarkersLoading || _isRoleSwitching)
+            Positioned.fill(
+              child: Container(
+                color: Colors.transparent,
+                child: AbsorbPointer(absorbing: true, child: Container()),
+              ),
+            ),
+
+          // 載入遮罩 overlay（角色切換或地圖標籤載入）
+          if (_isRoleSwitching || _isMarkersLoading)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(_isRoleSwitching ? 0.3 : 0.2),
               child: Center(
                 child: Container(
-                  width: 200,
-                  height: 120,
+                  width: _isRoleSwitching ? 200 : 180,
+                  height: _isRoleSwitching ? 120 : 100,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(34),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                        color: Colors.black.withOpacity(
+                          _isRoleSwitching ? 0.2 : 0.15,
+                        ),
+                        blurRadius: _isRoleSwitching ? 10 : 8,
+                        offset: Offset(0, _isRoleSwitching ? 4 : 3),
                       ),
                     ],
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // 資料傳輸icon動畫
-                      DataTransferIcon(color: Colors.black),
-                      const SizedBox(height: 16),
-                      // 切換中文字
+                      // 動態顯示不同的icon
+                      _isRoleSwitching
+                          ? DataTransferIcon(color: Colors.black)
+                          : Icon(
+                              Icons.location_on,
+                              size: 28,
+                              color: AppColors.primary,
+                            ),
+                      SizedBox(height: _isRoleSwitching ? 16 : 12),
+                      // 動態顯示不同的文字
                       Text(
-                        '視角切換中',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                        _isRoleSwitching ? '視角切換中' : '載入地圖標籤',
+                        style: TextStyle(
+                          fontSize: _isRoleSwitching ? 16 : 15,
+                          color: _isRoleSwitching
+                              ? Colors.grey[400]
+                              : Colors.grey[600],
+                        ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: _isRoleSwitching ? 8 : 6),
                       // 三個點點動畫
-                      LoadingDots(color: Colors.grey[400]!, size: 4.0),
+                      LoadingDots(
+                        color: _isRoleSwitching
+                            ? Colors.grey[400]!
+                            : AppColors.primary,
+                        size: _isRoleSwitching ? 4.0 : 3.5,
+                      ),
                     ],
                   ),
                 ),
@@ -1215,6 +1197,13 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   void _updateMarkers() async {
     if (!mounted) return;
 
+    // 只在非角色切換時設置標籤載入狀態
+    if (!_isRoleSwitching) {
+      setState(() {
+        _isMarkersLoading = true;
+      });
+    }
+
     final currentUser = FirebaseAuth.instance.currentUser;
     final tasksToCheck = _userRole == UserRole.parent ? _myPosts : _allPosts;
 
@@ -1243,6 +1232,12 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       if (mounted) {
         setState(() {
           _markers = markers;
+          // 結束標籤載入狀態
+          _isMarkersLoading = false;
+          // 如果是角色切換，同時結束角色切換狀態
+          if (_isRoleSwitching) {
+            _isRoleSwitching = false;
+          }
         });
       }
 
@@ -1285,6 +1280,13 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   /// 原始標記邏輯（作為備用）
   Future<void> _updateMarkersLegacy() async {
     if (!mounted) return;
+
+    // 只在非角色切換時且還沒有設置載入狀態時設置
+    if (!_isRoleSwitching && !_isMarkersLoading) {
+      setState(() {
+        _isMarkersLoading = true;
+      });
+    }
 
     final allMarkers = <Marker>{};
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -1387,6 +1389,12 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
     setState(() {
       _markers = allMarkers;
+      // 結束標籤載入狀態
+      _isMarkersLoading = false;
+      // 如果是角色切換，同時結束角色切換狀態
+      if (_isRoleSwitching) {
+        _isRoleSwitching = false;
+      }
     });
   }
 
