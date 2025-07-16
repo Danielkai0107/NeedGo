@@ -719,7 +719,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
         _mapCtrl.animateCamera(
           CameraUpdate.newCameraPosition(
-            CameraPosition(target: newLocation, zoom: _zoom, tilt: 60.0),
+            CameraPosition(target: newLocation, zoom: _zoom, tilt: 65.0),
           ),
         );
       }
@@ -742,7 +742,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             initialCameraPosition: CameraPosition(
               target: _center,
               zoom: _zoom,
-              tilt: 60.0,
+              tilt: 65.0,
             ),
             style: MapStyles.customStyle,
             onMapCreated: (controller) {
@@ -754,6 +754,8 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
             compassEnabled: false,
+            tiltGesturesEnabled: false,
+            rotateGesturesEnabled: false,
             minMaxZoomPreference: const MinMaxZoomPreference(
               12,
               double.infinity,

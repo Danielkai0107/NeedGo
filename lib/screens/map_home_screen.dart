@@ -274,7 +274,7 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
 
         _mapCtrl.animateCamera(
           CameraUpdate.newCameraPosition(
-            CameraPosition(target: newLocation, zoom: _zoom),
+            CameraPosition(target: newLocation, zoom: _zoom, tilt: 65.0),
           ),
         );
       }
@@ -730,7 +730,11 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
         children: [
           // 地圖
           GoogleMap(
-            initialCameraPosition: CameraPosition(target: _center, zoom: _zoom),
+            initialCameraPosition: CameraPosition(
+              target: _center,
+              zoom: _zoom,
+              tilt: 65.0,
+            ),
             onMapCreated: (GoogleMapController controller) {
               _mapCtrl = controller;
               controller.setMapStyle(MapStyles.customStyle);
@@ -741,6 +745,8 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
             compassEnabled: false,
+            tiltGesturesEnabled: false,
+            rotateGesturesEnabled: false,
           ),
 
           // 類別篩選器
