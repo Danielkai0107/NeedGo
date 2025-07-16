@@ -8,7 +8,7 @@ import '../styles/app_colors.dart';
 class LocationMarker {
   /// 生成Google Maps風格的當前位置標記
   static Future<BitmapDescriptor> generateCurrentLocationMarker({
-    double size = 20.0,
+    double size = 16.0,
     double bearing = 0.0, // 方向角度（0度為北）
   }) async {
     final recorder = ui.PictureRecorder();

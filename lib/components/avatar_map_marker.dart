@@ -11,7 +11,7 @@ class AvatarMapMarker {
   static Future<BitmapDescriptor> generateSingleAvatarMarker({
     required String? avatarUrl,
     required double size,
-    double borderWidth = 0.5, // 固定1px邊框 (0.5 * 2.0 scaleFactor = 1.0px)
+    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
   }) async {
@@ -19,7 +19,7 @@ class AvatarMapMarker {
     final canvas = Canvas(recorder);
 
     // 提高解析度：使用2倍大小繪製，最後縮放
-    final scaleFactor = 2.0;
+    final scaleFactor = 1.45;
     final totalSize = (size + borderWidth * 2) * scaleFactor;
     final paint = Paint()..isAntiAlias = true;
 
@@ -88,10 +88,10 @@ class AvatarMapMarker {
   static Future<BitmapDescriptor> generateOverlappingAvatarsMarker({
     required List<Map<String, dynamic>> tasks,
     required double size,
-    double borderWidth = 0.5, // 固定1px邊框 (0.5 * 2.0 scaleFactor = 1.0px)
+    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
-    double overlapPercentage = 0.9,
+    double overlapPercentage = 0.85,
   }) async {
     if (tasks.isEmpty) {
       throw ArgumentError('至少需要一個任務');
@@ -111,7 +111,7 @@ class AvatarMapMarker {
     final canvas = Canvas(recorder);
 
     // 提高解析度
-    final scaleFactor = 2.0;
+    final scaleFactor = 1.45;
     final avatarSize = size * scaleFactor; // 保持和單一頭像相同大小
     final offset = avatarSize * (1 - overlapPercentage);
     final totalWidth =
@@ -156,12 +156,12 @@ class AvatarMapMarker {
   static Future<BitmapDescriptor> generateMultipleTasksMarker({
     required List<Map<String, dynamic>> tasks,
     required double size,
-    double borderWidth = 0.5, // 固定1px邊框 (0.5 * 2.0 scaleFactor = 1.0px)
+    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
     Color badgeColor = Colors.red,
     Color textColor = Colors.white,
-    double overlapPercentage = 0.9,
+    double overlapPercentage = 0.85,
   }) async {
     if (tasks.length < 3) {
       return generateOverlappingAvatarsMarker(
@@ -178,7 +178,7 @@ class AvatarMapMarker {
     final canvas = Canvas(recorder);
 
     // 提高解析度
-    final scaleFactor = 2.0;
+    final scaleFactor = 1.45;
     final avatarSize = size * scaleFactor; // 保持和單一頭像相同大小
     final offset = avatarSize * (1 - overlapPercentage);
     final badgeSize = avatarSize * 0.3; // 稍微縮小徽章以適應
@@ -270,13 +270,13 @@ class AvatarMapMarker {
   /// 根據任務數量自動選擇合適的標記類型
   static Future<BitmapDescriptor> generateTasksMarker({
     required List<Map<String, dynamic>> tasks,
-    double size = 40.0, // 合理的地圖標記大小
-    double borderWidth = 0.5, // 固定1px邊框 (0.5 * 2.0 scaleFactor = 1.0px)
+    double size = 90.0, // 合理的地圖標記大小
+    double borderWidth = 0.8, // 固定1px邊框 (0.8 * 2.0 scaleFactor = 1.6px)
     Color borderColor = Colors.white,
     Color backgroundColor = Colors.white,
     Color badgeColor = Colors.red,
     Color textColor = Colors.white,
-    double overlapPercentage = 0.9,
+    double overlapPercentage = 0.85,
   }) async {
     if (tasks.isEmpty) {
       throw ArgumentError('任務列表不能為空');
