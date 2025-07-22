@@ -910,9 +910,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _userRole == 'parent'
-                                  ? '有新的應徵者時會在這裡顯示通知'
-                                  : '有新的任務時會在這裡顯示通知',
+                              '有新的任務或應徵者時會在這裡通知',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[500],
