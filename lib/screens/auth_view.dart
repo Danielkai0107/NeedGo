@@ -16,23 +16,38 @@ class _AuthViewState extends State<AuthView> {
   String? _error;
 
   Future<void> _signInWithGoogle() async {
+    print('🚀 開始 Google 登入流程...');
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
+      print('📞 調用 AuthService.signInWithGoogle()');
       final user = await _authService.signInWithGoogle();
+
       if (user != null) {
         // 登入成功，AuthGate 會自動處理導航
-        print('Google 登入成功: ${user.email}');
+        print('✅ Google 登入成功: ${user.email}');
+        print('🔍 用戶資料: uid=${user.uid}, displayName=${user.displayName}');
+        print('📧 用戶信箱: ${user.email}');
+        print('📱 電話號碼: ${user.phoneNumber ?? "無"}');
+
+        // 手動觸發狀態檢查（以防萬一）
+        print('🔄 登入成功，等待 AuthGate 處理...');
+      } else {
+        // 用戶取消登入，這是正常行為，不需要顯示錯誤
+        print('⏹️ 用戶取消 Google 登入');
       }
     } catch (e) {
+      print('❌ Google 登入失敗: $e');
       setState(() {
-        _error = e.toString();
+        _error = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
       if (mounted) {
+        print('🏁 登入流程結束，更新 UI 狀態');
         setState(() {
           _isLoading = false;
         });
@@ -174,6 +189,55 @@ class _AuthViewState extends State<AuthView> {
                       ],
                     ),
                   ),
+
+                const SizedBox(height: 16),
+
+                // 登入提示
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.blue.shade600,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '首次使用需要完成註冊',
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '登入後我們會引導您填寫基本資料和上傳頭像',
+                              style: TextStyle(
+                                color: Colors.blue.shade600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
 
                 const SizedBox(height: 32),
 

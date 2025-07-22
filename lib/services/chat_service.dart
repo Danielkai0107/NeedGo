@@ -200,11 +200,20 @@ class ChatService {
   /// 更新用戶在線狀態
   static Future<void> updateOnlineStatus(bool isOnline) async {
     final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
+    print('📲 ChatService.updateOnlineStatus 被調用: ${isOnline ? "在線" : "離線"}');
+    print('📲 當前用戶: ${currentUser?.uid ?? "null"}');
+    
+    if (currentUser == null) {
+      print('⚠️ 用戶為空，無法更新在線狀態');
+      return;
+    }
 
     try {
+      print('🔍 檢查用戶文檔是否存在...');
       final userDocRef = _firestore.collection('user').doc(currentUser.uid);
       final userDoc = await userDocRef.get();
+      
+      print('📄 用戶文檔存在: ${userDoc.exists}');
 
       if (userDoc.exists) {
         // 用戶文檔存在，更新在線狀態
@@ -212,13 +221,14 @@ class ChatService {
           'isOnline': isOnline,
           'lastSeen': Timestamp.now(),
         });
-        print('在線狀態已更新: ${isOnline ? "在線" : "離線"}');
+        print('✅ 在線狀態已更新: ${isOnline ? "在線" : "離線"}');
       } else {
         // 用戶文檔不存在，跳過更新（可能正在註冊過程中）
         print('⚠️ 用戶文檔不存在，跳過在線狀態更新');
+        print('💡 這表示用戶可能正在註冊過程中，這是正常情況');
       }
     } catch (e) {
-      print(' 更新在線狀態失敗: $e');
+      print('❌ 更新在線狀態失敗: $e');
     }
   }
 

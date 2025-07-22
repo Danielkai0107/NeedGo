@@ -92,16 +92,16 @@ class AuthService {
       await _auth.signOut();
       print('Firebase 登出成功');
 
-      print('完整登出流程完成');
+      print('✅ 完整登出流程完成');
     } catch (e) {
-      print(' 登出過程中發生錯誤: $e');
+      print('❌ 登出過程中發生錯誤: $e');
 
       // 即使發生錯誤，也要嘗試 Firebase 登出
       try {
         await _auth.signOut();
         print('Firebase 強制登出成功');
       } catch (authError) {
-        print(' Firebase 登出也失敗: $authError');
+        print('❌ Firebase 登出也失敗: $authError');
         throw Exception('登出失敗: ${authError.toString()}');
       }
     }

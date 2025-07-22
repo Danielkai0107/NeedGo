@@ -495,8 +495,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // 關閉載入對話框
         Navigator.pop(context);
 
-        // 清除所有路由並返回到根路由，讓 AuthGate 處理重新導向到登入頁面
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        print('✅ ProfileScreen：登出成功，等待 AuthGate 自動處理導航');
+        // 不需要手動導航，AuthGate 會自動監聽狀態變化並跳轉到登入頁面
       }
     } catch (e) {
       if (mounted) {

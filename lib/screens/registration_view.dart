@@ -12,6 +12,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/custom_dropdown_field.dart';
 import '../widgets/custom_date_time_field.dart';
 import '../services/rekognition_service.dart';
+import '../services/auth_service.dart';
 import '../utils/custom_snackbar.dart';
 
 class RegistrationView extends StatefulWidget {
@@ -31,6 +32,7 @@ class RegistrationView extends StatefulWidget {
 class _RegistrationViewState extends State<RegistrationView> {
   int _currentStep = 0;
   bool _loading = false;
+  final AuthService _authService = AuthService();
 
   // 添加鍵盤高度跟蹤變量
   double _previousKeyboardHeight = 0.0;
@@ -73,12 +75,18 @@ class _RegistrationViewState extends State<RegistrationView> {
   @override
   void initState() {
     super.initState();
+    print('📝 RegistrationView initState 被調用');
+    print('📝 傳入參數: uid=${widget.uid}, phoneNumber=${widget.phoneNumber}');
+
     _defaultFocusNode = FocusNode();
     // 預先填入 Google 帳號的 email
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser?.email != null) {
       _emailCtrl.text = currentUser!.email!;
+      print('📧 自動填入 Email: ${currentUser.email}');
     }
+
+    print('✅ RegistrationView 初始化完成');
   }
 
   @override
@@ -185,11 +193,11 @@ class _RegistrationViewState extends State<RegistrationView> {
 
         // 5. 導向主流程
         if (mounted) {
-          print('🚀 導航到主頁面...');
-          // 導航到根路由，讓 AuthGate 處理狀態判斷
-          final navigator = Navigator.of(context);
-          navigator.pushNamedAndRemoveUntil(
-            '/', // 讓 AuthGate 自動判斷應該進入哪個頁面
+          print('✅ 註冊完成，重新載入應用讓 AuthGate 檢查狀態');
+          // 註冊完成後，重新載入根頁面讓 AuthGate 重新檢查用戶註冊狀態
+          // 這次檢查會發現用戶已註冊，自動跳轉到主頁面
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/', // 回到根路由，讓 AuthGate 重新判斷
             (route) => false,
           );
         }
@@ -575,6 +583,112 @@ class _RegistrationViewState extends State<RegistrationView> {
     }
   }
 
+  // 處理離開註冊流程
+  Future<void> _handleExitRegistration() async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 64,
+                color: Colors.orange[600],
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '確認離開註冊？',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '離開註冊流程將會登出您的帳號，\n之前填寫的資料將不會被儲存。',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        '繼續註冊',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[600],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        '確認離開',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (shouldExit == true) {
+      await _performExitAndSignOut();
+    }
+  }
+
+  // 執行登出並導航
+  Future<void> _performExitAndSignOut() async {
+    try {
+      setState(() => _loading = true);
+
+      print('🔄 註冊頁面：執行登出...');
+      // 先登出用戶
+      await _authService.signOut();
+
+      print('✅ 註冊頁面：登出成功，等待 AuthGate 自動處理導航');
+      // 不需要手動導航，AuthGate 會自動監聽狀態變化並跳轉
+    } catch (e) {
+      print('❌ 登出過程發生錯誤: $e');
+
+      // 即使登出失敗，也顯示警告訊息
+      if (mounted) {
+        CustomSnackBar.showWarning(context, '登出過程中發生問題，請重新嘗試');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // 監聽鍵盤高度變化
@@ -595,12 +709,14 @@ class _RegistrationViewState extends State<RegistrationView> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: TextButton(
-          onPressed: () {
-            Navigator.of(
-              context,
-            ).pushNamedAndRemoveUntil('/auth', (route) => false);
-          },
-          child: const Text('離開', style: TextStyle(fontSize: 16)),
+          onPressed: _loading ? null : _handleExitRegistration,
+          child: Text(
+            '離開',
+            style: TextStyle(
+              fontSize: 16,
+              color: _loading ? Colors.grey : null,
+            ),
+          ),
         ),
         leadingWidth: 80,
         // 在真人驗證步驟時顯示重置按鈕

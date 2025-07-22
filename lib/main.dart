@@ -8,6 +8,7 @@ import 'services/chat_service.dart';
 import 'routes.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'styles/app_colors.dart';
+// 移除 AuthGate import，現在通過路由系統使用
 
 /// 應用程式主入口
 /// AuthGate 會自動處理登入狀態判斷：
@@ -45,6 +46,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   StreamSubscription<User?>? _authStateSubscription;
+  User? _currentUser; // 添加當前用戶狀態追蹤
 
   @override
   void initState() {
@@ -55,15 +57,30 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _authStateSubscription = FirebaseAuth.instance.authStateChanges().listen((
       User? user,
     ) {
+      print('🔄 main.dart: Firebase Auth 狀態變化');
+      print('🔍 main.dart: 用戶狀態: ${user != null ? "已登入" : "未登入"}');
       if (user != null) {
+        print('🔍 main.dart: 用戶資料: uid=${user.uid}, email=${user.email}');
+
         // 用戶登入時設置為在線狀態
+        print('📲 main.dart: 調用 ChatService.updateOnlineStatus(true)');
         ChatService.updateOnlineStatus(true);
-        
+
         // 啟動聊天室清理定時器
+        print('🧹 main.dart: 啟動聊天室清理定時器');
         ChatService.startChatRoomCleanupTimer();
       } else {
+        print('📴 main.dart: 用戶登出，停止聊天室清理定時器');
         // 用戶登出時停止聊天室清理定時器
         ChatService.stopChatRoomCleanupTimer();
+      }
+
+      // 更新當前用戶狀態，觸發 UI 重建
+      if (mounted && _currentUser?.uid != user?.uid) {
+        print('🔄 main.dart: 用戶狀態改變，觸發 UI 重建');
+        setState(() {
+          _currentUser = user;
+        });
       }
     });
 
@@ -120,7 +137,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           style: AppButtonStyles.primaryButton(),
         ),
       ),
-      // 初始路由設定為 '/', 會自動載入 AuthGate
+      // 使用路由系統，支援註冊完成後的導航
       initialRoute: '/',
       onGenerateRoute: Routes.generate,
       // 關閉 debug 模式下的橫幅
