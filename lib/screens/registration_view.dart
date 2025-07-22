@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mvp_app/styles/app_colors.dart';
 
 import 'dart:ui' as ui;
 import 'dart:math' as math;
@@ -293,9 +294,7 @@ class _RegistrationViewState extends State<RegistrationView> {
               height: 4,
               margin: EdgeInsets.only(right: index < 3 ? 8 : 0),
               decoration: BoxDecoration(
-                color: index <= _currentStep
-                    ? Theme.of(context).primaryColor
-                    : Colors.grey[300],
+                color: index <= _currentStep ? Colors.black : Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -345,8 +344,6 @@ class _RegistrationViewState extends State<RegistrationView> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.camera_alt, color: Colors.blue, size: 24),
-                        SizedBox(width: 16),
                         Text(
                           '拍照',
                           style: TextStyle(
@@ -372,12 +369,6 @@ class _RegistrationViewState extends State<RegistrationView> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(
-                          Icons.photo_library,
-                          color: Colors.green,
-                          size: 24,
-                        ),
-                        SizedBox(width: 16),
                         Text(
                           '從相簿選擇',
                           style: TextStyle(
@@ -589,44 +580,79 @@ class _RegistrationViewState extends State<RegistrationView> {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                size: 64,
-                color: Colors.orange[600],
-              ),
-              const SizedBox(height: 16),
+              // 標題
               const Text(
                 '確認離開註冊？',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
+              // 內容
               Text(
                 '離開註冊流程將會登出您的帳號，\n之前填寫的資料將不會被儲存。',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey[600],
-                  height: 1.4,
+                  height: 2,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
+              // 警告資訊容器
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 20,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '離開將會清除所有內容',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              // 按鈕組
               Row(
                 children: [
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.pop(context, false),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       child: const Text(
                         '繼續註冊',
                         style: TextStyle(
+                          color: Colors.grey,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -635,12 +661,12 @@ class _RegistrationViewState extends State<RegistrationView> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
+                    child: OutlinedButton(
                       onPressed: () => Navigator.pop(context, true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red[600],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red[600],
+                        side: BorderSide(color: Colors.red[600]!),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       child: const Text(
                         '確認離開',
@@ -714,7 +740,7 @@ class _RegistrationViewState extends State<RegistrationView> {
             '離開',
             style: TextStyle(
               fontSize: 16,
-              color: _loading ? Colors.grey : null,
+              color: _loading ? Colors.grey : AppColors.greyDark,
             ),
           ),
         ),
@@ -826,7 +852,7 @@ class _RegistrationViewState extends State<RegistrationView> {
                               child: ElevatedButton(
                                 onPressed: _canProceed() ? _handleNext : null,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange[600],
+                                  backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 24.0,
@@ -978,6 +1004,7 @@ class _RegistrationViewState extends State<RegistrationView> {
   Widget _buildAvatarStep() {
     return Column(
       children: [
+        SizedBox(height: 24),
         // 頭像顯示區域 - 使用固定高度容器
         Center(
           child: GestureDetector(
@@ -992,19 +1019,9 @@ class _RegistrationViewState extends State<RegistrationView> {
                     border: Border.all(
                       color: _croppedImage != null
                           ? Colors.green[300]!
-                          : Colors.blue[300]!,
-                      width: 3,
+                          : Colors.grey[300]!,
+                      width: 2.8,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            (_croppedImage != null ? Colors.green : Colors.blue)
-                                .withOpacity(0.2),
-                        spreadRadius: 2,
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: _croppedImage != null
                       ? ClipOval(
@@ -1056,17 +1073,9 @@ class _RegistrationViewState extends State<RegistrationView> {
                     decoration: BoxDecoration(
                       color: _croppedImage != null
                           ? Colors.green[600]
-                          : Colors.blue[600],
+                          : Colors.grey[400],
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          spreadRadius: 1,
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
+                      border: Border.all(color: Colors.white, width: 2.8),
                     ),
                     child: Icon(
                       _croppedImage != null ? Icons.check : Icons.edit,
@@ -1090,13 +1099,13 @@ class _RegistrationViewState extends State<RegistrationView> {
             _isProcessingImage
                 ? '處理中...'
                 : _croppedImage != null
-                ? '頭像已設定完成，點擊可重新選擇'
-                : '點擊上方圓圈拍照或選擇頭像照片',
+                ? '頭像已設定完成'
+                : '點擊拍照或選擇頭像照片',
             style: TextStyle(
               color: _croppedImage != null
                   ? Colors.green[600]
-                  : Colors.blue[600],
-              fontSize: 14,
+                  : Colors.grey[400],
+              fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
@@ -1111,6 +1120,8 @@ class _RegistrationViewState extends State<RegistrationView> {
   Widget _buildVerificationStep() {
     return Column(
       children: [
+        SizedBox(height: 24),
+
         // 驗證照片區域 - 使用與頭像上傳相同的乾淨UI
         Center(
           child: GestureDetector(
@@ -1129,23 +1140,9 @@ class _RegistrationViewState extends State<RegistrationView> {
                           ? Colors.green[300]!
                           : (_verificationError != null
                                 ? Colors.red[300]!
-                                : Colors.blue[300]!),
-                      width: 3,
+                                : Colors.grey[300]!),
+                      width: 2.8,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            (_isVerified
-                                    ? Colors.green
-                                    : (_verificationError != null
-                                          ? Colors.red
-                                          : Colors.blue))
-                                .withOpacity(0.2),
-                        spreadRadius: 2,
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: _verificationImage != null
                       ? ClipOval(
@@ -1199,24 +1196,16 @@ class _RegistrationViewState extends State<RegistrationView> {
                           ? Colors.green[600]
                           : (_verificationError != null
                                 ? Colors.red[600]
-                                : Colors.blue[600]),
+                                : Colors.grey[400]),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          spreadRadius: 1,
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
+                      border: Border.all(color: Colors.white, width: 2.8),
                     ),
                     child: Icon(
                       _isVerified
-                          ? Icons.check
+                          ? Icons.verified
                           : (_verificationError != null
                                 ? Icons.close
-                                : Icons.camera_alt),
+                                : Icons.verified),
                       size: 20,
                       color: Colors.white,
                     ),
@@ -1237,17 +1226,15 @@ class _RegistrationViewState extends State<RegistrationView> {
             _isVerifying
                 ? '正在驗證中...'
                 : _isVerified
-                ? '驗證通過！點擊可重新驗證'
-                : (_verificationError != null
-                      ? '驗證失敗，點擊重新拍照'
-                      : '點擊上方圓圈拍照進行真人驗證'),
+                ? '恭喜你！驗證通過'
+                : (_verificationError != null ? '驗證失敗，點擊重新拍照' : '點擊拍照進行真人驗證'),
             style: TextStyle(
               color: _isVerified
                   ? Colors.green[600]
                   : (_verificationError != null
                         ? Colors.red[600]
-                        : Colors.blue[600]),
-              fontSize: 14,
+                        : Colors.grey[400]),
+              fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
@@ -1262,8 +1249,8 @@ class _RegistrationViewState extends State<RegistrationView> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1271,17 +1258,30 @@ class _RegistrationViewState extends State<RegistrationView> {
               const Text(
                 '溫馨提醒：',
                 style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey,
+                  fontSize: 15,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                '• 請確保光線充足，避免過亮或過暗\n'
-                '• 正面拍攝，避免側臉或仰頭\n'
-                '• 請勿佩戴口罩、帽子或墨鏡\n'
+                '• 請確保光線充足，避免過亮或過暗',
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '• 正面拍攝，避免側臉或仰頭',
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '• 請勿佩戴口罩、帽子或墨鏡',
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 '• 保持表情自然，眼睛看向鏡頭',
-                style: TextStyle(color: Colors.blue[700], fontSize: 14),
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
               ),
             ],
           ),

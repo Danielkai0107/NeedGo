@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:mvp_app/styles/app_colors.dart';
 
 import '../utils/custom_snackbar.dart';
 import '../widgets/custom_text_field.dart';
@@ -553,38 +554,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return 'other';
       default:
         return displayValue;
-    }
-  }
-
-  /// 格式化加入時間
-  String _calculateJoinTime() {
-    final createdAt = _profile['createdAt'];
-    if (createdAt == null) return '加入時間未知';
-
-    try {
-      DateTime date;
-      if (createdAt is Timestamp) {
-        date = createdAt.toDate();
-      } else if (createdAt is String) {
-        date = DateTime.parse(createdAt);
-      } else {
-        return '加入時間未知';
-      }
-
-      final now = DateTime.now();
-      final difference = now.difference(date);
-
-      if (difference.inDays < 30) {
-        return '加入 ${difference.inDays} 天';
-      } else if (difference.inDays < 365) {
-        final months = difference.inDays ~/ 30;
-        return '加入 $months 個月';
-      } else {
-        final years = difference.inDays ~/ 365;
-        return '加入 $years 年';
-      }
-    } catch (e) {
-      return '加入時間未知';
     }
   }
 
@@ -1218,7 +1187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       width: 35,
                       height: 35,
                       decoration: BoxDecoration(
-                        color: Colors.blue[600],
+                        color: AppColors.primary,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 3),
                         boxShadow: [
@@ -1251,20 +1220,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: Colors.black,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            _calculateJoinTime(),
-            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-          ),
           const SizedBox(height: 12),
           if (_profile['isVerified'] == true)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.verified_user, size: 16, color: Colors.green[600]),
+                Icon(
+                  Icons.how_to_reg_rounded,
+                  size: 24,
+                  color: Colors.green[600],
+                ),
                 const SizedBox(width: 6),
                 Text(
-                  '已認證',
+                  '真人用戶',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1277,24 +1245,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             OutlinedButton.icon(
               onPressed: _canVerifyToday() ? _showVerificationDialog : null,
               icon: Icon(
-                Icons.verified_user,
-                size: 16,
-                color: _canVerifyToday() ? Colors.blue[600] : Colors.grey,
+                Icons.gpp_maybe_outlined,
+                size: 20,
+                color: Colors.grey,
               ),
               label: Text(
-                _canVerifyToday() ? '前往驗證' : '今日驗證次數已用完',
+                _canVerifyToday() ? '前往真人驗證' : '今日驗證次數已用完',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: _canVerifyToday() ? Colors.blue[600] : Colors.grey,
+                  color: Colors.grey,
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(
-                  color: _canVerifyToday()
-                      ? Colors.blue[300]!
-                      : Colors.grey[300]!,
-                ),
+                side: BorderSide(color: Colors.grey[300]!),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 8,
@@ -1345,7 +1309,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icon(icon, size: 20, color: Colors.grey[600]),
           const SizedBox(width: 12),
           Text(
-            '$label：',
+            '$label ：',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,

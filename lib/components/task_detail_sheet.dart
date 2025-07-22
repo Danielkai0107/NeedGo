@@ -98,7 +98,7 @@ class VerifiedAvatar extends StatelessWidget {
                 ],
               ),
               child: Icon(
-                Icons.verified_user_rounded,
+                Icons.verified,
                 color: Colors.white,
                 size: badgeIconSize,
               ),
@@ -309,53 +309,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       if (mounted) {
         setState(() => _isLoadingApplicants = false);
       }
-    }
-  }
-
-  /// 計算用戶加入App的時間
-  String _calculateJoinTime(Map<String, dynamic> userData) {
-    try {
-      // 嘗試從不同可能的欄位獲取註冊時間
-      dynamic createdAtField =
-          userData['createdAt'] ??
-          userData['registrationDate'] ??
-          userData['joinDate'] ??
-          userData['created_at'];
-
-      if (createdAtField == null) {
-        return '新用戶';
-      }
-
-      DateTime createdAt;
-      if (createdAtField is Timestamp) {
-        // Firestore Timestamp
-        createdAt = createdAtField.toDate();
-      } else if (createdAtField is String) {
-        // 字串格式的日期
-        createdAt = DateTime.parse(createdAtField);
-      } else {
-        return '新用戶';
-      }
-
-      final now = DateTime.now();
-      final difference = now.difference(createdAt);
-      final months = (difference.inDays / 30).floor();
-
-      if (months < 1) {
-        return '新用戶';
-      } else if (months < 12) {
-        return '加入 ${months} 個月';
-      } else {
-        final years = (months / 12).floor();
-        final remainingMonths = months % 12;
-        if (remainingMonths == 0) {
-          return '加入 ${years} 年';
-        } else {
-          return '加入 ${years} 年 ${remainingMonths} 個月';
-        }
-      }
-    } catch (e) {
-      return '新用戶';
     }
   }
 
@@ -1390,10 +1343,34 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      _calculateJoinTime(_publisherData!),
-                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                    ),
+                    // 認證狀態
+                    _publisherData!['isVerified'] == true
+                        ? Row(
+                            children: [
+                              Icon(
+                                Icons.how_to_reg_rounded,
+                                size: 16,
+                                color: Colors.green[700],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '真人用戶',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            '尚未認證用戶',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[500],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                   ],
                 ),
               ),
@@ -1728,7 +1705,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
   Widget _buildApplicantCard(Map<String, dynamic> applicant, int index) {
     final applicantName = applicant['name'] ?? '未設定姓名';
     final avatarUrl = applicant['avatarUrl']?.toString() ?? '';
-    final joinTimeText = _calculateJoinTime(applicant);
 
     return Container(
       width: double.infinity,
@@ -1778,15 +1754,34 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
                   ),
                   const SizedBox(height: 4),
 
-                  // 加入時間
-                  Text(
-                    joinTimeText,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[500],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  // 認證狀態
+                  applicant['isVerified'] == true
+                      ? Row(
+                          children: [
+                            Icon(
+                              Icons.how_to_reg_rounded,
+                              size: 16,
+                              color: Colors.green[700],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '真人用戶',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.green[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          '尚未認證用戶',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[500],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                 ],
               ),
             ),
@@ -2462,53 +2457,6 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     CustomSnackBar.showWarning(context, message);
   }
 
-  /// 計算用戶加入App的時間
-  String _calculateJoinTime(Map<String, dynamic> userData) {
-    try {
-      // 嘗試從不同可能的欄位獲取註冊時間
-      dynamic createdAtField =
-          userData['createdAt'] ??
-          userData['registrationDate'] ??
-          userData['joinDate'] ??
-          userData['created_at'];
-
-      if (createdAtField == null) {
-        return '新用戶';
-      }
-
-      DateTime createdAt;
-      if (createdAtField is Timestamp) {
-        // Firestore Timestamp
-        createdAt = createdAtField.toDate();
-      } else if (createdAtField is String) {
-        // 字串格式的日期
-        createdAt = DateTime.parse(createdAtField);
-      } else {
-        return '新用戶';
-      }
-
-      final now = DateTime.now();
-      final difference = now.difference(createdAt);
-      final months = (difference.inDays / 30).floor();
-
-      if (months < 1) {
-        return '新用戶';
-      } else if (months < 12) {
-        return '加入 ${months} 個月';
-      } else {
-        final years = (months / 12).floor();
-        final remainingMonths = months % 12;
-        if (remainingMonths == 0) {
-          return '加入 ${years} 年';
-        } else {
-          return '加入 ${years} 年 ${remainingMonths} 個月';
-        }
-      }
-    } catch (e) {
-      return '新用戶';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -2579,7 +2527,6 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
   Widget _buildApplicantHeader() {
     final applicantName = widget.applicantData['name'] ?? '未設定姓名';
     final avatarUrl = widget.applicantData['avatarUrl']?.toString() ?? '';
-    final joinTimeText = _calculateJoinTime(widget.applicantData);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -2622,11 +2569,34 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    joinTimeText,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                    textAlign: TextAlign.center,
-                  ),
+                  // 認證狀態
+                  widget.applicantData['isVerified'] == true
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.how_to_reg_rounded,
+                              size: 16,
+                              color: Colors.green[700],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '真人用戶',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.green[700],
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          '尚未認證用戶',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                 ],
               ),
             ),
@@ -3342,11 +3312,34 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '已發布 $_taskCount 個任務',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                    textAlign: TextAlign.center,
-                  ),
+                  widget.publisherData['isVerified'] == true
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.how_to_reg_rounded,
+                              size: 16,
+                              color: Colors.green[700],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '真人用戶',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.green[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          '尚未認證用戶',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                 ],
               ),
             ),
@@ -3617,7 +3610,7 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
           height: 50,
         ),
         const Text(
-          '個人介紹 (發布用)',
+          '個人介紹',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 20),

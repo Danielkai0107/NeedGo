@@ -2048,7 +2048,7 @@ class VerifiedAvatar extends StatelessWidget {
               width: badgeSize,
               height: badgeSize,
               decoration: BoxDecoration(
-                color: Colors.blue,
+                color: AppColors.primary,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 1),
               ),

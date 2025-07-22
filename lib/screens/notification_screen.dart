@@ -173,7 +173,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
           // 避免重複添加相同的通知
           if (existingNotificationIds.contains(notificationId)) {
-            print('    通知已存在，跳過');
+            print('通知已存在，跳過');
             continue;
           }
           existingNotificationIds.add(notificationId);
@@ -195,13 +195,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
             'taskId': task['id'],
             'taskName': taskTitle,
             'applicantId': applicantId,
-            'message': '「$taskTitle」有新的應徵者！',
+            'message': '有新的應徵者！',
             'timestamp': timestamp,
             'isRead': isRead,
             'taskData': task,
           });
 
-          print('   通知已添加');
+          print('通知已添加');
         }
       }
 
@@ -278,7 +278,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           'type': 'new_task',
           'taskId': task['id'],
           'taskName': task['title'] ?? task['name'] ?? '未命名任務',
-          'message': '有新的任務：${task['title'] ?? task['name']}',
+          'message': '有新的任務！',
           'timestamp': timestamp,
           'isRead': isRead,
           'taskData': task,
@@ -654,14 +654,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          side: BorderSide(color: AppColors.primary),
+                          side: BorderSide(color: Colors.grey[400]!),
                         ),
                         child: Text(
                           isRead ? '標記為未讀' : '標記為已讀',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
-                            color: AppColors.primary,
+                            color: Colors.grey[500],
                           ),
                         ),
                       ),
@@ -709,12 +709,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
     switch (type) {
       case 'new_applicant':
-        backgroundColor = isRead ? Colors.blue[50]! : Colors.blue[100]!;
+        backgroundColor = Colors.white;
         textColor = isRead ? Colors.blue[600]! : Colors.blue[700]!;
         text = '新應徵者';
         break;
       case 'new_task':
-        backgroundColor = isRead ? Colors.orange[50]! : Colors.orange[100]!;
+        backgroundColor = Colors.white;
         textColor = isRead ? Colors.orange[600]! : Colors.orange[700]!;
         text = '新任務';
         break;
@@ -839,12 +839,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       const SizedBox(width: 8),
                     ],
                     Text(
-                      '點擊查看詳情',
+                      isRead ? '已讀' : '查看詳情',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: type == 'new_applicant'
-                            ? Colors.blue[600]
-                            : Colors.orange[600],
+                        fontSize: 13,
+                        color: isRead
+                            ? Colors.grey[500]
+                            : (type == 'new_applicant'
+                                  ? Colors.blue[600]
+                                  : Colors.orange[600]),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -876,7 +878,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           if (_notifications.isNotEmpty)
             TextButton(
               onPressed: _clearAllNotifications,
-              child: const Text('全部清除'),
+              child: const Text('全部清除', style: TextStyle(color: Colors.grey)),
             ),
         ],
       ),
