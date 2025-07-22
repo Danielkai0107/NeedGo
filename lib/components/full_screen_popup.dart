@@ -13,6 +13,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/custom_dropdown_field.dart';
 import '../widgets/custom_date_time_field.dart';
 import 'verification_bottom_sheet.dart';
+import '../utils/custom_snackbar.dart';
 
 class FullScreenPopup extends StatelessWidget {
   final Widget child;
@@ -324,9 +325,7 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
       await _performAutoCrop(bytes);
     } catch (e) {
       setState(() => _isPickingImage = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+      CustomSnackBar.showError(context, '選擇圖片失敗：$e');
     }
   }
 
@@ -376,9 +375,7 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
       }
     } catch (e) {
       setState(() => _isPickingImage = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('自動裁切失敗：$e')));
+      CustomSnackBar.showError(context, '自動裁切失敗：$e');
     }
   }
 
@@ -410,14 +407,10 @@ class _EditProfileBottomSheetState extends State<EditProfileBottomSheet> {
         _isUploadingAvatar = false;
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('頭像更新成功！')));
+      CustomSnackBar.showSuccess(context, '頭像更新成功！');
     } catch (e) {
       setState(() => _isUploadingAvatar = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('頭像上傳失敗：$e')));
+      CustomSnackBar.showError(context, '頭像上傳失敗：$e');
     }
   }
 
@@ -1457,71 +1450,91 @@ class _MyApplicationsBottomSheetState extends State<MyApplicationsBottomSheet>
     return await showDialog<bool>(
           context: context,
           builder: (BuildContext context) {
-            return AlertDialog(
+            return Dialog(
+              backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(34),
               ),
-              title: Row(
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.orange[600],
-                    size: 24,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('確認取消應徵'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('您確定要取消應徵這個任務嗎？'),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange[200]!),
-                    ),
-                    child: Text(
-                      '任務：${application['title'] ?? application['name'] ?? '未命名任務'}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 標題
+                    Text(
+                      '確認取消應徵',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '取消後將無法恢復，需要重新應徵。',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 13,
-                      height: 1.4,
+                    const SizedBox(height: 16),
+                    // 內容
+                    Text(
+                      '您確定要取消應徵這個任務嗎？',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    // 任務資訊容器
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.orange[200]!),
+                      ),
+                      child: Text(
+                        '任務：${application['title'] ?? application['name'] ?? '未命名任務'}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '取消後將無法恢復，需要重新應徵。',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    // 按鈕組
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text(
+                              '再想想',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange[600],
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text(
+                              '確定取消',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('再想想', style: TextStyle(color: Colors.grey[600])),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange[600],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('確定取消'),
-                ),
-              ],
             );
           },
         ) ??
@@ -2224,55 +2237,79 @@ class _MyTasksListBottomSheetState extends State<MyTasksListBottomSheet>
     return await showDialog<bool>(
           context: context,
           builder: (BuildContext context) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.red[600],
-                    size: 24,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('確認刪除'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '您確定要刪除這個任務嗎？',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 18,
-                      height: 1.4,
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 標題
+                    Text(
+                      '確認刪除',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '此操作無法復原，所有相關的應徵記錄也會被刪除。',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 13,
-                      height: 1.4,
+                    const SizedBox(height: 16),
+                    // 內容
+                    Text(
+                      '您確定要刪除這個任務嗎？',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    // 警告容器
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red[200]!),
+                      ),
+                      child: Text(
+                        '此操作無法復原，所有相關的應徵記錄也會被刪除。',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: Colors.red[700],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // 按鈕組
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text(
+                              '取消',
+                              style: TextStyle(color: Colors.grey, fontSize: 16),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red[600],
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('刪除', style: TextStyle(fontSize: 16)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('取消', style: TextStyle(color: Colors.grey[600])),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('刪除'),
-                ),
-              ],
             );
           },
         ) ??

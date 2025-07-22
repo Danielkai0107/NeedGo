@@ -218,7 +218,7 @@ class ChatService {
         print('⚠️ 用戶文檔不存在，跳過在線狀態更新');
       }
     } catch (e) {
-      print('❌ 更新在線狀態失敗: $e');
+      print(' 更新在線狀態失敗: $e');
     }
   }
 
@@ -422,7 +422,7 @@ class ChatService {
         print('✅ 聊天室已設置為對所有參與者可見: $chatId');
       }
     } catch (e) {
-      print('❌ 更新聊天室可見性失敗: $e');
+      print(' 更新聊天室可見性失敗: $e');
     }
   }
 
@@ -850,7 +850,7 @@ class ChatService {
 
       print('✅ 任務 $taskId 的所有聊天室關閉提醒已發送完成');
     } catch (e) {
-      print('❌ 發送聊天室關閉提醒失敗: $e');
+      print(' 發送聊天室關閉提醒失敗: $e');
     }
   }
 
@@ -885,7 +885,7 @@ class ChatService {
 
       print('✅ 過期任務 $taskId 的所有聊天室關閉提醒已發送完成');
     } catch (e) {
-      print('❌ 發送過期任務聊天室關閉提醒失敗: $e');
+      print(' 發送過期任務聊天室關閉提醒失敗: $e');
     }
   }
 
@@ -1010,20 +1010,18 @@ class ChatService {
       print('⚠️ 無法獲取聊天室關閉時間配置，使用預設值: 1440分鐘');
       return 1440;
     } catch (e) {
-      print('❌ 獲取系統配置失敗: $e，使用預設值: 1440分鐘');
+      print(' 獲取系統配置失敗: $e，使用預設值: 1440分鐘');
       return 1440;
     }
   }
 
-  /// 檢查任務是否已完成超過指定時間
+  /// 檢查任務是否已完成或過期超過指定時間
   static Future<bool> isTaskCompletedForConfiguredTime(String taskId) async {
     try {
-      // 獲取系統配置的關閉時間
-      final closeTimeMinutes = await _getChatCloseTimer();
-
       final taskDoc = await _firestore.collection('posts').doc(taskId).get();
 
       if (!taskDoc.exists) {
+        print('📅 任務不存在: $taskId');
         return false;
       }
 
@@ -1032,8 +1030,9 @@ class ChatService {
       final completedAt = taskData['completedAt'] as Timestamp?;
       final expiredAt = taskData['expiredAt'] as Timestamp?;
 
-      // 檢查任務是否已完成超過配置的時間
+      // 對於已完成的任務，使用系統配置的等待時間
       if (status == 'completed' && completedAt != null) {
+        final closeTimeMinutes = await _getChatCloseTimer();
         final completedTime = completedAt.toDate();
         final now = DateTime.now();
         final difference = now.difference(completedTime);
@@ -1044,8 +1043,9 @@ class ChatService {
         return isExpired;
       }
 
-      // 檢查任務是否已過期超過配置的時間
+      // 對於已標記為過期的任務，使用系統配置的等待時間
       if (status == 'expired' && expiredAt != null) {
+        final closeTimeMinutes = await _getChatCloseTimer();
         final expiredTime = expiredAt.toDate();
         final now = DateTime.now();
         final difference = now.difference(expiredTime);
@@ -1056,9 +1056,73 @@ class ChatService {
         return isExpired;
       }
 
-      // 如果任務狀態不是 completed 或 expired，則不應該清理聊天室
-      // 即使任務日期已過，但任務可能仍在進行中
-      print('📅 任務狀態: $status，不需要清理聊天室（任務未完成或過期）');
+      // 重要修復：對於實際已過期但狀態未更新的任務，使用固定的5分鐘等待時間
+      if (_isTaskExpiredNow(taskData)) {
+        // 任務時間已過期，計算從過期時間到現在的時間差
+        DateTime expiredTime;
+        final date = taskData['date'];
+        final time = taskData['time'];
+
+        if (date is String) {
+          expiredTime = DateTime.parse(date);
+        } else if (date is DateTime) {
+          expiredTime = date;
+        } else if (date is Timestamp) {
+          expiredTime = (date as Timestamp).toDate();
+        } else {
+          print('📅 任務日期格式不正確: $taskId');
+          return false;
+        }
+
+        // 如果有時間資訊，使用精確時間
+        if (time != null && time is Map) {
+          final hour = time['hour'] ?? 0;
+          final minute = time['minute'] ?? 0;
+          expiredTime = DateTime(
+            expiredTime.year,
+            expiredTime.month,
+            expiredTime.day,
+            hour,
+            minute,
+          );
+        } else {
+          // 如果沒有時間資訊，設定為當天 23:59
+          expiredTime = DateTime(
+            expiredTime.year,
+            expiredTime.month,
+            expiredTime.day,
+            23,
+            59,
+          );
+        }
+
+        final now = DateTime.now();
+        final difference = now.difference(expiredTime);
+        // 過期任務固定等待5分鐘後清理聊天室
+        const expiredTaskCleanupMinutes = 5;
+        final shouldCleanup = difference.inMinutes >= expiredTaskCleanupMinutes;
+
+        print(
+          '📅 任務實際過期於: $expiredTime, 已過 ${difference.inMinutes} 分鐘, 過期任務等待時間: ${expiredTaskCleanupMinutes}分鐘, 需清理: $shouldCleanup',
+        );
+        print('📅 任務狀態: $status (實際已過期但狀態未更新)');
+
+        // 如果需要清理，先自動更新任務狀態
+        if (shouldCleanup) {
+          print('🔄 自動更新過期任務狀態: $taskId');
+          await _firestore.collection('posts').doc(taskId).update({
+            'status': 'expired',
+            'isActive': false,
+            'expiredAt': Timestamp.fromDate(expiredTime),
+            'updatedAt': Timestamp.now(),
+          });
+        }
+
+        return shouldCleanup;
+      }
+
+      // 如果任務狀態不是 completed 或 expired，且時間還沒過期
+      print('📅 任務狀態: $status，不需要清理聊天室（任務仍在進行中）');
       return false;
     } catch (e) {
       print('檢查任務完成狀態失敗: $e');
@@ -1151,14 +1215,14 @@ class ChatService {
             cleanedCount++;
             print('✅ 聊天室清理完成: $chatId');
           } catch (e) {
-            print('❌ 清理聊天室 $chatId 失敗: $e');
+            print(' 清理聊天室 $chatId 失敗: $e');
             // 如果清理失敗，回滾 isCleanedUp 標記
             try {
               await _firestore.collection('chats').doc(chatId).update({
                 'isCleanedUp': false,
               });
             } catch (rollbackError) {
-              print('❌ 回滾清理標記失敗: $rollbackError');
+              print(' 回滾清理標記失敗: $rollbackError');
             }
           }
         }
@@ -1166,7 +1230,7 @@ class ChatService {
 
       print('✅ 聊天室清理完成，共清理 $cleanedCount 個聊天室');
     } catch (e) {
-      print('❌ 清理過期聊天室失敗: $e');
+      print(' 清理過期聊天室失敗: $e');
     }
   }
 
@@ -1224,15 +1288,15 @@ class ChatService {
   static Timer? _cleanupTimer;
 
   static void startChatRoomCleanupTimer() {
-    // 每5分鐘檢查一次，確保及時清理過期聊天室
-    _cleanupTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+    // 每1分鐘檢查一次，確保及時清理過期聊天室
+    _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       checkAndCleanupExpiredChatRooms();
     });
 
     // 立即執行一次
     checkAndCleanupExpiredChatRooms();
 
-    print('✅ 聊天室清理定時器已啟動（每5分鐘檢查一次）');
+    print('✅ 聊天室清理定時器已啟動（每1分鐘檢查一次）');
   }
 
   static void stopChatRoomCleanupTimer() {
@@ -1248,6 +1312,96 @@ class ChatService {
     _cachedChatCloseTimer = null;
     _cacheExpiry = null;
     await checkAndCleanupExpiredChatRooms();
+  }
+
+  /// 立即清理所有實際過期的聊天室（忽略等待時間）
+  static Future<void> triggerImmediateCleanupForExpiredTasks() async {
+    try {
+      print('🧹 開始立即清理實際過期的聊天室...');
+
+      // 獲取所有活躍的聊天室
+      final chatRoomsSnapshot = await _firestore
+          .collection('chats')
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      int cleanedCount = 0;
+
+      for (var chatDoc in chatRoomsSnapshot.docs) {
+        final chatData = chatDoc.data();
+        final chatId = chatDoc.id;
+        final taskId = chatData['taskId'] as String?;
+        final isConnectionLost = chatData['isConnectionLost'] ?? false;
+        final isCleanedUp = chatData['isCleanedUp'] ?? false;
+
+        // 跳過已經失去聯繫或已清理的聊天室
+        if (isConnectionLost || isCleanedUp || taskId == null) {
+          continue;
+        }
+
+        // 檢查任務是否實際已過期（不管狀態）
+        final taskDoc = await _firestore.collection('posts').doc(taskId).get();
+        if (!taskDoc.exists) continue;
+
+        final taskData = taskDoc.data()!;
+        if (_isTaskExpiredNow(taskData)) {
+          print('🧹 發現實際過期的任務聊天室: $chatId (任務: $taskId)');
+
+          try {
+            // 使用事務確保原子性操作
+            await _firestore.runTransaction((transaction) async {
+              final chatRef = _firestore.collection('chats').doc(chatId);
+              final currentChatDoc = await transaction.get(chatRef);
+
+              if (!currentChatDoc.exists) return;
+
+              final currentChatData = currentChatDoc.data()!;
+              if (currentChatData['isConnectionLost'] == true ||
+                  currentChatData['isCleanedUp'] == true) {
+                return;
+              }
+
+              // 標記為正在清理
+              transaction.update(chatRef, {
+                'isCleanedUp': true,
+                'cleanedUpAt': Timestamp.now(),
+              });
+            });
+
+            // 清空聊天室訊息
+            await clearChatRoomMessages(chatId);
+
+            // 發送失去聯繫訊息
+            await _sendConnectionLostMessage(chatId);
+
+            // 最終標記聊天室為已失去聯繫
+            await _firestore.collection('chats').doc(chatId).update({
+              'isConnectionLost': true,
+              'lastMessage': '任務已過期，聊天室已關閉。',
+              'lastMessageSender': 'system',
+              'updatedAt': Timestamp.now(),
+            });
+
+            // 同時更新任務狀態
+            await _firestore.collection('posts').doc(taskId).update({
+              'status': 'expired',
+              'isActive': false,
+              'updatedAt': Timestamp.now(),
+              'expiredAt': Timestamp.now(),
+            });
+
+            cleanedCount++;
+            print('✅ 過期任務聊天室清理完成: $chatId');
+          } catch (e) {
+            print(' 清理聊天室 $chatId 失敗: $e');
+          }
+        }
+      }
+
+      print('✅ 立即清理完成，共清理 $cleanedCount 個過期任務的聊天室');
+    } catch (e) {
+      print(' 立即清理過期聊天室失敗: $e');
+    }
   }
 
   /// 清除系統配置緩存
@@ -1346,7 +1500,7 @@ class ChatService {
         'taskActive': taskActive,
       };
     } catch (e) {
-      print('❌ 測試聊天室恢復功能失敗: $e');
+      print(' 測試聊天室恢復功能失敗: $e');
       return {'success': false, 'message': '測試失敗: $e'};
     }
   }
@@ -1358,7 +1512,7 @@ class ChatService {
 
       final taskDoc = await _firestore.collection('posts').doc(taskId).get();
       if (!taskDoc.exists) {
-        print('❌ 任務不存在: $taskId');
+        print(' 任務不存在: $taskId');
         return false;
       }
 
@@ -1379,7 +1533,7 @@ class ChatService {
 
       return isActive;
     } catch (e) {
-      print('❌ 檢查任務狀態失敗: $e');
+      print(' 檢查任務狀態失敗: $e');
       return false;
     }
   }
@@ -1453,7 +1607,7 @@ class ChatService {
       // 獲取聊天室資訊
       final chatDoc = await _firestore.collection('chats').doc(chatId).get();
       if (!chatDoc.exists) {
-        print('❌ 聊天室不存在: $chatId');
+        print(' 聊天室不存在: $chatId');
         return false;
       }
 
@@ -1473,7 +1627,7 @@ class ChatService {
       }
 
       if (taskId == null) {
-        print('❌ 聊天室缺少任務ID: $chatId');
+        print(' 聊天室缺少任務ID: $chatId');
         return false;
       }
 
@@ -1483,7 +1637,7 @@ class ChatService {
       print('📊 任務活躍狀態: $isActive');
 
       if (!isActive) {
-        print('❌ 任務已完成或過期，無法恢復聊天室: $chatId, 任務ID: $taskId');
+        print(' 任務已完成或過期，無法恢復聊天室: $chatId, 任務ID: $taskId');
         return false;
       }
 
@@ -1496,7 +1650,7 @@ class ChatService {
       print('✅ 聊天室已智能恢復: $chatId（任務進行中，對用戶 ${currentUser.uid} 恢復顯示）');
       return true;
     } catch (e) {
-      print('❌ 智能恢復聊天室失敗: $e');
+      print(' 智能恢復聊天室失敗: $e');
       return false;
     }
   }

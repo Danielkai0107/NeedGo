@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'task_detail_sheet.dart';
+import '../utils/custom_snackbar.dart';
 
 /// 地點資訊彈窗 - 在 ParentView 與 PlayerView 中共用
 class LocationInfoSheet extends StatefulWidget {
@@ -216,7 +217,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
         return 0.0;
       }
     } catch (e) {
-      print('❌ 解析價格失敗: ${task['title'] ?? task['id']}, 錯誤: $e');
+      print(' 解析價格失敗: ${task['title'] ?? task['id']}, 錯誤: $e');
       return 0.0;
     }
   }
@@ -893,9 +894,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
       await launchUrl(url);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('無法開啟導航')));
+        CustomSnackBar.showError(context, '無法開啟導航');
       }
     }
   }

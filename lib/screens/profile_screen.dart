@@ -199,7 +199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         print('✅ 已自動遷移用戶資料，添加缺少的欄位');
       } catch (e) {
-        print('❌ 用戶資料遷移失敗: $e');
+        print(' 用戶資料遷移失敗: $e');
       }
     }
   }
@@ -459,17 +459,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Navigator.pop(context);
 
         // 顯示錯誤訊息
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('登出失敗：$e'),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: '重試',
-              textColor: Colors.white,
-              onPressed: _logout,
-            ),
-          ),
-        );
+        CustomSnackBar.showError(context, '登出失敗：$e');
       }
     }
   }

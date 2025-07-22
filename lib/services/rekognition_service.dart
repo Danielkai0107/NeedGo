@@ -46,10 +46,10 @@ class RekognitionService {
   static void testCredentials() {
     print('🔍 測試 AWS 憑證加載:');
     print(
-      '   Access Key: ${_accessKey.isEmpty ? "❌ 未設定" : "✅ 已設定 (${_accessKey.substring(0, 8)}...)"}',
+      '   Access Key: ${_accessKey.isEmpty ? " 未設定" : "✅ 已設定 (${_accessKey.substring(0, 8)}...)"}',
     );
     print(
-      '   Secret Key: ${_secretKey.isEmpty ? "❌ 未設定" : "✅ 已設定 (${_secretKey.length} 字符)"}',
+      '   Secret Key: ${_secretKey.isEmpty ? " 未設定" : "✅ 已設定 (${_secretKey.length} 字符)"}',
     );
     print('   Region: $_region');
     print('   所有環境變數: ${dotenv.env.keys.toList()}');
@@ -65,7 +65,7 @@ class RekognitionService {
       // 檢查憑證是否存在
       if (_accessKey.isEmpty || _secretKey.isEmpty) {
         print(
-          '❌ AWS 憑證檢查失敗: AccessKey=${_accessKey.isEmpty ? "空" : "已設定"}, SecretKey=${_secretKey.isEmpty ? "空" : "已設定"}',
+          ' AWS 憑證檢查失敗: AccessKey=${_accessKey.isEmpty ? "空" : "已設定"}, SecretKey=${_secretKey.isEmpty ? "空" : "已設定"}',
         );
         return FaceComparisonResult(
           isSuccess: false,
@@ -162,7 +162,7 @@ class RekognitionService {
           );
         }
       } else {
-        print('❌ Rekognition API 錯誤: ${response.statusCode}');
+        print(' Rekognition API 錯誤: ${response.statusCode}');
         print('錯誤內容: ${response.body}');
 
         final errorData = json.decode(response.body);

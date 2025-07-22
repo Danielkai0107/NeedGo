@@ -165,72 +165,19 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
 
-  /// 顯示自定義樣式的 SnackBar
-  void _showCustomSnackBar(String message, {Color? iconColor, IconData? icon}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              icon ?? Icons.check_circle_outline,
-              color: iconColor ?? Colors.green[600],
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: Colors.grey[800],
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.white,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 8,
-        margin: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom:
-              MediaQuery.of(context).size.height -
-              MediaQuery.of(context).padding.top -
-              120, // 調整位置到頂部附近
-        ),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
   /// 顯示成功訊息
   void _showSuccessMessage(String message) {
-    _showCustomSnackBar(
-      message,
-      iconColor: Colors.green[600],
-      icon: Icons.check_circle_outline,
-    );
+    CustomSnackBar.showSuccess(context, message);
   }
 
   /// 顯示錯誤訊息
   void _showErrorMessage(String message) {
-    _showCustomSnackBar(
-      message,
-      iconColor: Colors.red[600],
-      icon: Icons.error_outline,
-    );
+    CustomSnackBar.showError(context, message);
   }
 
   /// 顯示警告訊息
   void _showWarningMessage(String message) {
-    _showCustomSnackBar(
-      message,
-      iconColor: Colors.orange[600],
-      icon: Icons.warning_outlined,
-    );
+    CustomSnackBar.showWarning(context, message);
   }
 
   @override
@@ -521,14 +468,14 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       // 通知父組件更新
       widget.onTaskUpdated?.call();
 
-      print('✅ 任務狀態已自動更新為過期');
+      print('任務狀態已自動更新為過期');
 
       // 顯示過期通知（不阻塞）
       if (mounted) {
         _showTaskExpiredMessage();
       }
     } catch (e) {
-      print('❌ 自動更新任務過期狀態失敗: $e');
+      print(' 自動更新任務過期狀態失敗: $e');
       // 如果更新失敗，仍然停止計時器並更新本地狀態
       if (mounted) {
         setState(() {
@@ -663,7 +610,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         }
       }
     } catch (e) {
-      print('❌ 檢查任務過期狀態失敗: $e');
+      print(' 檢查任務過期狀態失敗: $e');
     }
   }
 
@@ -730,9 +677,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       // 發送聊天室關閉提醒訊息
       await ChatService.sendTaskExpiredChatCloseReminder(taskId);
 
-      print('✅ 任務狀態已更新為過期，聊天室關閉提醒已發送');
+      print('任務狀態已更新為過期，聊天室關閉提醒已發送');
     } catch (e) {
-      print('❌ 更新任務過期狀態失敗: $e');
+      print(' 更新任務過期狀態失敗: $e');
     }
   }
 
@@ -745,102 +692,101 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       context: context,
       barrierDismissible: false, // 不能點擊外部關閉
       builder: (BuildContext context) {
-        return AlertDialog(
+        return Dialog(
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(34),
           ),
-          title: Row(
-            children: [
-              Icon(Icons.schedule_rounded, color: Colors.orange[600], size: 28),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 標題
+                Text(
                   '任務已結束',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '「$taskTitle」已超過執行時間，系統已自動結束此任務。',
-                style: const TextStyle(fontSize: 16, height: 1.5),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange[200]!),
+                const SizedBox(height: 16),
+                // 內容
+                Text(
+                  '「$taskTitle」已超過執行時間，系統已自動結束此任務。',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          color: Colors.orange[700],
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '任務結束後：',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
+                const SizedBox(height: 16),
+                // 資訊容器
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
                             color: Colors.orange[700],
+                            size: 18,
                           ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '任務結束後：',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.isParentView
+                            ? '• 任務已從地圖上移除\n• 應徵者無法再申請\n• 可在「我的發佈清單」中查看'
+                            : '• 任務已從地圖上移除\n• 無法申請或取消申請\n• 可在「我的應徵清單」中查看',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.orange[700],
+                          height: 1.4,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // 按鈕組
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // 關閉對話框
+                      Navigator.of(context).pop(); // 關閉任務詳情頁
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.isParentView
-                          ? '• 任務已從地圖上移除\n• 應徵者無法再申請\n• 可在「我的發佈清單」中查看'
-                          : '• 任務已從地圖上移除\n• 無法申請或取消申請\n• 可在「我的應徵清單」中查看',
+                    child: const Text(
+                      '我知道了',
                       style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.orange[700],
-                        height: 1.4,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // 關閉對話框
-                Navigator.of(context).pop(); // 關閉任務詳情頁
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
-              child: const Text(
-                '我知道了',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
+              ],
             ),
-          ],
-          actionsPadding: const EdgeInsets.only(
-            left: 24,
-            right: 24,
-            bottom: 16,
           ),
         );
       },
@@ -876,17 +822,13 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
 
         widget.onTaskUpdated?.call();
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('申請成功！')));
+        CustomSnackBar.showSuccess(context, '申請成功！');
 
         setState(() {}); // 刷新UI狀態
       }
     } catch (e) {
       print('申請失敗: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('申請失敗：$e')));
+      CustomSnackBar.showError(context, '申請失敗：$e');
     } finally {
       if (mounted) {
         setState(() => _isApplying = false);
@@ -923,17 +865,13 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
 
         widget.onTaskUpdated?.call();
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已取消申請')));
+        CustomSnackBar.showSuccess(context, '已取消申請');
 
         setState(() {}); // 刷新UI狀態
       }
     } catch (e) {
       print('取消申請失敗: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('取消申請失敗：$e')));
+      CustomSnackBar.showError(context, '取消申請失敗：$e');
     } finally {
       if (mounted) {
         setState(() => _isApplying = false);
@@ -1075,8 +1013,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
       _showErrorMessage('開始與應徵者聊天失敗: $e');
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -1945,19 +1881,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
         Navigator.of(context).pop();
 
         // 顯示成功訊息
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('任務已完成，已通知相關聊天室'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        CustomSnackBar.showSuccess(context, '任務已完成，已通知相關聊天室');
       }
     } catch (e) {
       print('完成任務時發生錯誤: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('完成任務失敗: $e'), backgroundColor: Colors.red),
-        );
+        CustomSnackBar.showError(context, '完成任務失敗: $e');
       }
     }
   }
@@ -1967,89 +1896,118 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
     return await showDialog<bool>(
           context: context,
           builder: (BuildContext context) {
-            return AlertDialog(
+            return Dialog(
+              backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(34),
               ),
-              title: Row(
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    color: Colors.green[600],
-                    size: 24,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('確認任務完成'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('您確定要將此任務標記為完成嗎？'),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green[200]!),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 標題
+                    Text(
+                      '確認任務完成',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 16),
+                    // 內容
+                    Text(
+                      '您確定要將此任務標記為完成嗎？',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    // 任務資訊容器
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.green[200]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '任務：${widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務'}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '✓ 任務將被標記為已完成',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                          Text(
+                            '✓ 任務將從地圖上移除',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                          Text(
+                            '✓ 任務將移至"過去發布"區域',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '完成後此操作無法復原。',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    // 按鈕組
+                    Row(
                       children: [
-                        Text(
-                          '任務：${widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務'}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text(
+                              '取消',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          '✓ 任務將被標記為已完成',
-                          style: TextStyle(fontSize: 12, color: Colors.green),
-                        ),
-                        const Text(
-                          '✓ 任務將從地圖上移除',
-                          style: TextStyle(fontSize: 12, color: Colors.green),
-                        ),
-                        const Text(
-                          '✓ 任務將移至"過去發布"區域',
-                          style: TextStyle(fontSize: 12, color: Colors.green),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green[600],
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text(
+                              '確認完成',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '完成後此操作無法復原。',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('取消', style: TextStyle(color: Colors.grey[600])),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[600],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('確認完成'),
-                ),
-              ],
             );
           },
         ) ??
@@ -2489,72 +2447,19 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     }
   }
 
-  /// 顯示自定義樣式的 SnackBar
-  void _showCustomSnackBar(String message, {Color? iconColor, IconData? icon}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              icon ?? Icons.check_circle_outline,
-              color: iconColor ?? Colors.green[600],
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: Colors.grey[800],
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.white,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 8,
-        margin: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom:
-              MediaQuery.of(context).size.height -
-              MediaQuery.of(context).padding.top -
-              120, // 調整位置到頂部附近
-        ),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
   /// 顯示成功訊息
   void _showSuccessMessage(String message) {
-    _showCustomSnackBar(
-      message,
-      iconColor: Colors.green[600],
-      icon: Icons.check_circle_outline,
-    );
+    CustomSnackBar.showSuccess(context, message);
   }
 
   /// 顯示錯誤訊息
   void _showErrorMessage(String message) {
-    _showCustomSnackBar(
-      message,
-      iconColor: Colors.red[600],
-      icon: Icons.error_outline,
-    );
+    CustomSnackBar.showError(context, message);
   }
 
   /// 顯示警告訊息
   void _showWarningMessage(String message) {
-    _showCustomSnackBar(
-      message,
-      iconColor: Colors.orange[600],
-      icon: Icons.warning_outlined,
-    );
+    CustomSnackBar.showWarning(context, message);
   }
 
   /// 計算用戶加入App的時間
@@ -3102,9 +3007,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     } catch (e) {
       print('發送郵件錯誤: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('開啟郵件應用程式失敗: $e')));
+        CustomSnackBar.showError(context, '開啟郵件應用程式失敗: $e');
       }
     }
   }
@@ -3182,9 +3085,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     }
 
     if (contacts.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('申請者尚未提供聯絡資訊')));
+      CustomSnackBar.showWarning(context, '申請者尚未提供聯絡資訊');
       return;
     }
 
@@ -3602,15 +3503,11 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
         final result = await launchUrl(uri);
         print('撥打電話結果: $result');
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('無法撥打電話，請檢查設備是否支援通話功能')));
+        CustomSnackBar.showError(context, '無法撥打電話，請檢查設備是否支援通話功能');
       }
     } catch (e) {
       print('撥打電話錯誤: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('撥打電話失敗: $e')));
+      CustomSnackBar.showError(context, '撥打電話失敗: $e');
     }
   }
 
@@ -3627,15 +3524,11 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
         final result = await launchUrl(uri);
         print('發送郵件結果: $result');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('無法開啟郵件應用程式，請檢查設備是否已安裝郵件應用程式')),
-        );
+        CustomSnackBar.showError(context, '無法開啟郵件應用程式，請檢查設備是否已安裝郵件應用程式');
       }
     } catch (e) {
       print('發送郵件錯誤: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('開啟郵件應用程式失敗: $e')));
+      CustomSnackBar.showError(context, '開啟郵件應用程式失敗: $e');
     }
   }
 
@@ -3655,15 +3548,11 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
         );
         print('開啟 Line 結果: $result');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('無法開啟 Line，請檢查設備是否已安裝 Line 應用程式')),
-        );
+        CustomSnackBar.showError(context, '無法開啟 Line，請檢查設備是否已安裝 Line 應用程式');
       }
     } catch (e) {
       print('開啟 Line 錯誤: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('開啟 Line 失敗: $e')));
+      CustomSnackBar.showError(context, '開啟 Line 失敗: $e');
     }
   }
 
@@ -3781,9 +3670,7 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
     }
 
     if (contacts.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('發布者尚未提供聯絡資訊')));
+      CustomSnackBar.showWarning(context, '發布者尚未提供聯絡資訊');
       return;
     }
 

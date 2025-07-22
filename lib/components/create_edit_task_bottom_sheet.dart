@@ -109,7 +109,7 @@ class TaskData {
 
           print('   ✅ 第 ${i + 1} 張圖片上傳成功: ${downloadUrl.substring(0, 50)}...');
         } catch (e) {
-          print('   ❌ 第 ${i + 1} 張圖片上傳失敗: $e');
+          print('    第 ${i + 1} 張圖片上傳失敗: $e');
           throw Exception('圖片上傳失敗: $e');
         }
       }
@@ -1152,7 +1152,7 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '首先，請填寫基礎資訊',
+            '我現在有空，想發布...',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
@@ -2412,19 +2412,19 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
             });
           }
         } else {
-          print('❌ Google Places API 錯誤: ${data['status']}');
+          print(' Google Places API 錯誤: ${data['status']}');
           if (data['error_message'] != null) {
             print('📝 錯誤詳情: ${data['error_message']}');
           }
           _setMockLocationSuggestions(query);
         }
       } else {
-        print('❌ HTTP 錯誤: ${response.statusCode}');
+        print(' HTTP 錯誤: ${response.statusCode}');
         print('📝 回應內容: ${response.body}');
         _setMockLocationSuggestions(query);
       }
     } catch (e) {
-      print('❌ 搜尋地點異常: $e');
+      print(' 搜尋地點異常: $e');
       _setMockLocationSuggestions(query);
     }
   }

@@ -74,9 +74,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   // 地圖相關
   Set<Marker> _markers = {};
   List<Map<String, dynamic>> _systemLocations = [];
-  Set<String> _availableCategories = {};
-  Set<String> _selectedCategories = {};
-  bool _showCategoryFilter = false;
   MarkerData? _selectedMarker;
   Map<String, dynamic>? _selectedLocation;
   List<Map<String, dynamic>> _locationSuggestions = [];
@@ -181,7 +178,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       print('✅ 統一地圖視角初始化完成');
     } catch (e) {
-      print('❌ 初始化失敗: $e');
+      print(' 初始化失敗: $e');
       // 確保在錯誤時也清除載入狀態
       if (mounted) {
         setState(() {
@@ -272,16 +269,9 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         return data;
       }).toList();
 
-      final categories = locations
-          .map((loc) => loc['category']?.toString() ?? '')
-          .where((cat) => cat.isNotEmpty)
-          .toSet();
-
       if (mounted) {
         setState(() {
           _systemLocations = locations;
-          _availableCategories = categories;
-          _selectedCategories = Set.from(categories);
         });
       }
     } catch (e) {
@@ -293,7 +283,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   Future<void> _loadMyPosts() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      print('❌ 用戶未登入，無法載入我的任務');
+      print(' 用戶未登入，無法載入我的任務');
       return;
     }
 
@@ -351,7 +341,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         });
       }
     } catch (e) {
-      print('❌ 載入我的任務失敗: $e');
+      print(' 載入我的任務失敗: $e');
 
       // 如果是索引問題，嘗試替代查詢方法
       if (e.toString().contains('FAILED_PRECONDITION') ||
@@ -421,7 +411,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         });
       }
     } catch (e) {
-      print('❌ 替代查詢也失敗: $e');
+      print(' 替代查詢也失敗: $e');
       if (mounted) {
         setState(() {
           _myPosts = [];
@@ -434,7 +424,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   Future<void> _loadAllPosts() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      print('❌ 用戶未登入，無法載入任務');
+      print(' 用戶未登入，無法載入任務');
       return;
     }
 
@@ -476,7 +466,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         });
       }
     } catch (e) {
-      print('❌ 載入所有任務失敗: $e');
+      print(' 載入所有任務失敗: $e');
 
       // 如果是索引問題，嘗試替代查詢方法
       if (e.toString().contains('FAILED_PRECONDITION') ||
@@ -542,7 +532,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         });
       }
     } catch (e) {
-      print('❌ 替代查詢也失敗: $e');
+      print(' 替代查詢也失敗: $e');
       if (mounted) {
         setState(() {
           _allPosts = [];
@@ -584,7 +574,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             _updateMarkers(); // 這裡會自動結束 _isRoleSwitching 狀態
           })
           .catchError((error) {
-            print('❌ Parent 任務載入失敗: $error');
+            print(' Parent 任務載入失敗: $error');
             if (mounted) {
               setState(() {
                 _isRoleSwitching = false;
@@ -605,7 +595,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             _updateMarkers(); // 這裡會自動結束 _isRoleSwitching 狀態
           })
           .catchError((error) {
-            print('❌ Player 任務載入失敗: $error');
+            print(' Player 任務載入失敗: $error');
             if (mounted) {
               setState(() {
                 _isRoleSwitching = false;
@@ -833,24 +823,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
               ),
             ),
 
-          // 篩選器面板
-          if (_showCategoryFilter)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 200,
-              left: 16,
-              right: 16,
-              child: CategoryFilterPanel(
-                availableCategories: _availableCategories,
-                selectedCategories: _selectedCategories,
-                onCategoryChanged: (categories) {
-                  setState(() {
-                    _selectedCategories = categories;
-                  });
-                  _updateMarkers();
-                },
-              ),
-            ),
-
           // 左上角 - 角色信息和切換
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
@@ -991,37 +963,16 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             ),
           ),
 
-          // 左下角 - 篩選和定位
+          // 右下角 - 定位按鈕
           Positioned(
             bottom: 140,
             right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 篩選按鈕
-                _buildActionButton(
-                  icon: _showCategoryFilter
-                      ? Icons.close_rounded
-                      : Icons.tune_rounded,
-                  onPressed: () {
-                    setState(() {
-                      _showCategoryFilter = !_showCategoryFilter;
-                    });
-                  },
-                  heroTag: 'filter',
-                  isLarge: true,
-                  usePlayerStyle: true,
-                ),
-                const SizedBox(height: 16),
-                // 定位按鈕
-                _buildActionButton(
-                  icon: Icons.my_location_rounded,
-                  onPressed: _findAndRecenter,
-                  heroTag: 'location',
-                  isLarge: true,
-                  usePlayerStyle: true,
-                ),
-              ],
+            child: _buildActionButton(
+              icon: Icons.my_location_rounded,
+              onPressed: _findAndRecenter,
+              heroTag: 'location',
+              isLarge: true,
+              usePlayerStyle: true,
             ),
           ),
 
@@ -1220,11 +1171,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     try {
       // 使用新的標記管理器生成所有標記
       final markers = await MapMarkerManager.generateMarkers(
-        systemLocations: _systemLocations
-            .where(
-              (location) => _selectedCategories.contains(location['category']),
-            )
-            .toList(),
+        systemLocations: _systemLocations,
         userTasks: activeTasks,
         isParentView: _userRole == UserRole.parent,
         onMarkerTap: _handleMarkerTap,
@@ -1245,7 +1192,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       print('🗺️ 總共添加 ${markers.length} 個標記到地圖');
     } catch (e) {
-      print('❌ 更新地圖標記失敗: $e');
+      print(' 更新地圖標記失敗: $e');
 
       // 回退到原始標記邏輯
       await _updateMarkersLegacy();
@@ -1300,8 +1247,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     // 添加系統地點標記 - 僅在 Parent 視角下顯示
     if (_userRole == UserRole.parent) {
       for (var location in _systemLocations) {
-        if (!_selectedCategories.contains(location['category'])) continue;
-
         final locationPosition = LatLng(location['lat'], location['lng']);
         bool hasOwnTaskNearby = false;
 
@@ -1680,7 +1625,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        print('❌ 用戶未登入，無法保存任務');
+        print(' 用戶未登入，無法保存任務');
         if (mounted) {
           CustomSnackBar.showError(context, '請先登入');
         }
@@ -1748,7 +1693,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
           print('⚠️  地理位置保存失敗');
         }
       } else {
-        print('❌ 驗證失敗！文檔不存在');
+        print(' 驗證失敗！文檔不存在');
       }
 
       if (mounted) {
@@ -1788,7 +1733,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         CustomSnackBar.showSuccess(context, '任務創建成功！文檔 ID: ${docRef.id}');
       }
     } catch (e, stackTrace) {
-      print('❌ 保存任務失敗: $e');
+      print(' 保存任務失敗: $e');
       print('📋 錯誤堆疊: $stackTrace');
 
       if (mounted) {
@@ -1914,7 +1859,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       print('✅ 任務已標記為過期，聊天室關閉提醒已發送: $taskId');
     } catch (e) {
-      print('❌ 更新任務過期狀態失敗: $e');
+      print(' 更新任務過期狀態失敗: $e');
     }
   }
 
@@ -1957,68 +1902,6 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
   Future<void> _saveReadApplicantIds() async {
     // 保存已讀應徵者ID
     print('💾 保存已讀應徵者ID');
-  }
-}
-
-/// 類別篩選面板
-class CategoryFilterPanel extends StatelessWidget {
-  final Set<String> availableCategories;
-  final Set<String> selectedCategories;
-  final Function(Set<String>) onCategoryChanged;
-
-  const CategoryFilterPanel({
-    Key? key,
-    required this.availableCategories,
-    required this.selectedCategories,
-    required this.onCategoryChanged,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '篩選類別',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: availableCategories.map((category) {
-              final isSelected = selectedCategories.contains(category);
-              return FilterChip(
-                label: Text(category),
-                selected: isSelected,
-                onSelected: (selected) {
-                  final newSelected = Set<String>.from(selectedCategories);
-                  if (selected) {
-                    newSelected.add(category);
-                  } else {
-                    newSelected.remove(category);
-                  }
-                  onCategoryChanged(newSelected);
-                },
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
   }
 }
 

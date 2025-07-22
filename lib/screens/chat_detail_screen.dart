@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/chat_service.dart';
 import '../components/online_avatar.dart';
 import '../components/task_detail_sheet.dart';
+import '../utils/custom_snackbar.dart';
 
 /// 聊天室詳情頁面
 class ChatDetailScreen extends StatefulWidget {
@@ -29,10 +30,48 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void initState() {
     super.initState();
 
-    // 標記訊息為已讀
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // 檢查聊天室是否應該被關閉
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkChatRoomStatus();
+      // 標記訊息為已讀
       ChatService.markMessagesAsRead(widget.chatRoom.id);
     });
+  }
+
+  /// 檢查聊天室狀態，如果應該關閉則自動關閉
+  Future<void> _checkChatRoomStatus() async {
+    try {
+      // 如果聊天室已經是關閉狀態，不需要檢查
+      if (widget.chatRoom.isConnectionLost) {
+        return;
+      }
+
+      // 檢查對應的任務是否應該清理聊天室
+      final shouldCleanup = await ChatService.shouldCleanupChatRoom(
+        widget.chatRoom.id,
+      );
+
+      if (shouldCleanup) {
+        print('🔄 聊天室應該被關閉，正在處理: ${widget.chatRoom.id}');
+
+        // 觸發清理
+        await ChatService.triggerImmediateCleanupForExpiredTasks();
+
+        // 顯示提示並關閉頁面
+        if (mounted) {
+          CustomSnackBar.showWarning(context, '此聊天室已過期關閉');
+
+          // 延遲一下再關閉，讓用戶看到提示
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('檢查聊天室狀態失敗: $e');
+    }
   }
 
   @override
@@ -360,11 +399,32 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   /// 建立訊息輸入區域
   Widget _buildMessageInput() {
-    // 如果聊天室已失去聯繫，顯示特殊的UI
-    if (widget.chatRoom.isConnectionLost) {
-      return _buildConnectionLostInput();
-    }
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatRoom.id)
+          .snapshots(),
+      builder: (context, snapshot) {
+        // 檢查最新的聊天室狀態
+        bool isConnectionLost = widget.chatRoom.isConnectionLost;
 
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          isConnectionLost = data['isConnectionLost'] ?? false;
+        }
+
+        // 如果聊天室已失去聯繫，顯示特殊的UI
+        if (isConnectionLost) {
+          return _buildConnectionLostInput();
+        }
+
+        return _buildActiveMessageInput();
+      },
+    );
+  }
+
+  /// 建立活躍狀態的訊息輸入區域
+  Widget _buildActiveMessageInput() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -507,18 +567,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       if (mounted) {
         Navigator.of(context).pop(); // 返回聊天室列表
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('聊天室「${widget.chatRoom.taskTitle}」已刪除'),
-            backgroundColor: Colors.green,
-          ),
+        CustomSnackBar.showSuccess(
+          context,
+          '聊天室「${widget.chatRoom.taskTitle}」已刪除',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('刪除聊天室失敗：$e'), backgroundColor: Colors.red),
-        );
+        CustomSnackBar.showError(context, '刪除聊天室失敗：$e');
       }
     }
   }
@@ -540,9 +596,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     } catch (e) {
       print('發送訊息失敗: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('發送訊息失敗: $e'), backgroundColor: Colors.red),
-        );
+        CustomSnackBar.showError(context, '發送訊息失敗: $e');
       }
     }
   }
@@ -766,12 +820,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       if (!taskDoc.exists) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('找不到任務資料'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          CustomSnackBar.showError(context, '找不到任務資料');
         }
         return;
       }
@@ -809,9 +858,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       print('載入任務詳情失敗: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('載入任務詳情失敗: $e'), backgroundColor: Colors.red),
-        );
+        CustomSnackBar.showError(context, '載入任務詳情失敗: $e');
       }
     }
   }

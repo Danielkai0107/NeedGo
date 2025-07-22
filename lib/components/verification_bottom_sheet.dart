@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
+import '../utils/custom_snackbar.dart';
 
 // 10. 身份認證彈窗
 class VerificationBottomSheet extends StatefulWidget {
@@ -174,9 +175,7 @@ class _VerificationBottomSheetState extends State<VerificationBottomSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessingImage = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+        CustomSnackBar.showError(context, '選擇圖片失敗：$e');
       }
     }
   }
@@ -225,9 +224,7 @@ class _VerificationBottomSheetState extends State<VerificationBottomSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessingImage = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('自動裁切失敗：$e')));
+        CustomSnackBar.showError(context, '自動裁切失敗：$e');
       }
     }
   }
@@ -340,9 +337,7 @@ class _VerificationBottomSheetState extends State<VerificationBottomSheet> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('更新失敗：$e')));
+        CustomSnackBar.showError(context, '更新失敗：$e');
       }
     } finally {
       if (mounted) {

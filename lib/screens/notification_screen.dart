@@ -68,7 +68,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         });
       }
     } catch (e) {
-      print('❌ 判斷用戶角色失敗: $e');
+      print(' 判斷用戶角色失敗: $e');
     }
   }
 
@@ -86,7 +86,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         _readNotificationIds = readIds.toSet();
       });
     } catch (e) {
-      print('❌ 載入已讀通知ID失敗: $e');
+      print(' 載入已讀通知ID失敗: $e');
     }
   }
 
@@ -100,7 +100,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       final key = '${_userRole}_read_notifications_${user.uid}';
       await prefs.setStringList(key, _readNotificationIds.toList());
     } catch (e) {
-      print('❌ 保存已讀通知ID失敗: $e');
+      print(' 保存已讀通知ID失敗: $e');
     }
   }
 
@@ -172,7 +172,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
           // 避免重複添加相同的通知
           if (existingNotificationIds.contains(notificationId)) {
-            print('   ❌ 通知已存在，跳過');
+            print('    通知已存在，跳過');
             continue;
           }
           existingNotificationIds.add(notificationId);
@@ -227,7 +227,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         );
       }
     } catch (e) {
-      print('❌ 載入父級通知失敗: $e');
+      print(' 載入父級通知失敗: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -306,7 +306,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         );
       }
     } catch (e) {
-      print('❌ 載入子級通知失敗: $e');
+      print(' 載入子級通知失敗: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }

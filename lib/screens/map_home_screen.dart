@@ -243,7 +243,7 @@ class _MapHomeScreenState extends State<MapHomeScreen> {
         print('✅ 使用替代方法成功載入 ${posts.length} 個任務');
       }
     } catch (e) {
-      print('❌ 替代查詢也失敗: $e');
+      print(' 替代查詢也失敗: $e');
       if (mounted) {
         setState(() {
           _allPosts = [];

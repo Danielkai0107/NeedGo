@@ -12,6 +12,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/custom_dropdown_field.dart';
 import '../widgets/custom_date_time_field.dart';
 import '../services/rekognition_service.dart';
+import '../utils/custom_snackbar.dart';
 
 class RegistrationView extends StatefulWidget {
   final String uid;
@@ -117,9 +118,7 @@ class _RegistrationViewState extends State<RegistrationView> {
   Future<void> _submitAll() async {
     _validateCurrentStep();
     if (!_canProceed() || _croppedImage == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('請確認所有欄位填寫與上傳大頭貼')));
+      CustomSnackBar.showWarning(context, '請確認所有欄位填寫與上傳大頭貼');
       return;
     }
     setState(() => _loading = true);
@@ -198,7 +197,7 @@ class _RegistrationViewState extends State<RegistrationView> {
         throw Exception('用戶資料寫入失敗，請重試');
       }
     } catch (e) {
-      print('❌ 註冊失敗: $e');
+      print(' 註冊失敗: $e');
 
       if (mounted) {
         showDialog(
@@ -356,9 +355,7 @@ class _RegistrationViewState extends State<RegistrationView> {
       await _performAutoCrop(bytes);
     } catch (e) {
       setState(() => _isProcessingImage = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('選擇圖片失敗：$e')));
+      CustomSnackBar.showError(context, '選擇圖片失敗：$e');
     }
   }
 
@@ -405,9 +402,7 @@ class _RegistrationViewState extends State<RegistrationView> {
       }
     } catch (e) {
       setState(() => _isProcessingImage = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('自動裁切失敗：$e')));
+      CustomSnackBar.showError(context, '自動裁切失敗：$e');
     }
   }
 
