@@ -150,7 +150,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       // 載入用戶資料和角色（這是第一步，確保角色正確設定）
       await _loadUserProfile();
-      print('✅ 用戶資料載入完成，當前角色: ${_userRole.name}');
+      print('用戶資料載入完成，當前角色: ${_userRole.name}');
 
       await _loadSystemLocations();
       await _findAndRecenter();
@@ -176,7 +176,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       _updateMarkers();
       print('🏁 初始化完成，地圖標記已更新');
 
-      print('✅ 統一地圖視角初始化完成');
+      print('統一地圖視角初始化完成');
     } catch (e) {
       print(' 初始化失敗: $e');
       // 確保在錯誤時也清除載入狀態
@@ -321,7 +321,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         return data;
       }).toList();
 
-      print('✅ 成功載入 ${posts.length} 個我的任務');
+      print('成功載入 ${posts.length} 個我的任務');
 
       // 統計有地理位置的任務
       final tasksWithLocation = posts
@@ -403,7 +403,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         setState(() {
           _myPosts = posts;
         });
-        print('✅ 使用替代方法成功載入 ${posts.length} 個我的任務');
+        print('使用替代方法成功載入 ${posts.length} 個我的任務');
 
         // 數據載入完成後立即更新標記
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -457,7 +457,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       // 進一步過濾，只保留真正活躍的任務（排除已過期的任務）
       final activePosts = posts.where((task) => _isTaskActive(task)).toList();
 
-      print('✅ 成功載入 ${posts.length} 個標記為活躍的任務');
+      print('成功載入 ${posts.length} 個標記為活躍的任務');
       print('🔍 過濾後實際活躍任務: ${activePosts.length} 個');
 
       if (mounted) {
@@ -518,7 +518,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       // 進一步過濾，只保留真正活躍的任務（排除已過期的任務）
       final activePosts = posts.where((task) => _isTaskActive(task)).toList();
 
-      print('✅ 使用替代方法成功載入 ${posts.length} 個標記為活躍的任務');
+      print('使用替代方法成功載入 ${posts.length} 個標記為活躍的任務');
       print('🔍 過濾後實際活躍任務: ${activePosts.length} 個');
 
       if (mounted) {
@@ -570,7 +570,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       _loadMyPosts()
           .then((_) {
-            print('✅ Parent 任務載入完成，觸發標記更新');
+            print('Parent 任務載入完成，觸發標記更新');
             _updateMarkers(); // 這裡會自動結束 _isRoleSwitching 狀態
           })
           .catchError((error) {
@@ -591,7 +591,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       _loadAllPosts()
           .then((_) {
-            print('✅ Player 任務載入完成，觸發標記更新');
+            print('Player 任務載入完成，觸發標記更新');
             _updateMarkers(); // 這裡會自動結束 _isRoleSwitching 狀態
           })
           .catchError((error) {
@@ -1096,7 +1096,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
     // 更新地圖標記
     _updateMarkers();
 
-    print('✅ 手動重新載入完成');
+    print('手動重新載入完成');
 
     if (mounted) {
       CustomSnackBar.showSuccess(context, '數據已重新載入');
@@ -1667,7 +1667,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
       print('🚀 正在保存到 Firestore...');
       final docRef = await _firestore.collection('posts').add(newTaskData);
 
-      print('✅ Firestore 保存成功！文檔 ID: ${docRef.id}');
+      print('Firestore 保存成功！文檔 ID: ${docRef.id}');
 
       // 驗證保存是否成功 - 立即讀取剛保存的文檔
       print('🔍 驗證保存結果...');
@@ -1678,17 +1678,17 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
       if (savedDoc.exists) {
         final savedData = savedDoc.data()!;
-        print('✅ 驗證成功！保存的數據: $savedData');
+        print('驗證成功！保存的數據: $savedData');
 
         // 檢查關鍵字段
         if (savedData['userId'] == user.uid) {
-          print('✅ userId 匹配');
+          print('userId 匹配');
         } else {
           print('⚠️  userId 不匹配: 期望 ${user.uid}, 實際 ${savedData['userId']}');
         }
 
         if (savedData['lat'] != null && savedData['lng'] != null) {
-          print('✅ 地理位置保存成功');
+          print('地理位置保存成功');
         } else {
           print('⚠️  地理位置保存失敗');
         }
@@ -1857,7 +1857,7 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
         });
       }
 
-      print('✅ 任務已標記為過期，聊天室關閉提醒已發送: $taskId');
+      print('任務已標記為過期，聊天室關閉提醒已發送: $taskId');
     } catch (e) {
       print(' 更新任務過期狀態失敗: $e');
     }

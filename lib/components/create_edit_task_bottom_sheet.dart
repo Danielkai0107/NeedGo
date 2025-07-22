@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/custom_snackbar.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_date_time_field.dart';
@@ -107,7 +108,7 @@ class TaskData {
           final downloadUrl = await storageRef.getDownloadURL();
           newImageUrls.add(downloadUrl);
 
-          print('   ✅ 第 ${i + 1} 張圖片上傳成功: ${downloadUrl.substring(0, 50)}...');
+          print('   第 ${i + 1} 張圖片上傳成功: ${downloadUrl.substring(0, 50)}...');
         } catch (e) {
           print('    第 ${i + 1} 張圖片上傳失敗: $e');
           throw Exception('圖片上傳失敗: $e');
@@ -2021,191 +2022,215 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
     return showDialog<TimeOfDay>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(
-            '選擇時間',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(34),
           ),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return SizedBox(
-                height: 200,
-                width: 300,
-                child: Row(
-                  children: [
-                    // 小時選擇器
-                    Expanded(
-                      child: Column(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 標題
+                Text(
+                  '選擇時間',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // 時間選擇器內容
+                StatefulBuilder(
+                  builder: (BuildContext context, StateSetter setDialogState) {
+                    return SizedBox(
+                      height: 200,
+                      width: 300,
+                      child: Row(
                         children: [
-                          const SizedBox(height: 12),
-                          const Text(
-                            '時',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                          // 小時選擇器
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 12),
+                                const Text(
+                                  '時',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: ListWheelScrollView.useDelegate(
+                                    itemExtent: 40,
+                                    perspective: 0.005,
+                                    diameterRatio: 1.2,
+                                    physics: const FixedExtentScrollPhysics(),
+                                    controller: FixedExtentScrollController(
+                                      initialItem: selectedHour,
+                                    ),
+                                    onSelectedItemChanged: (index) {
+                                      setDialogState(() {
+                                        selectedHour = index;
+                                      });
+                                    },
+                                    childDelegate:
+                                        ListWheelChildBuilderDelegate(
+                                          builder: (context, index) {
+                                            if (index < 0 || index > 23)
+                                              return null;
+                                            return Container(
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                index.toString().padLeft(
+                                                  2,
+                                                  '0',
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight:
+                                                      selectedHour == index
+                                                      ? FontWeight.bold
+                                                      : FontWeight.normal,
+                                                  color: selectedHour == index
+                                                      ? AppColors.primary
+                                                      : Colors.black,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          childCount: 24,
+                                        ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 8),
+
+                          // 分隔符
+                          Container(
+                            padding: const EdgeInsets.only(
+                              left: 16,
+                              right: 16,
+                              top: 36,
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              ':',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+
+                          // 分鐘選擇器
                           Expanded(
-                            child: ListWheelScrollView.useDelegate(
-                              itemExtent: 40,
-                              perspective: 0.005,
-                              diameterRatio: 1.2,
-                              physics: const FixedExtentScrollPhysics(),
-                              controller: FixedExtentScrollController(
-                                initialItem: selectedHour,
-                              ),
-                              onSelectedItemChanged: (index) {
-                                setDialogState(() {
-                                  selectedHour = index;
-                                });
-                              },
-                              childDelegate: ListWheelChildBuilderDelegate(
-                                builder: (context, index) {
-                                  if (index < 0 || index > 23) return null;
-                                  return Container(
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      index.toString().padLeft(2, '0'),
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: selectedHour == index
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        color: selectedHour == index
-                                            ? AppColors.primary
-                                            : Colors.black,
-                                      ),
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 12),
+                                const Text(
+                                  '分',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: ListWheelScrollView.useDelegate(
+                                    itemExtent: 40,
+                                    perspective: 0.005,
+                                    diameterRatio: 1.2,
+                                    physics: const FixedExtentScrollPhysics(),
+                                    controller: FixedExtentScrollController(
+                                      initialItem: selectedMinute ~/ 5, // 5分鐘間隔
                                     ),
-                                  );
-                                },
-                                childCount: 24,
-                              ),
+                                    onSelectedItemChanged: (index) {
+                                      setDialogState(() {
+                                        selectedMinute = index * 5; // 5分鐘間隔
+                                      });
+                                    },
+                                    childDelegate:
+                                        ListWheelChildBuilderDelegate(
+                                          builder: (context, index) {
+                                            if (index < 0 || index > 11)
+                                              return null; // 0, 5, 10, ..., 55
+                                            final minute = index * 5;
+                                            return Container(
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                minute.toString().padLeft(
+                                                  2,
+                                                  '0',
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight:
+                                                      selectedMinute == minute
+                                                      ? FontWeight.bold
+                                                      : FontWeight.normal,
+                                                  color:
+                                                      selectedMinute == minute
+                                                      ? AppColors.primary
+                                                      : Colors.black,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          childCount: 12, // 0-55分，每5分鐘一個間隔
+                                        ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-
-                    // 分隔符
-                    Container(
-                      padding: const EdgeInsets.only(
-                        left: 16,
-                        right: 16,
-                        top: 36,
-                      ),
-                      alignment: Alignment.center,
-                      child: const Text(
-                        ':',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                // 按鈕組
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(); // 取消
+                        },
+                        child: const Text(
+                          '取消',
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
                         ),
                       ),
                     ),
-
-                    // 分鐘選擇器
+                    const SizedBox(width: 16),
                     Expanded(
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 12),
-                          const Text(
-                            '分',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: ListWheelScrollView.useDelegate(
-                              itemExtent: 40,
-                              perspective: 0.005,
-                              diameterRatio: 1.2,
-                              physics: const FixedExtentScrollPhysics(),
-                              controller: FixedExtentScrollController(
-                                initialItem: selectedMinute ~/ 5, // 5分鐘間隔
-                              ),
-                              onSelectedItemChanged: (index) {
-                                setDialogState(() {
-                                  selectedMinute = index * 5; // 5分鐘間隔
-                                });
-                              },
-                              childDelegate: ListWheelChildBuilderDelegate(
-                                builder: (context, index) {
-                                  if (index < 0 || index > 11)
-                                    return null; // 0, 5, 10, ..., 55
-                                  final minute = index * 5;
-                                  return Container(
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      minute.toString().padLeft(2, '0'),
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: selectedMinute == minute
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        color: selectedMinute == minute
-                                            ? AppColors.primary
-                                            : Colors.black,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                childCount: 12, // 0-55分，每5分鐘一個間隔
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final selectedTime = TimeOfDay(
+                            hour: selectedHour,
+                            minute: selectedMinute,
+                          );
+                          Navigator.of(context).pop(selectedTime);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text('確認', style: TextStyle(fontSize: 16)),
                       ),
                     ),
                   ],
                 ),
-              );
-            },
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // 取消
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.grey,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(100),
-                  side: BorderSide(color: Colors.grey),
-                ),
-              ),
-              child: const Text('取消'),
-            ),
-
-            ElevatedButton(
-              onPressed: () {
-                final selectedTime = TimeOfDay(
-                  hour: selectedHour,
-                  minute: selectedMinute,
-                );
-                Navigator.of(context).pop(selectedTime);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(100),
-                ),
-              ),
-              child: const Text('確認'),
-            ),
-          ],
         );
       },
     );
@@ -2537,10 +2562,21 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
   void _selectLocation(Map<String, dynamic> place) async {
     if (mounted) {
       setState(() {
+        _addressError = null; // 先清除之前的錯誤
+      });
+
+      // 檢查是否有相同地點的進行中任務
+      if (await _hasActiveTaskAtSameLocation(place['description'])) {
+        setState(() {
+          _addressError = '您已有相同地點的進行中任務，不可同時發布';
+        });
+        return;
+      }
+
+      setState(() {
         _taskData.address = place['description'];
         _addressController.text = place['description'];
         _locationSuggestions = []; // 清空建議列表
-        if (_addressError != null) _addressError = null; // 清除錯誤
       });
 
       // 如果是模擬數據，直接使用已有的座標
@@ -2575,6 +2611,116 @@ class _CreateEditTaskBottomSheetState extends State<CreateEditTaskBottomSheet>
         _contentFocusNode.unfocus();
         _addressFocusNode.unfocus();
       }
+    }
+  }
+
+  /// 檢查是否有相同地點的進行中任務
+  Future<bool> _hasActiveTaskAtSameLocation(String address) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+
+      // 如果是編輯模式，需要排除當前任務本身
+      final currentTaskId = widget.existingTask?['id'];
+
+      print('🔍 檢查相同地點的進行中任務...');
+      print('   - 用戶ID: ${user.uid}');
+      print('   - 地址: $address');
+      print('   - 當前任務ID: $currentTaskId');
+
+      // 查詢該用戶的所有任務
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      for (var doc in snapshot.docs) {
+        final task = doc.data();
+        final taskId = doc.id;
+
+        // 如果是編輯模式，跳過當前任務本身
+        if (currentTaskId != null && taskId == currentTaskId) {
+          continue;
+        }
+
+        // 檢查是否為進行中任務
+        final status = _getTaskStatus(task);
+        if (status != 'open' && status != 'accepted') {
+          continue;
+        }
+
+        // 檢查地址是否相同
+        final taskAddress = task['address'] as String?;
+        if (taskAddress != null && taskAddress.trim() == address.trim()) {
+          print('⚠️ 發現相同地點的進行中任務: $taskId');
+          print('   - 任務地址: $taskAddress');
+          print('   - 任務狀態: $status');
+          return true;
+        }
+      }
+
+      print('沒有發現相同地點的進行中任務');
+      return false;
+    } catch (e) {
+      print('❌ 檢查相同地點任務時出錯: $e');
+      return false;
+    }
+  }
+
+  /// 獲取任務狀態
+  String _getTaskStatus(Map<String, dynamic> task) {
+    if (task['status'] == 'completed') return 'completed';
+    if (task['acceptedApplicant'] != null) return 'accepted';
+    if (_isTaskExpiredNow(task)) return 'expired';
+    return task['status'] ?? 'open';
+  }
+
+  /// 檢查任務是否已過期
+  bool _isTaskExpiredNow(Map<String, dynamic> task) {
+    if (task['date'] == null) return false;
+
+    try {
+      DateTime taskDate;
+      final date = task['date'];
+
+      if (date is String) {
+        taskDate = DateTime.parse(date);
+      } else if (date is DateTime) {
+        taskDate = date;
+      } else if (date is Timestamp) {
+        taskDate = (date as Timestamp).toDate();
+      } else {
+        return false;
+      }
+
+      // 如果有時間資訊，使用精確時間
+      final time = task['time'];
+      if (time != null && time is Map) {
+        final hour = time['hour'] ?? 0;
+        final minute = time['minute'] ?? 0;
+        taskDate = DateTime(
+          taskDate.year,
+          taskDate.month,
+          taskDate.day,
+          hour,
+          minute,
+        );
+      } else {
+        // 如果沒有時間資訊，設定為當天 23:59
+        taskDate = DateTime(
+          taskDate.year,
+          taskDate.month,
+          taskDate.day,
+          23,
+          59,
+        );
+      }
+
+      final now = DateTime.now();
+      return taskDate.isBefore(now);
+    } catch (e) {
+      print('檢查任務過期時間失敗: $e');
+      return false;
     }
   }
 }

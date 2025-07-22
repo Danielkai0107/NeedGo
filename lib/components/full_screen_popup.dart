@@ -121,7 +121,7 @@ class ApplicantsListBottomSheet extends StatelessWidget {
               child: Icon(Icons.person, color: Colors.blue[600], size: 24),
             ),
             title: Text(
-              applicant['name'] ?? '未設定名稱', // ✅ 改用 name 欄位
+              applicant['name'] ?? '未設定名稱', // 改用 name 欄位
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
             ),
             subtitle: Column(
@@ -191,7 +191,7 @@ class ApplicantProfileBottomSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      applicant['name'] ?? '未設定名稱', // ✅ 改用 name 欄位
+                      applicant['name'] ?? '未設定名稱', // 改用 name 欄位
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -212,7 +212,7 @@ class ApplicantProfileBottomSheet extends StatelessWidget {
           if (applicant['lineId']?.toString().isNotEmpty == true)
             _buildInfoCard('Line ID', applicant['lineId'], Icons.chat),
           if (applicant['applicantResume']?.toString().isNotEmpty ==
-              true) // ✅ 改用 applicantResume
+              true) // 改用 applicantResume
             _buildInfoCard(
               '個人履歷',
               applicant['applicantResume'],

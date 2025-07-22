@@ -197,7 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // 更新本地資料
         data.addAll(updateData);
 
-        print('✅ 已自動遷移用戶資料，添加缺少的欄位');
+        print('已自動遷移用戶資料，添加缺少的欄位');
       } catch (e) {
         print(' 用戶資料遷移失敗: $e');
       }
@@ -407,20 +407,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('登出'),
-        content: const Text('確定要登出嗎？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 標題
+              Text(
+                '登出',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 內容
+              Text(
+                '確定要登出嗎？',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              // 按鈕組
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text(
+                        '取消',
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[600],
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('登出', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('登出'),
-          ),
-        ],
+        ),
       ),
     );
 
@@ -430,13 +469,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 20),
-            Text('正在登出...'),
-          ],
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
+        child: const Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('正在登出...', style: TextStyle(fontSize: 16)),
+            ],
+          ),
         ),
       ),
     );
@@ -681,18 +726,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             children: [
               Expanded(
-                child: TextButton(
+                child: OutlinedButton(
                   onPressed: () {
                     setState(() {
                       _isEditingBasicInfo = false;
                     });
                     _loadProfile(); // 重新載入資料
                   },
-                  style: TextButton.styleFrom(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[500],
+                    side: BorderSide(color: Colors.grey[400]!),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey[300]!),
                     ),
                   ),
                   child: const Text(
@@ -707,13 +753,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: ElevatedButton(
                   onPressed: _isSavingBasicInfo ? null : _saveBasicInfo,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
+                    backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    elevation: 2,
+                    elevation: 0,
                   ),
                   child: _isSavingBasicInfo
                       ? const SizedBox(
@@ -774,18 +820,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             children: [
               Expanded(
-                child: TextButton(
+                child: OutlinedButton(
                   onPressed: () {
                     setState(() {
                       _isEditingContactInfo = false;
                     });
                     _loadProfile(); // 重新載入資料
                   },
-                  style: TextButton.styleFrom(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[500],
+                    side: BorderSide(color: Colors.grey[400]!),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey[300]!),
                     ),
                   ),
                   child: const Text(
@@ -800,13 +847,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: ElevatedButton(
                   onPressed: _isSavingContactInfo ? null : _saveContactInfo,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
+                    backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    elevation: 2,
+                    elevation: 0,
                   ),
                   child: _isSavingContactInfo
                       ? const SizedBox(
@@ -852,18 +899,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             children: [
               Expanded(
-                child: TextButton(
+                child: OutlinedButton(
                   onPressed: () {
                     setState(() {
                       _isEditingPublisherIntro = false;
                     });
                     _loadProfile();
                   },
-                  style: TextButton.styleFrom(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[500],
+                    side: BorderSide(color: Colors.grey[400]!),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey[300]!),
                     ),
                   ),
                   child: const Text(
@@ -880,13 +928,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? null
                       : _savePublisherIntro,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
+                    backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    elevation: 2,
+                    elevation: 0,
                   ),
                   child: _isSavingPublisherIntro
                       ? const SizedBox(
@@ -921,7 +969,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Text(
             '應徵簡歷 (應徵用)',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 24),
 
@@ -1037,7 +1085,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           CustomTextField(
             controller: _selfIntroController,
             label: '自我介紹',
-            hintText: '描述您的技能、經驗和專長，讓雇主更了解您...',
+            hintText: '描述你的技能、經驗和專長，讓對方更了解你...',
             maxLines: 5,
           ),
           const SizedBox(height: 32),
@@ -1046,18 +1094,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             children: [
               Expanded(
-                child: TextButton(
+                child: OutlinedButton(
                   onPressed: () {
                     setState(() {
                       _isEditingApplicantResume = false;
                     });
                     _loadProfile();
                   },
-                  style: TextButton.styleFrom(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[500],
+                    side: BorderSide(color: Colors.grey[400]!),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey[300]!),
                     ),
                   ),
                   child: const Text(
@@ -1074,13 +1123,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? null
                       : _saveApplicantResume,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
+                    backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    elevation: 2,
+                    elevation: 0,
                   ),
                   child: _isSavingApplicantResume
                       ? const SizedBox(
@@ -1270,7 +1319,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Text(
               title,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             if (onEdit != null)
               IconButton(
@@ -1290,7 +1339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildInfoRow(String label, String value, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Row(
         children: [
           Icon(icon, size: 20, color: Colors.grey[600]),
@@ -1325,7 +1374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const Text(
               '個人介紹 (發布用)',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             IconButton(
               onPressed: () {
@@ -1381,7 +1430,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const Text(
               '應徵簡歷 (應徵用)',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             IconButton(
               onPressed: () {
@@ -1420,11 +1469,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Icons.two_wheeler,
               ),
               const Divider(),
+              const SizedBox(height: 12),
+
               const Text(
                 '自我介紹：',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Text(
                 selfIntro?.isNotEmpty == true ? selfIntro! : '尚未填寫自我介紹',
                 style: TextStyle(
@@ -1511,96 +1562,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildVerificationDialog() {
     return StatefulBuilder(
       builder: (context, setState) {
-        return AlertDialog(
+        return Dialog(
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(34),
           ),
-          title: const Text(
-            '身份驗證',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '請拍攝一張清晰的正面照片進行身份驗證',
-                style: TextStyle(fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-
-              // 說明
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 標題
+                Text(
+                  '身份驗證',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '拍攝要求：',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                const SizedBox(height: 16),
+                // 內容
+                Text(
+                  '請拍攝一張清晰的正面照片進行身份驗證',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+
+                // 說明容器
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '拍攝要求：',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '• 光線充足，避免過亮或過暗\n'
+                        '• 正面拍攝，眼睛看向鏡頭\n'
+                        '• 請勿佩戴口罩、帽子或墨鏡\n'
+                        '• 保持表情自然',
+                        style: TextStyle(fontSize: 14, color: Colors.blue[700]),
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (_todayVerificationFailures > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.orange[200]!),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '• 光線充足，避免過亮或過暗\n'
-                      '• 正面拍攝，眼睛看向鏡頭\n'
-                      '• 請勿佩戴口罩、帽子或墨鏡\n'
-                      '• 保持表情自然',
-                      style: TextStyle(fontSize: 14, color: Colors.blue[700]),
+                    child: Text(
+                      '今日已驗證失敗 $_todayVerificationFailures 次，剩餘 ${3 - _todayVerificationFailures} 次機會',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+                // 按鈕組
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: _isVerifying
+                            ? null
+                            : () => Navigator.pop(context),
+                        child: const Text(
+                          '取消',
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isVerifying
+                            ? null
+                            : () => _startVerification(setState),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: _isVerifying
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                '開始驗證',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-
-              if (_todayVerificationFailures > 0) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '今日已驗證失敗 $_todayVerificationFailures 次，剩餘 ${3 - _todayVerificationFailures} 次機會',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
               ],
-            ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: _isVerifying ? null : () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: _isVerifying
-                  ? null
-                  : () => _startVerification(setState),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[600],
-                foregroundColor: Colors.white,
-              ),
-              child: _isVerifying
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text('開始驗證'),
-            ),
-          ],
         );
       },
     );

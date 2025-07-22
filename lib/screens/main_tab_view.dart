@@ -127,7 +127,10 @@ class _MainTabViewState extends State<MainTabView> {
           child: SafeArea(
             child: Container(
               height: 90, // 增加導航欄高度給文字更多空間
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 4,
+              ), // 減少左右padding確保等寬
               child: Row(
                 children: [
                   // 首頁地圖
@@ -232,25 +235,37 @@ class _MainTabViewState extends State<MainTabView> {
       onTap: onTap,
       behavior: HitTestBehavior.opaque, // 讓整個區域都可以點擊
       child: Container(
+        // 確保每個容器完全等寬等高
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        height: double.infinity,
+        // 移除額外的 padding，讓每個按鈕完全等寬
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max, // 使用最大空間
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center, // 確保水平居中
           children: [
-            iconWidget,
-            const SizedBox(height: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isActive ? Colors.grey[900] : Colors.grey[600],
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            // 圖標容器 - 固定高度確保對齊
+            SizedBox(
+              height: 32, // 固定圖標區域高度
+              child: Center(child: iconWidget),
+            ),
+            const SizedBox(height: 4), // 減少間距
+            // 文字容器 - 固定高度確保對齊
+            SizedBox(
+              height: 24, // 固定文字區域高度
+              child: Center(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isActive ? Colors.grey[900] : Colors.grey[600],
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    height: 1.2, // 設定行高，確保文字垂直居中
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

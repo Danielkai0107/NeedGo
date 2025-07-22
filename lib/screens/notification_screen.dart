@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../components/task_detail_sheet.dart';
+import '../components/create_edit_task_bottom_sheet.dart';
 import '../utils/custom_snackbar.dart';
 import '../styles/app_colors.dart';
 
@@ -52,7 +53,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     await _loadReadNotificationIds();
     _setupNotificationListener();
 
-    print('✅ 通知系統初始化完成');
+    print('通知系統初始化完成');
   }
 
   /// 判斷用戶角色
@@ -133,7 +134,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           });
     }
 
-    print('✅ 通知監聽器設置完成');
+    print('通知監聽器設置完成');
   }
 
   /// 載入父級通知（應徵者通知）
@@ -200,7 +201,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             'taskData': task,
           });
 
-          print('   ✅ 通知已添加');
+          print('   通知已添加');
         }
       }
 
@@ -401,8 +402,190 @@ class _NotificationScreenState extends State<NotificationScreen> {
             _loadPlayerNotifications();
           }
         },
+        // 提供編輯任務回調（僅對自己的任務有效）
+        onEditTask:
+            _userRole == 'parent' &&
+                notification['taskData']['userId'] ==
+                    FirebaseAuth.instance.currentUser?.uid
+            ? () {
+                Navigator.of(context).pop(); // 關閉任務詳情頁
+                _showEditTaskSheet(notification['taskData']);
+              }
+            : null,
+        // 提供刪除任務回調（僅對自己的任務有效）
+        onDeleteTask:
+            _userRole == 'parent' &&
+                notification['taskData']['userId'] ==
+                    FirebaseAuth.instance.currentUser?.uid
+            ? () async {
+                Navigator.of(context).pop(); // 關閉任務詳情頁
+                await _deleteTask(notification['taskData']['id']);
+              }
+            : null,
       ),
     );
+  }
+
+  /// 顯示編輯任務彈窗
+  void _showEditTaskSheet(Map<String, dynamic> taskData) {
+    CreateEditTaskBottomSheet.show(
+      context,
+      existingTask: taskData,
+      onSubmit: (updatedTaskData) async {
+        await _updateTask(updatedTaskData, taskData['id']);
+      },
+    );
+  }
+
+  /// 更新任務
+  Future<void> _updateTask(TaskData taskData, String taskId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 如果有新圖片需要上傳，獲取包含圖片 URL 的數據
+      Map<String, dynamic> updateData;
+      if (taskData.images.isNotEmpty) {
+        updateData = await taskData.toJsonWithUploadedImages(taskId: taskId);
+      } else {
+        updateData = taskData.toJson();
+      }
+
+      // 移除不需要的字段（Firestore 會自動處理）
+      updateData.remove('id');
+
+      // 加入必要的更新字段
+      updateData['updatedAt'] = Timestamp.now();
+      updateData['userId'] = user.uid; // 確保用戶 ID 正確
+
+      // 更新到 Firestore
+      await _firestore.collection('posts').doc(taskId).update(updateData);
+
+      print('任務更新成功，ID: $taskId');
+
+      // 重新載入通知
+      if (_userRole == 'parent') {
+        await _loadParentNotifications();
+      } else {
+        await _loadPlayerNotifications();
+      }
+
+      if (mounted) {
+        CustomSnackBar.showSuccess(context, '任務更新成功！');
+      }
+    } catch (e) {
+      print('❌ 更新任務失敗: $e');
+      if (mounted) {
+        CustomSnackBar.showError(context, '更新任務失敗：$e');
+      }
+    }
+  }
+
+  /// 刪除任務
+  Future<void> _deleteTask(String taskId) async {
+    // 顯示確認對話框
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 標題
+              Text(
+                '刪除任務',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 內容
+              Text(
+                '確定要刪除這個任務嗎？',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              // 警告容器
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red[200]!),
+                ),
+                child: Text(
+                  '此操作無法復原。',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: Colors.red[700],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 24),
+              // 按鈕組
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text(
+                        '取消',
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[600],
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('刪除', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // 從 Firestore 刪除任務
+      await _firestore.collection('posts').doc(taskId).delete();
+
+      print('任務刪除成功');
+
+      // 重新載入通知
+      if (_userRole == 'parent') {
+        await _loadParentNotifications();
+      } else {
+        await _loadPlayerNotifications();
+      }
+
+      if (mounted) {
+        CustomSnackBar.showSuccess(context, '任務已刪除');
+      }
+    } catch (e) {
+      print('❌ 刪除任務失敗: $e');
+      if (mounted) {
+        CustomSnackBar.showError(context, '刪除任務失敗：$e');
+      }
+    }
   }
 
   /// 顯示長按選單

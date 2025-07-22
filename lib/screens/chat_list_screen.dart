@@ -300,7 +300,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           final sortedChatRooms = [...activeChatRooms, ...closedChatRooms];
 
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.only(top: 12, bottom: 8),
             itemCount: sortedChatRooms.length,
             itemBuilder: (context, index) {
               final chatRoom = sortedChatRooms[index];
@@ -326,6 +326,10 @@ class _ChatListScreenState extends State<ChatListScreen>
       decoration: BoxDecoration(
         color: isClosed ? Colors.grey[100] : Colors.white,
         borderRadius: BorderRadius.circular(12),
+        // 為已關閉的聊天室添加白色外框
+        border: isClosed
+            ? Border.all(color: Colors.grey[300]!, width: 1.0)
+            : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(isClosed ? 0.02 : 0.05),
@@ -671,7 +675,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       builder: (BuildContext context) {
         return Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(34),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -791,7 +797,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       // 靜默執行立即清理，不顯示任何UI反饋
       await ChatService.triggerImmediateCleanupForExpiredTasks();
       _lastCleanupCheck = DateTime.now();
-      print('✅ 聊天分頁：自動立即清理過期聊天室完成');
+      print('聊天分頁：自動立即清理過期聊天室完成');
     } catch (e) {
       print(' 聊天分頁：自動立即清理過期聊天室失敗: $e');
       // 靜默失敗，不影響用戶體驗
@@ -818,9 +824,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       // 使用立即清理方法，不等待配置時間
       await ChatService.triggerImmediateCleanupForExpiredTasks();
       _lastCleanupCheck = DateTime.now(); // 更新時間以避免再次跳過
-      print('✅ 聊天分頁：手動觸發立即清理完成');
+      print('聊天分頁：手動觸發立即清理完成');
       if (mounted) {
-        CustomSnackBar.showSuccess(context, '✅ 已立即清理所有過期任務的聊天室');
+        CustomSnackBar.showSuccess(context, '已立即清理所有過期任務的聊天室');
       }
     } catch (e) {
       print(' 聊天分頁：手動觸發立即清理失敗: $e');

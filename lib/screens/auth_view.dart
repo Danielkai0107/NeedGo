@@ -25,7 +25,7 @@ class _AuthViewState extends State<AuthView> {
       final user = await _authService.signInWithGoogle();
       if (user != null) {
         // 登入成功，AuthGate 會自動處理導航
-        print('✅ Google 登入成功: ${user.email}');
+        print('Google 登入成功: ${user.email}');
       }
     } catch (e) {
       setState(() {

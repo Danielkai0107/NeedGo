@@ -136,7 +136,7 @@ class _RegistrationViewState extends State<RegistrationView> {
         SettableMetadata(contentType: 'image/jpeg'),
       );
       final avatarUrl = await storageRef.getDownloadURL();
-      print('✅ 頭像上傳成功: $avatarUrl');
+      print('頭像上傳成功: $avatarUrl');
 
       // 2. 準備社群連結 Map
       Map<String, String> socialLinks = {};
@@ -172,7 +172,7 @@ class _RegistrationViewState extends State<RegistrationView> {
           .collection('user')
           .doc(widget.uid)
           .set(userData);
-      print('✅ 用戶資料寫入成功');
+      print('用戶資料寫入成功');
 
       // 4. 驗證寫入是否成功
       print('🔍 驗證用戶資料是否成功寫入...');
@@ -181,7 +181,7 @@ class _RegistrationViewState extends State<RegistrationView> {
           .doc(widget.uid)
           .get();
       if (doc.exists) {
-        print('✅ 用戶資料驗證成功');
+        print('用戶資料驗證成功');
 
         // 5. 導向主流程
         if (mounted) {
@@ -202,26 +202,68 @@ class _RegistrationViewState extends State<RegistrationView> {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('註冊失敗'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('註冊過程中發生錯誤，請重試。'),
-                const SizedBox(height: 8),
-                Text(
-                  '錯誤詳情：$e',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+          builder: (_) => Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(34),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('確定'),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 標題
+                  Text(
+                    '註冊失敗',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // 內容
+                  Text(
+                    '註冊過程中發生錯誤，請重試。',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  // 錯誤詳情容器
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.red[200]!),
+                    ),
+                    child: Text(
+                      '錯誤詳情：$e',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.red[700],
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // 確定按鈕
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[600],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text('確定', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       }
@@ -262,78 +304,101 @@ class _RegistrationViewState extends State<RegistrationView> {
     final ImageSource? source = await showDialog<ImageSource>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
+        return Dialog(
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(34),
           ),
-          title: const Text(
-            '選擇照片來源',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () => Navigator.of(context).pop(ImageSource.camera),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.camera_alt, color: Colors.blue, size: 24),
-                      SizedBox(width: 16),
-                      Text(
-                        '拍照',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 標題
+                Text(
+                  '選擇照片來源',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              InkWell(
-                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.photo_library, color: Colors.green, size: 24),
-                      SizedBox(width: 16),
-                      Text(
-                        '從相簿選擇',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                const SizedBox(height: 24),
+                // 拍照選項
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.camera_alt, color: Colors.blue, size: 24),
+                        SizedBox(width: 16),
+                        Text(
+                          '拍照',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                '取消',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
+                const SizedBox(height: 16),
+                // 相簿選擇選項
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.photo_library,
+                          color: Colors.green,
+                          size: 24,
+                        ),
+                        SizedBox(width: 16),
+                        Text(
+                          '從相簿選擇',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // 取消按鈕
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text(
+                      '取消',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );

@@ -46,10 +46,10 @@ class RekognitionService {
   static void testCredentials() {
     print('🔍 測試 AWS 憑證加載:');
     print(
-      '   Access Key: ${_accessKey.isEmpty ? " 未設定" : "✅ 已設定 (${_accessKey.substring(0, 8)}...)"}',
+      '   Access Key: ${_accessKey.isEmpty ? " 未設定" : "已設定 (${_accessKey.substring(0, 8)}...)"}',
     );
     print(
-      '   Secret Key: ${_secretKey.isEmpty ? " 未設定" : "✅ 已設定 (${_secretKey.length} 字符)"}',
+      '   Secret Key: ${_secretKey.isEmpty ? " 未設定" : "已設定 (${_secretKey.length} 字符)"}',
     );
     print('   Region: $_region');
     print('   所有環境變數: ${dotenv.env.keys.toList()}');
@@ -74,7 +74,7 @@ class RekognitionService {
         );
       }
 
-      print('✅ AWS 憑證檢查通過');
+      print('AWS 憑證檢查通過');
       print('🌍 使用 AWS 區域: $_region');
 
       // 檢查圖片文件大小（AWS Rekognition 限制 5MB）

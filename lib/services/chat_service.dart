@@ -181,7 +181,7 @@ class ChatService {
     await Future.wait(futures);
     _activeListeners.clear();
 
-    print('✅ 所有聊天服務監聽器已清理');
+    print('所有聊天服務監聽器已清理');
   }
 
   /// 添加監聽器到管理器
@@ -212,7 +212,7 @@ class ChatService {
           'isOnline': isOnline,
           'lastSeen': Timestamp.now(),
         });
-        print('✅ 在線狀態已更新: ${isOnline ? "在線" : "離線"}');
+        print('在線狀態已更新: ${isOnline ? "在線" : "離線"}');
       } else {
         // 用戶文檔不存在，跳過更新（可能正在註冊過程中）
         print('⚠️ 用戶文檔不存在，跳過在線狀態更新');
@@ -294,7 +294,7 @@ class ChatService {
       // 創建時就發送系統歡迎訊息
       await _sendSystemWelcomeMessage(chatId, taskTitle);
 
-      print('✅ 聊天室創建成功: $chatId (只對創建者 ${currentUser.uid} 可見)');
+      print('聊天室創建成功: $chatId (只對創建者 ${currentUser.uid} 可見)');
     } else {
       // 聊天室已存在，檢查是否被當前用戶隱藏
       final currentUser = _auth.currentUser;
@@ -311,7 +311,7 @@ class ChatService {
           print('🔄 檢測到聊天室被當前用戶隱藏，嘗試恢復...');
           final restored = await smartRestoreChatRoom(chatId);
           if (restored) {
-            print('✅ 聊天室已自動恢復: $chatId（任務進行中）');
+            print('聊天室已自動恢復: $chatId（任務進行中）');
 
             // 為了確保 Stream 更新，觸發聊天室數據的輕微更新
             await _firestore.collection('chats').doc(chatId).update({
@@ -392,7 +392,7 @@ class ChatService {
     // 更新聊天室最後訊息資訊
     await _updateChatRoomLastMessage(chatId, content, currentUser.uid);
 
-    print('✅ 訊息發送成功');
+    print('訊息發送成功');
   }
 
   /// 檢查並更新聊天室可見性（在發送第一則真實訊息時）
@@ -419,7 +419,7 @@ class ChatService {
           'updatedAt': Timestamp.now(),
         });
 
-        print('✅ 聊天室已設置為對所有參與者可見: $chatId');
+        print('聊天室已設置為對所有參與者可見: $chatId');
       }
     } catch (e) {
       print(' 更新聊天室可見性失敗: $e');
@@ -483,7 +483,7 @@ class ChatService {
       // 如果有聊天室被恢復，記錄日誌
       if (hiddenBy.length > updatedHiddenBy.length) {
         final restoredCount = hiddenBy.length - updatedHiddenBy.length;
-        print('✅ 因新訊息自動恢復 $restoredCount 個用戶的聊天室: $chatId');
+        print('因新訊息自動恢復 $restoredCount 個用戶的聊天室: $chatId');
       }
     }
   }
@@ -503,7 +503,7 @@ class ChatService {
       unreadCount[currentUser.uid] = 0;
 
       await chatRef.update({'unreadCount': unreadCount});
-      print('✅ 訊息已標記為已讀');
+      print('訊息已標記為已讀');
     }
   }
 
@@ -757,7 +757,7 @@ class ChatService {
         'hiddenBy': FieldValue.arrayUnion([currentUser.uid]),
       });
 
-      print('✅ 聊天室已隱藏: $chatId（僅對用戶 ${currentUser.uid} 隱藏）');
+      print('聊天室已隱藏: $chatId（僅對用戶 ${currentUser.uid} 隱藏）');
     } catch (e) {
       print('隱藏聊天室失敗: $e');
       throw Exception('隱藏聊天室失敗: $e');
@@ -775,7 +775,7 @@ class ChatService {
         'hiddenBy': FieldValue.arrayRemove([currentUser.uid]),
       });
 
-      print('✅ 聊天室已恢復: $chatId（對用戶 ${currentUser.uid} 恢復顯示）');
+      print('聊天室已恢復: $chatId（對用戶 ${currentUser.uid} 恢復顯示）');
     } catch (e) {
       print('恢復聊天室失敗: $e');
       throw Exception('恢復聊天室失敗: $e');
@@ -812,7 +812,7 @@ class ChatService {
         'updatedAt': Timestamp.now(),
       });
 
-      print('✅ 系統訊息發送成功: $chatId');
+      print('系統訊息發送成功: $chatId');
     } catch (e) {
       print('發送系統訊息失敗: $e');
       throw Exception('發送系統訊息失敗: $e');
@@ -848,7 +848,7 @@ class ChatService {
         print('📢 已發送聊天室關閉提醒: $chatId');
       }
 
-      print('✅ 任務 $taskId 的所有聊天室關閉提醒已發送完成');
+      print('任務 $taskId 的所有聊天室關閉提醒已發送完成');
     } catch (e) {
       print(' 發送聊天室關閉提醒失敗: $e');
     }
@@ -883,7 +883,7 @@ class ChatService {
         print('📢 已發送過期任務聊天室關閉提醒: $chatId');
       }
 
-      print('✅ 過期任務 $taskId 的所有聊天室關閉提醒已發送完成');
+      print('過期任務 $taskId 的所有聊天室關閉提醒已發送完成');
     } catch (e) {
       print(' 發送過期任務聊天室關閉提醒失敗: $e');
     }
@@ -943,7 +943,7 @@ class ChatService {
         'updatedAt': Timestamp.now(),
       });
 
-      print('✅ 個人化系統訊息發送成功: $chatId');
+      print('個人化系統訊息發送成功: $chatId');
     } catch (e) {
       print('發送個人化系統訊息失敗: $e');
       throw Exception('發送個人化系統訊息失敗: $e');
@@ -968,7 +968,7 @@ class ChatService {
 
       await batch.commit();
 
-      print('✅ 聊天室訊息已清空: $chatId');
+      print('聊天室訊息已清空: $chatId');
     } catch (e) {
       print('清空聊天室訊息失敗: $e');
       throw Exception('清空聊天室訊息失敗: $e');
@@ -983,7 +983,7 @@ class ChatService {
       if (_cachedChatCloseTimer != null &&
           _cacheExpiry != null &&
           now.isBefore(_cacheExpiry!)) {
-        print('✅ 使用緩存的聊天室關閉時間: ${_cachedChatCloseTimer}分鐘');
+        print('使用緩存的聊天室關閉時間: ${_cachedChatCloseTimer}分鐘');
         return _cachedChatCloseTimer!;
       }
 
@@ -1001,7 +1001,7 @@ class ChatService {
           _cachedChatCloseTimer = chatCloseTimer;
           _cacheExpiry = now.add(const Duration(minutes: 5));
 
-          print('✅ 從資料庫獲取聊天室關閉時間: ${chatCloseTimer}分鐘 (已緩存)');
+          print('從資料庫獲取聊天室關閉時間: ${chatCloseTimer}分鐘 (已緩存)');
           return chatCloseTimer;
         }
       }
@@ -1213,7 +1213,7 @@ class ChatService {
             });
 
             cleanedCount++;
-            print('✅ 聊天室清理完成: $chatId');
+            print('聊天室清理完成: $chatId');
           } catch (e) {
             print(' 清理聊天室 $chatId 失敗: $e');
             // 如果清理失敗，回滾 isCleanedUp 標記
@@ -1228,7 +1228,7 @@ class ChatService {
         }
       }
 
-      print('✅ 聊天室清理完成，共清理 $cleanedCount 個聊天室');
+      print('聊天室清理完成，共清理 $cleanedCount 個聊天室');
     } catch (e) {
       print(' 清理過期聊天室失敗: $e');
     }
@@ -1277,7 +1277,7 @@ class ChatService {
           .collection('messages')
           .add(systemMessage.toFirestore());
 
-      print('✅ 失去聯繫訊息發送成功: $chatId');
+      print('失去聯繫訊息發送成功: $chatId');
     } catch (e) {
       print('發送失去聯繫訊息失敗: $e');
       throw Exception('發送失去聯繫訊息失敗: $e');
@@ -1296,13 +1296,13 @@ class ChatService {
     // 立即執行一次
     checkAndCleanupExpiredChatRooms();
 
-    print('✅ 聊天室清理定時器已啟動（每1分鐘檢查一次）');
+    print('聊天室清理定時器已啟動（每1分鐘檢查一次）');
   }
 
   static void stopChatRoomCleanupTimer() {
     _cleanupTimer?.cancel();
     _cleanupTimer = null;
-    print('✅ 聊天室清理定時器已停止');
+    print('聊天室清理定時器已停止');
   }
 
   /// 立即觸發聊天室清理（用於測試）
@@ -1391,14 +1391,14 @@ class ChatService {
             });
 
             cleanedCount++;
-            print('✅ 過期任務聊天室清理完成: $chatId');
+            print('過期任務聊天室清理完成: $chatId');
           } catch (e) {
             print(' 清理聊天室 $chatId 失敗: $e');
           }
         }
       }
 
-      print('✅ 立即清理完成，共清理 $cleanedCount 個過期任務的聊天室');
+      print('立即清理完成，共清理 $cleanedCount 個過期任務的聊天室');
     } catch (e) {
       print(' 立即清理過期聊天室失敗: $e');
     }
@@ -1490,7 +1490,7 @@ class ChatService {
         taskTitle: '測試任務',
       );
 
-      print('✅ 測試完成，聊天室ID: $resultChatId');
+      print('測試完成，聊天室ID: $resultChatId');
 
       return {
         'success': true,
@@ -1529,7 +1529,7 @@ class ChatService {
 
       // 如果任務狀態為 open 或 accepted，則認為任務還在進行中
       final isActive = status == 'open' || status == 'accepted';
-      print('✅ 任務活躍狀態結果: $isActive');
+      print('任務活躍狀態結果: $isActive');
 
       return isActive;
     } catch (e) {
@@ -1647,7 +1647,7 @@ class ChatService {
         'hiddenBy': FieldValue.arrayRemove([currentUser.uid]),
       });
 
-      print('✅ 聊天室已智能恢復: $chatId（任務進行中，對用戶 ${currentUser.uid} 恢復顯示）');
+      print('聊天室已智能恢復: $chatId（任務進行中，對用戶 ${currentUser.uid} 恢復顯示）');
       return true;
     } catch (e) {
       print(' 智能恢復聊天室失敗: $e');

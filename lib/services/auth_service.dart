@@ -55,7 +55,7 @@ class AuthService {
         googleSignedIn = await _googleSignIn.isSignedIn();
         if (googleSignedIn) {
           await _googleSignIn.signOut();
-          print('✅ Google 登出成功');
+          print('Google 登出成功');
         } else {
           print('ℹ️ Google 未登入狀態，跳過登出');
         }
@@ -72,14 +72,14 @@ class AuthService {
           final currentAccount = _googleSignIn.currentUser;
           if (currentAccount != null) {
             await _googleSignIn.disconnect();
-            print('✅ Google 連接已斷開');
+            print('Google 連接已斷開');
           } else {
             print('ℹ️ Google 連接已經斷開，無需重複操作');
           }
         } catch (e) {
           // 特定錯誤處理 - 某些情況下斷開連接失敗是正常的
           final errorMessage = e.toString();
-          if (errorMessage.contains('Failed to disconnect') || 
+          if (errorMessage.contains('Failed to disconnect') ||
               errorMessage.contains('status')) {
             print('ℹ️ Google 連接斷開完成（系統已自動處理）');
           } else {
@@ -90,16 +90,16 @@ class AuthService {
 
       // 3. Firebase 登出
       await _auth.signOut();
-      print('✅ Firebase 登出成功');
+      print('Firebase 登出成功');
 
-      print('✅ 完整登出流程完成');
+      print('完整登出流程完成');
     } catch (e) {
       print(' 登出過程中發生錯誤: $e');
 
       // 即使發生錯誤，也要嘗試 Firebase 登出
       try {
         await _auth.signOut();
-        print('✅ Firebase 強制登出成功');
+        print('Firebase 強制登出成功');
       } catch (authError) {
         print(' Firebase 登出也失敗: $authError');
         throw Exception('登出失敗: ${authError.toString()}');

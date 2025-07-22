@@ -198,7 +198,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
     try {
       if (price is num) {
         final result = price.toDouble();
-        print('✅ 成功解析數字價格: $result');
+        print('成功解析數字價格: $result');
         return result;
       } else if (price is String) {
         final priceStr = price as String;
@@ -206,7 +206,7 @@ class _LocationInfoSheetState extends State<LocationInfoSheet> {
         final cleanedPrice = priceStr.replaceAll(RegExp(r'[^\d.]'), '');
         if (cleanedPrice.isNotEmpty) {
           final result = double.tryParse(cleanedPrice) ?? 0.0;
-          print('✅ 成功解析字符串價格: $priceStr -> $result');
+          print('成功解析字符串價格: $priceStr -> $result');
           return result;
         } else {
           print('⚠️  字符串價格清理後為空: $priceStr');
