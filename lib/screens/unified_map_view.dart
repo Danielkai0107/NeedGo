@@ -963,6 +963,19 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
             ),
           ),
 
+          // 右上角 - 問題回報按鈕（在重新整理按鈕下方）
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 76, // 重新整理按鈕位置 + 60px間距
+            right: 16,
+            child: _buildActionButton(
+              icon: Icons.help_outline_rounded,
+              onPressed: _showBugReportDialog,
+              heroTag: 'bug_report',
+              isLarge: false,
+              usePlayerStyle: false, // 使用默認白色樣式以便區分
+            ),
+          ),
+
           // 右下角 - 定位按鈕
           Positioned(
             bottom: 140,
@@ -1100,6 +1113,223 @@ class _UnifiedMapViewState extends State<UnifiedMapView> {
 
     if (mounted) {
       CustomSnackBar.showSuccess(context, '數據已重新載入');
+    }
+  }
+
+  /// 顯示問題回報對話框
+  void _showBugReportDialog() async {
+    final issueTypes = ['功能問題', '介面錯誤', '載入緩慢', '閃退問題', '資料同步問題', '其他問題'];
+
+    String? selectedIssueType;
+    String additionalDetails = '';
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 標題
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.help_outline_rounded,
+                              color: Colors.red[600],
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '問題回報',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 說明文字
+                        Text(
+                          '你的寶貴建議，是我們最大的動力！',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // 問題類型選擇
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: issueTypes.asMap().entries.map((entry) {
+                              final issueType = entry.value;
+                              return RadioListTile<String>(
+                                title: Text(
+                                  issueType,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                value: issueType,
+                                groupValue: selectedIssueType,
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedIssueType = value;
+                                  });
+                                },
+                                activeColor: Colors.red[600],
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 0,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 詳細描述（可選）
+                        TextField(
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: '詳細描述（可選）\n例如：在什麼情況下發生、錯誤訊息、預期行為等',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.red[400]!),
+                            ),
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                          onChanged: (value) {
+                            additionalDetails = value;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        // 按鈕組
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  '取消',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: selectedIssueType != null
+                                    ? () {
+                                        Navigator.of(context).pop({
+                                          'issueType': selectedIssueType!,
+                                          'details': additionalDetails,
+                                        });
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red[600],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '送出回報',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      _submitBugReport(result['issueType']!, result['details'] ?? '');
+    }
+  }
+
+  /// 提交問題回報
+  Future<void> _submitBugReport(String issueType, String description) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        CustomSnackBar.showError(context, '請先登入');
+        return;
+      }
+
+      // 收集系統資訊
+      final reportData = {
+        'userId': user.uid,
+        'userName': _profile['name'] ?? '未知用戶',
+        'userEmail': _profile['email'] ?? user.email ?? '',
+        'issueType': issueType,
+        'description': description,
+        'userRole': _userRole.name,
+        'timestamp': Timestamp.now(),
+        'status': 'pending', // pending, investigating, resolved
+        'appVersion': '1.0.0', // 可以從 package_info 獲取
+        'platform': 'flutter',
+        'resolved': false,
+      };
+
+      // 保存到 Firestore
+      await _firestore.collection('bug_reports').add(reportData);
+
+      if (mounted) {
+        CustomSnackBar.showSuccess(context, '問題回報已送出，感謝你的反饋！');
+      }
+
+      print('問題回報已提交: $issueType - $description');
+    } catch (e) {
+      print('提交問題回報失敗: $e');
+      if (mounted) {
+        CustomSnackBar.showError(context, '送出失敗，請稍後再試');
+      }
     }
   }
 

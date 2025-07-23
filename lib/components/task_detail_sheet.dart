@@ -2197,18 +2197,18 @@ class _TaskDetailSheetState extends State<TaskDetailSheet>
             child: OutlinedButton(
               onPressed: () => _completeTask(),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red[600],
-                side: BorderSide(color: Colors.red[600]!),
+                foregroundColor: Colors.green[600],
+                side: BorderSide(color: Colors.green[600]!),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 textStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(40),
                 ),
               ),
-              child: const Text('提早結束任務'),
+              child: const Text('完成任務'),
             ),
           ),
         ],
@@ -3260,7 +3260,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _showReportDialog,
-                label: const Text('檢舉該用戶'),
+                label: const Text('我要檢舉'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.red[600],
                   side: BorderSide(color: Colors.red[400]!),
@@ -4132,7 +4132,7 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _showReportDialog,
-                label: const Text('檢舉該用戶'),
+                label: const Text('我要檢舉'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.red[600],
                   side: BorderSide(color: Colors.red[400]!),
