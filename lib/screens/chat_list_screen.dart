@@ -347,7 +347,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           onTap: isClosed ? null : () => _enterChatRoom(chatRoom),
           onLongPress: () => _showLongPressOptions(chatRoom),
           child: Opacity(
-            opacity: isClosed ? 0.6 : 1.0,
+            opacity: 1.0,
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
@@ -362,7 +362,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: isClosed ? Colors.grey[500] : Colors.black,
+                        color: isClosed ? Colors.grey[700] : Colors.black,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -375,7 +375,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.grey[400],
+                        color: Colors.grey[500],
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text(
@@ -407,7 +407,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               ? Colors.grey[500]
                               : (unreadCount > 0
                                     ? Colors.black87
-                                    : Colors.grey[600]),
+                                    : Colors.grey[700]),
                           fontWeight: isClosed
                               ? FontWeight.normal
                               : (unreadCount > 0
@@ -495,7 +495,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   String _formatLastMessage(ChatRoom chatRoom) {
     // 如果聊天室已失去聯繫，顯示失去聯繫狀態
     if (chatRoom.isConnectionLost) {
-      return '系統已關閉聊天室';
+      return '任務結束，系統已關閉聊天室';
     }
 
     if (chatRoom.lastMessageSender == 'system') {

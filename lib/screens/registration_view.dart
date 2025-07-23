@@ -285,22 +285,24 @@ class _RegistrationViewState extends State<RegistrationView> {
 
   // 步驟進度條
   Widget _buildStepIndicator() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Row(
-        children: List.generate(4, (index) {
-          return Expanded(
-            child: Container(
-              height: 4,
-              margin: EdgeInsets.only(right: index < 3 ? 8 : 0),
-              decoration: BoxDecoration(
-                color: index <= _currentStep ? Colors.black : Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+    return Row(
+      children: List.generate(4, (index) {
+        final isCompleted = index < _currentStep;
+        final isCurrent = index == _currentStep;
+
+        return Expanded(
+          child: Container(
+            height: 4,
+            margin: EdgeInsets.only(right: index < 3 ? 8 : 0),
+            decoration: BoxDecoration(
+              color: isCompleted || isCurrent
+                  ? AppColors.primary
+                  : Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
             ),
-          );
-        }),
-      ),
+          ),
+        );
+      }),
     );
   }
 
@@ -776,9 +778,6 @@ class _RegistrationViewState extends State<RegistrationView> {
               children: [
                 Column(
                   children: [
-                    // 步驟進度條
-                    _buildStepIndicator(),
-
                     // 主內容區
                     Expanded(
                       child: SingleChildScrollView(
@@ -803,34 +802,77 @@ class _RegistrationViewState extends State<RegistrationView> {
                       ),
                     ),
 
-                    // 底部操作按鈕
+                    // 進度條 + 底部操作按鈕
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: EdgeInsets.only(
+                        left: 16,
+                        right: 16,
+                        top: 16,
+                        bottom: 16 + MediaQuery.of(context).padding.bottom,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        border: Border(
-                          top: BorderSide(color: Colors.grey[100]!),
-                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withValues(alpha: 0.1),
+                            spreadRadius: 1,
+                            blurRadius: 5,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
                       ),
-                      child: SafeArea(
-                        child: Row(
-                          children: [
-                            // 上一步按鈕
-                            if (_currentStep > 0)
+                      child: Column(
+                        children: [
+                          // 步驟進度條移動到這裡
+                          _buildStepIndicator(),
+                          const SizedBox(height: 16),
+                          // 控制按鈕
+                          Row(
+                            children: [
+                              // 上一步按鈕
+                              if (_currentStep > 0)
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => setState(() {
+                                      // 如果從驗證步驟返回，重置驗證狀態
+                                      if (_currentStep == 2) {
+                                        _resetVerificationState();
+                                      }
+                                      _currentStep--;
+                                      _shouldForceClearFocus =
+                                          true; // 設置標記確保返回上一步後強制移除焦點
+                                    }),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.grey[500],
+                                      side: BorderSide(
+                                        color: Colors.grey[400]!,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 24.0,
+                                        vertical: 16,
+                                      ),
+                                      textStyle: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: const Text('上一步'),
+                                  ),
+                                ),
+
+                              // 間距
+                              if (_currentStep > 0) const SizedBox(width: 12),
+
+                              // 下一步/完成按鈕
                               Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => setState(() {
-                                    // 如果從驗證步驟返回，重置驗證狀態
-                                    if (_currentStep == 2) {
-                                      _resetVerificationState();
-                                    }
-                                    _currentStep--;
-                                    _shouldForceClearFocus =
-                                        true; // 設置標記確保返回上一步後強制移除焦點
-                                  }),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.grey[500],
-                                    side: BorderSide(color: Colors.grey[400]!),
+                                child: ElevatedButton(
+                                  onPressed: _canProceed() ? _handleNext : null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 24.0,
                                       vertical: 16,
@@ -839,35 +881,16 @@ class _RegistrationViewState extends State<RegistrationView> {
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
                                     ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
                                   ),
-                                  child: const Text('上一步'),
+                                  child: Text(_getNextButtonText()),
                                 ),
                               ),
-
-                            // 間距
-                            if (_currentStep > 0) const SizedBox(width: 12),
-
-                            // 下一步/完成按鈕
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _canProceed() ? _handleNext : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24.0,
-                                    vertical: 16,
-                                  ),
-                                  textStyle: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                child: Text(_getNextButtonText()),
-                              ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
