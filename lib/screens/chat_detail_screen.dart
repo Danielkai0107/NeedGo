@@ -177,11 +177,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ],
         ),
         actions: [
-          // 查看任務詳情按鈕
+          // 檢舉按鈕
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: _showTaskDetails,
-            tooltip: '查看任務詳情',
+            onPressed: _showReportDialog,
+            tooltip: '檢舉用戶',
             splashRadius: 24,
           ),
         ],
@@ -731,112 +731,106 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             }
           }
 
-          return GestureDetector(
-            onTap: _showTaskDetails,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 標題和查看詳情圖標
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 標題和查看詳情圖標
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.chatRoom.taskTitle,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: Colors.grey[500],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // 任務詳細信息
+                Row(
+                  children: [
+                    // 時間
+                    if (timeText.isNotEmpty) ...[
+                      Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        timeText,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(width: 16),
+                    ],
+
+                    // 報酬
+                    Icon(Icons.payments, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      price == null || price == 0 ? '免費' : 'NT\$ $price',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+
+                    const Spacer(),
+                  ],
+                ),
+
+                // 地址（如果有的話）
+                if (address.isNotEmpty) ...[
+                  const SizedBox(height: 6),
                   Row(
                     children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          widget.chatRoom.taskTitle,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                          address,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: Colors.grey[500],
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-
-                  // 任務詳細信息
-                  Row(
-                    children: [
-                      // 時間
-                      if (timeText.isNotEmpty) ...[
-                        Icon(
-                          Icons.access_time,
-                          size: 14,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          timeText,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                      ],
-
-                      // 報酬
-                      Icon(Icons.payments, size: 14, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(
-                        price == null || price == 0 ? '免費' : 'NT\$ $price',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-
-                      const Spacer(),
-                    ],
-                  ),
-
-                  // 地址（如果有的話）
-                  if (address.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on,
-                          size: 14,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            address,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
           );
         },
@@ -855,68 +849,228 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  /// 顯示任務詳情
-  void _showTaskDetails() async {
+  /// 顯示檢舉對話框
+  void _showReportDialog() async {
+    final reportReasons = ['不當行為或騷擾', '提供虛假資訊', '違反服務條款', '垃圾訊息或廣告', '其他不當內容'];
+
+    String? selectedReason;
+    String additionalDetails = '';
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 標題
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.report_problem_rounded,
+                              color: Colors.red[600],
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '檢舉用戶',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 說明文字
+                        Text(
+                          '請選擇檢舉原因，我們會盡快處理您的回報。',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // 檢舉原因選擇
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: reportReasons.asMap().entries.map((
+                              entry,
+                            ) {
+                              final reason = entry.value;
+                              return RadioListTile<String>(
+                                title: Text(
+                                  reason,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                value: reason,
+                                groupValue: selectedReason,
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedReason = value;
+                                  });
+                                },
+                                activeColor: Colors.red[600],
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 0,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 詳細描述（可選）
+                        TextField(
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: '詳細描述（可選）',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.red[400]!),
+                            ),
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                          onChanged: (value) {
+                            additionalDetails = value;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        // 按鈕組
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  '取消',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: selectedReason != null
+                                    ? () {
+                                        Navigator.of(context).pop({
+                                          'reason': selectedReason!,
+                                          'details': additionalDetails,
+                                        });
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red[600],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '提交檢舉',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      await _submitReport(result['reason']!, result['details'] ?? '');
+    }
+  }
+
+  /// 提交檢舉報告
+  Future<void> _submitReport(String reason, String details) async {
     try {
-      // 顯示載入指示器
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-
-      // 查詢任務數據
-      final taskDoc = await FirebaseFirestore.instance
-          .collection('posts')
-          .doc(widget.chatRoom.taskId)
-          .get();
-
-      // 關閉載入指示器
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-
-      if (!taskDoc.exists) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
         if (mounted) {
-          CustomSnackBar.showError(context, '找不到任務資料');
+          CustomSnackBar.showError(context, '請先登入');
         }
         return;
       }
 
-      final taskData = taskDoc.data()!;
-      taskData['id'] = taskDoc.id;
+      // 確定被檢舉的用戶（聊天室的對方）
+      final isCurrentUserParent = currentUser.uid == widget.chatRoom.parentId;
+      final reportedUserId = isCurrentUserParent
+          ? widget.chatRoom.playerId
+          : widget.chatRoom.parentId;
 
-      // 判斷當前用戶是否為 Parent
-      final isParentView = currentUser?.uid == widget.chatRoom.parentId;
+      // 獲取被檢舉用戶的資訊
+      final reportedUserInfo = await ChatService.getUserInfo(reportedUserId);
+      final reportedUserName = reportedUserInfo?['name']?.toString() ?? '未設定姓名';
 
-      // 顯示任務詳情頁面
+      final reportData = {
+        'reporterId': currentUser.uid,
+        'reportedUserId': reportedUserId,
+        'reportedUserName': reportedUserName,
+        'reportType': 'chat_user', // 聊天室用戶檢舉
+        'reason': reason,
+        'details': details,
+        'taskId': widget.chatRoom.taskId,
+        'taskTitle': widget.chatRoom.taskTitle,
+        'chatRoomId': widget.chatRoom.id,
+        'status': 'pending', // pending, reviewed, resolved
+        'createdAt': Timestamp.now(),
+      };
+
+      await FirebaseFirestore.instance.collection('reports').add(reportData);
+
       if (mounted) {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          enableDrag: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => TaskDetailSheet(
-            taskData: taskData,
-            isParentView: isParentView,
-            hideBottomActions: true, // 從聊天室查看時隱藏底部按鈕
-            hideApplicantsList: true, // 從聊天室查看時隱藏申請者清單
-            onTaskUpdated: () {
-              // 任務更新後可以選擇重新載入聊天室數據或其他處理
-              print('任務已更新');
-            },
-          ),
-        );
+        CustomSnackBar.showSuccess(context, '檢舉已提交，感謝您的回報。我們會盡快處理。');
       }
     } catch (e) {
-      // 關閉載入指示器（如果還在顯示）
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-
-      print('載入任務詳情失敗: $e');
+      print('提交檢舉失敗: $e');
       if (mounted) {
-        CustomSnackBar.showError(context, '載入任務詳情失敗: $e');
+        CustomSnackBar.showError(context, '提交檢舉失敗，請稍後再試');
       }
     }
   }
