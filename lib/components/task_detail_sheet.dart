@@ -2457,6 +2457,221 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
     CustomSnackBar.showWarning(context, message);
   }
 
+  /// 顯示檢舉對話框
+  void _showReportDialog() async {
+    final reportReasons = ['不當行為或騷擾', '提供虛假資訊', '違反服務條款', '垃圾訊息或廣告', '其他不當內容'];
+
+    String? selectedReason;
+    String additionalDetails = '';
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 標題
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.report_problem_rounded,
+                              color: Colors.red[600],
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '檢舉用戶',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 說明文字
+                        Text(
+                          '請選擇檢舉原因，我們會盡快處理您的回報。',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // 檢舉原因選擇
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: reportReasons.asMap().entries.map((
+                              entry,
+                            ) {
+                              final reason = entry.value;
+                              return RadioListTile<String>(
+                                title: Text(
+                                  reason,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                value: reason,
+                                groupValue: selectedReason,
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedReason = value;
+                                  });
+                                },
+                                activeColor: Colors.red[600],
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 0,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 詳細描述（可選）
+                        TextField(
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: '詳細描述（可選）',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.red[400]!),
+                            ),
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                          onChanged: (value) {
+                            additionalDetails = value;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        // 按鈕組
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  '取消',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: selectedReason != null
+                                    ? () {
+                                        Navigator.of(context).pop({
+                                          'reason': selectedReason!,
+                                          'details': additionalDetails,
+                                        });
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red[600],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '提交檢舉',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      _submitReport('applicant', result['reason']!, result['details'] ?? '');
+    }
+  }
+
+  /// 提交檢舉報告
+  Future<void> _submitReport(String type, String reason, String details) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        _showErrorMessage('請先登入');
+        return;
+      }
+
+      final reportData = {
+        'reporterId': currentUser.uid,
+        'reportedUserId': widget.applicantData['uid'],
+        'reportedUserName': widget.applicantData['name'] ?? '未設定姓名',
+        'reportType': type, // 'applicant'
+        'reason': reason,
+        'details': details,
+        'taskId': widget.taskData['id'],
+        'taskTitle':
+            widget.taskData['title'] ?? widget.taskData['name'] ?? '未命名任務',
+        'status': 'pending', // pending, reviewed, resolved
+        'createdAt': Timestamp.now(),
+      };
+
+      await _firestore.collection('reports').add(reportData);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // 關閉詳情頁
+        _showSuccessMessage('檢舉已提交，感謝您的回報。我們會盡快處理。');
+      }
+    } catch (e) {
+      print('提交檢舉失敗: $e');
+      if (mounted) {
+        _showErrorMessage('提交檢舉失敗，請稍後再試');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -2516,7 +2731,7 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
               ),
 
               // 底部操作按鈕
-              // _buildActionButtons(context),
+              _buildActionButtons(context),
             ],
           ),
         );
@@ -3018,24 +3233,49 @@ class _ApplicantDetailSheetState extends State<ApplicantDetailSheet> {
         border: Border(top: BorderSide(color: Colors.grey[100]!)),
       ),
       child: SafeArea(
-        child: SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.grey[500],
-              side: BorderSide(color: Colors.grey[400]!),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16,
-              ),
-              textStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
+        child: Row(
+          children: [
+            // 關閉按鈕
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.grey[500],
+                  side: BorderSide(color: Colors.grey[400]!),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: const Text('關閉'),
               ),
             ),
-            child: const Text('關閉'),
-          ),
+            const SizedBox(width: 12),
+
+            // 檢舉按鈕
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _showReportDialog,
+                label: const Text('檢舉該用戶'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red[600],
+                  side: BorderSide(color: Colors.red[400]!),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -3200,6 +3440,223 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
     }
   }
 
+  /// 顯示檢舉對話框
+  void _showReportDialog() async {
+    final reportReasons = ['不當行為或騷擾', '提供虛假資訊', '違反服務條款', '垃圾訊息或廣告', '其他不當內容'];
+
+    String? selectedReason;
+    String additionalDetails = '';
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 標題
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.report_problem_rounded,
+                              color: Colors.red[600],
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '檢舉用戶',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 說明文字
+                        Text(
+                          '請選擇檢舉原因，我們會盡快處理您的回報。',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // 檢舉原因選擇
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: reportReasons.asMap().entries.map((
+                              entry,
+                            ) {
+                              final reason = entry.value;
+                              return RadioListTile<String>(
+                                title: Text(
+                                  reason,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                value: reason,
+                                groupValue: selectedReason,
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedReason = value;
+                                  });
+                                },
+                                activeColor: Colors.red[600],
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 0,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 詳細描述（可選）
+                        TextField(
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: '詳細描述（可選）',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.red[400]!),
+                            ),
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                          onChanged: (value) {
+                            additionalDetails = value;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        // 按鈕組
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  '取消',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: selectedReason != null
+                                    ? () {
+                                        Navigator.of(context).pop({
+                                          'reason': selectedReason!,
+                                          'details': additionalDetails,
+                                        });
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red[600],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '提交檢舉',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      _submitReport('publisher', result['reason']!, result['details'] ?? '');
+    }
+  }
+
+  /// 提交檢舉報告
+  Future<void> _submitReport(String type, String reason, String details) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        CustomSnackBar.showError(context, '請先登入');
+        return;
+      }
+
+      final reportData = {
+        'reporterId': currentUser.uid,
+        'reportedUserId': widget.publisherData['uid'],
+        'reportedUserName': widget.publisherData['name'] ?? '未設定姓名',
+        'reportType': type, // 'publisher'
+        'reason': reason,
+        'details': details,
+        'taskId': widget.currentTaskData['id'],
+        'taskTitle':
+            widget.currentTaskData['title'] ??
+            widget.currentTaskData['name'] ??
+            '未命名任務',
+        'status': 'pending', // pending, reviewed, resolved
+        'createdAt': Timestamp.now(),
+      };
+
+      await _firestore.collection('reports').add(reportData);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // 關閉詳情頁
+        CustomSnackBar.showSuccess(context, '檢舉已提交，感謝您的回報。我們會盡快處理。');
+      }
+    } catch (e) {
+      print('提交檢舉失敗: $e');
+      if (mounted) {
+        CustomSnackBar.showError(context, '提交檢舉失敗，請稍後再試');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -3259,7 +3716,7 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
               ),
 
               // 底部操作按鈕
-              // _buildActionButtons(context),
+              _buildActionButtons(context),
             ],
           ),
         );
@@ -3671,13 +4128,14 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
             ),
             const SizedBox(width: 12),
 
-            // 聯絡發布者按鈕
+            // 檢舉按鈕
             Expanded(
-              child: ElevatedButton(
-                onPressed: () => _contactPublisher(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+              child: OutlinedButton.icon(
+                onPressed: _showReportDialog,
+                label: const Text('檢舉該用戶'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red[600],
+                  side: BorderSide(color: Colors.red[400]!),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24.0,
                     vertical: 16,
@@ -3687,7 +4145,6 @@ class _PublisherDetailSheetState extends State<PublisherDetailSheet> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                child: const Text('聯絡發布者'),
               ),
             ),
           ],
