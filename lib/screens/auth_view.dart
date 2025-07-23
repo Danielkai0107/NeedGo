@@ -1,6 +1,8 @@
 // lib/screens/auth_view.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../services/auth_service.dart';
+import '../services/system_service.dart';
 import '../styles/app_colors.dart';
 
 class AuthView extends StatefulWidget {
@@ -14,6 +16,7 @@ class _AuthViewState extends State<AuthView> {
   final AuthService _authService = AuthService();
   bool _isLoading = false;
   String? _error;
+  bool _hasAgreed = false;
 
   Future<void> _signInWithGoogle() async {
     print('🚀 開始 Google 登入流程...');
@@ -28,11 +31,21 @@ class _AuthViewState extends State<AuthView> {
       final user = await _authService.signInWithGoogle();
 
       if (user != null) {
-        // 登入成功，AuthGate 會自動處理導航
+        // 登入成功，記錄用戶同意聲明
         print('✅ Google 登入成功: ${user.email}');
         print('🔍 用戶資料: uid=${user.uid}, displayName=${user.displayName}');
         print('📧 用戶信箱: ${user.email}');
         print('📱 電話號碼: ${user.phoneNumber ?? "無"}');
+
+        // 記錄同意聲明
+        try {
+          print('📝 記錄用戶同意聲明...');
+          await _authService.recordUserConsent();
+          print('✅ 同意聲明記錄成功');
+        } catch (e) {
+          print('⚠️ 記錄同意聲明失敗: $e');
+          // 不阻止登入流程，但記錄錯誤
+        }
 
         // 手動觸發狀態檢查（以防萬一）
         print('🔄 登入成功，等待 AuthGate 處理...');
@@ -53,6 +66,124 @@ class _AuthViewState extends State<AuthView> {
         });
       }
     }
+  }
+
+  /// 顯示服務條款
+  Future<void> _showTermsOfService() async {
+    final content = await SystemService.getTermsOfService();
+    if (mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _buildPolicySheet('服務條款', content),
+      );
+    }
+  }
+
+  /// 顯示隱私政策
+  Future<void> _showPrivacyPolicy() async {
+    final content = await SystemService.getPrivacyPolicy();
+    if (mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _buildPolicySheet('隱私政策', content),
+      );
+    }
+  }
+
+  /// 建構政策顯示組件
+  Widget _buildPolicySheet(String title, String content) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.8,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+      ),
+      child: Column(
+        children: [
+          // 頂部標題欄
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: AppColors.greyShade(200), width: 1),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
+          ),
+
+          // 內容區域
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                content,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ),
+
+          // 底部按鈕 - 修正高度和 padding
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), // 增加底部 padding
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: AppColors.greyShade(200), width: 1),
+              ),
+            ),
+            child: SafeArea(
+              // 確保按鈕不會被底部安全區域遮擋
+              child: SizedBox(
+                width: double.infinity,
+                height: 54, // 增加按鈕高度
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    '我已閱讀',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -102,7 +233,7 @@ class _AuthViewState extends State<AuthView> {
                   ),
                 ),
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
 
                 Text(
                   '使用 Google 帳號登入以開始使用',
@@ -117,11 +248,13 @@ class _AuthViewState extends State<AuthView> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _signInWithGoogle,
+                    onPressed: (_isLoading || !_hasAgreed)
+                        ? null
+                        : _signInWithGoogle,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      elevation: 2,
+                      foregroundColor: Colors.grey[700],
+                      elevation: 0, // 移除陰影
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: BorderSide(color: Colors.grey[300]!),
@@ -190,62 +323,79 @@ class _AuthViewState extends State<AuthView> {
                     ),
                   ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 32),
 
-                // 登入提示
+                // 同意聲明 checkbox
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
+                  alignment: Alignment.center, // 整個區域置中
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center, // 內容水平置中
+                    crossAxisAlignment: CrossAxisAlignment.center, // 垂直置中對齊
+                    mainAxisSize: MainAxisSize.min, // 最小化 Row 寬度以實現置中
                     children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: Colors.blue.shade600,
-                        size: 20,
+                      Transform.scale(
+                        scale: 1.2,
+                        child: Checkbox(
+                          value: _hasAgreed,
+                          onChanged: (value) {
+                            setState(() {
+                              _hasAgreed = value ?? false;
+                            });
+                          },
+                          activeColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          side: MaterialStateBorderSide.resolveWith((states) {
+                            if (states.contains(MaterialState.selected)) {
+                              return BorderSide.none; // 選中時不顯示邊框
+                            }
+                            return BorderSide(
+                              color: AppColors.greyShade(400), // 更淡的灰色
+                              width: 1.0, // 更細的線條
+                            );
+                          }),
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '首次使用需要完成註冊',
-                              style: TextStyle(
-                                color: Colors.blue.shade700,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                      const SizedBox(width: 0),
+                      Flexible(
+                        // 改用 Flexible 以允許文字換行
+                        child: RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              height: 1.4,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '登入後我們會引導您填寫基本資料和上傳頭像',
-                              style: TextStyle(
-                                color: Colors.blue.shade600,
-                                fontSize: 12,
+                            children: [
+                              const TextSpan(text: '我已閱讀並同意 '),
+                              TextSpan(
+                                text: '服務條款',
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = _showTermsOfService,
                               ),
-                            ),
-                          ],
+                              const TextSpan(text: ' 和 '),
+                              TextSpan(
+                                text: '隱私政策',
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = _showPrivacyPolicy,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                const SizedBox(height: 32),
-
-                // 免責聲明
-                Text(
-                  '登入即表示您同意我們的服務條款和隱私政策',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                  textAlign: TextAlign.center,
                 ),
               ],
             ),
